@@ -1,5 +1,5 @@
 // API Configuration
-export const API_BASE_URL = 'https://4b89c43c49acd420-2-50-176-172.serveousercontent.com';
+export const API_BASE_URL = 'https://procurement-backend-production-184f.up.railway.app';
 
 export const API_ENDPOINTS = {
   // Authentication
