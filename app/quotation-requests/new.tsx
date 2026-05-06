@@ -105,8 +105,8 @@ export default function NewQuotationRequestScreen() {
   return (
     <SafeAreaView style={S.container} edges={['bottom']}>
       <ScreenHeader title="Create QR" subtitle={pr?.code || `PR-${prId}`} showBack />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={S.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={S.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
           {/* PR Info */}
           <Card padding={14} style={S.card}>

@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -196,10 +198,12 @@ export default function NewPurchaseRequestScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScreenHeader title="New Purchase Request" showBack />
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}>
 
         {/* ── Request Details ── */}
@@ -465,6 +469,7 @@ export default function NewPurchaseRequestScreen() {
 
         <View style={{ height: 48 }} />
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

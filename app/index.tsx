@@ -10,10 +10,7 @@ export default function Index() {
 
   useEffect(() => {
     if (!isLoading) {
-      const delay = setTimeout(() => {
-        router.replace(isAuthenticated ? '/(tabs)' : '/login');
-      }, 1200);
-      return () => clearTimeout(delay);
+      router.replace(isAuthenticated ? '/(tabs)' : '/login');
     }
   }, [isAuthenticated, isLoading, router]);
 

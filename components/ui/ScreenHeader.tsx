@@ -19,13 +19,21 @@ export function ScreenHeader({ title, subtitle, showBack = false, rightAction, r
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)' as any);
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + 6 }]}>
       <View style={styles.row}>
 
         {/* Left: back button or spacer */}
         {showBack ? (
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={16} activeOpacity={0.7}>
+          <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={16} activeOpacity={0.7}>
             <View style={styles.backCircle}>
               <IconSymbol name="chevron.left" size={18} color={C.tint} />
             </View>

@@ -123,8 +123,8 @@ export default function NewGoodsReceivingScreen() {
   return (
     <SafeAreaView style={S.container} edges={['bottom']}>
       <ScreenHeader title="Create GRN" subtitle={poNum} showBack />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={S.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={S.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
           {/* LPO Info */}
           <Card padding={14} style={S.card}>

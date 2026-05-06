@@ -32,18 +32,18 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = (Platform.OS === 'ios' ? 49 : 52) + Math.max(insets.bottom, 8);
 
-  if (user && user.role !== 'super_admin' && !user.is_superuser) {
-    router.replace('/purchase-requests' as any);
-    return null;
-  }
-
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [cycleMetrics, setCycleMetrics] = useState<ProcurementCycleMetrics | null>(null);
   const [projectAnalytics, setProjectAnalytics] = useState<ProjectAnalytics[]>([]);
-
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (user && user.role !== 'super_admin' && !user.is_superuser) {
+      router.replace('/purchase-requests' as any);
+    }
+  }, [user]);
 
   const loadDashboardData = async () => {
     try {
@@ -93,7 +93,11 @@ export default function DashboardScreen() {
     }
   };
 
-  useEffect(() => { loadDashboardData(); }, []);
+  useEffect(() => {
+    if (!user || user.role === 'super_admin' || user.is_superuser) {
+      loadDashboardData();
+    }
+  }, [user]);
   const onRefresh = () => { setRefreshing(true); loadDashboardData(); };
 
   const getGreeting = () => {

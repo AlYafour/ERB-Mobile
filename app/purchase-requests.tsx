@@ -431,7 +431,7 @@ export default function PurchaseRequestsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <View style={styles.innerContainer}>
         <ScreenHeader
           title="Purchase Requests"
