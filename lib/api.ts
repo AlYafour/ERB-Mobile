@@ -164,10 +164,21 @@ class ApiClient {
     ]);
   }
 
+  private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 10000): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      return response;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await this.fetchWithTimeout(`${this.baseURL}${endpoint}`, {
         ...this.getFetchOptions(),
         method: 'GET',
         headers,
@@ -175,17 +186,15 @@ class ApiClient {
       return this.handleResponse<T>(response);
     } catch (error: any) {
       console.error('❌ GET request error:', error);
-      return {
-        status: 0,
-        error: error.message || 'Network error',
-      };
+      const msg = error.name === 'AbortError' ? 'Connection timed out. Check server URL.' : error.message || 'Network error';
+      return { status: 0, error: msg };
     }
   }
 
   async post<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await this.fetchWithTimeout(`${this.baseURL}${endpoint}`, {
         ...this.getFetchOptions(),
         method: 'POST',
         headers,
@@ -194,25 +203,15 @@ class ApiClient {
       return this.handleResponse<T>(response);
     } catch (error: any) {
       console.error('❌ POST request error:', error);
-      const errorMessage = error.message || 'Network error';
-      // Check if it's a CORS error
-      if (errorMessage.includes('CORS') || errorMessage.includes('fetch')) {
-        return {
-          status: 0,
-          error: 'Network error: Please check your internet connection and ensure the server is accessible.',
-        };
-      }
-      return {
-        status: 0,
-        error: errorMessage,
-      };
+      const msg = error.name === 'AbortError' ? 'Connection timed out. Check server URL.' : error.message || 'Network error';
+      return { status: 0, error: msg };
     }
   }
 
   async put<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await this.fetchWithTimeout(`${this.baseURL}${endpoint}`, {
         ...this.getFetchOptions(),
         method: 'PUT',
         headers,
@@ -221,17 +220,15 @@ class ApiClient {
       return this.handleResponse<T>(response);
     } catch (error: any) {
       console.error('❌ PUT request error:', error);
-      return {
-        status: 0,
-        error: error.message || 'Network error',
-      };
+      const msg = error.name === 'AbortError' ? 'Connection timed out. Check server URL.' : error.message || 'Network error';
+      return { status: 0, error: msg };
     }
   }
 
   async patch<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await this.fetchWithTimeout(`${this.baseURL}${endpoint}`, {
         ...this.getFetchOptions(),
         method: 'PATCH',
         headers,
@@ -240,17 +237,15 @@ class ApiClient {
       return this.handleResponse<T>(response);
     } catch (error: any) {
       console.error('❌ PATCH request error:', error);
-      return {
-        status: 0,
-        error: error.message || 'Network error',
-      };
+      const msg = error.name === 'AbortError' ? 'Connection timed out. Check server URL.' : error.message || 'Network error';
+      return { status: 0, error: msg };
     }
   }
 
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await this.fetchWithTimeout(`${this.baseURL}${endpoint}`, {
         ...this.getFetchOptions(),
         method: 'DELETE',
         headers,
@@ -258,10 +253,8 @@ class ApiClient {
       return this.handleResponse<T>(response);
     } catch (error: any) {
       console.error('❌ DELETE request error:', error);
-      return {
-        status: 0,
-        error: error.message || 'Network error',
-      };
+      const msg = error.name === 'AbortError' ? 'Connection timed out. Check server URL.' : error.message || 'Network error';
+      return { status: 0, error: msg };
     }
   }
 

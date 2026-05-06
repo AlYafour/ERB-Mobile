@@ -1,7 +1,5 @@
 // API Configuration
-// For local development: use your computer's local IP (run Django on port 8000)
-// For production: use the Railway URL
-export const API_BASE_URL = 'http://192.168.1.29:8000';
+export const API_BASE_URL = 'https://f8052704cce76791-2-50-176-172.serveousercontent.com';
 
 export const API_ENDPOINTS = {
   // Authentication
