@@ -1,4 +1,21 @@
 import { apiClient } from '../api';
+
+// Suppress non-actionable errors from dashboard console output
+function isSilentError(error: any): boolean {
+  const msg = (error?.message || String(error)).toLowerCase();
+  return (
+    msg.includes('session expired') ||
+    msg.includes('authentication credentials') ||
+    msg.includes('unauthorized') ||
+    msg.includes('timed out') ||
+    msg.includes('timeout') ||
+    msg.includes('network') ||
+    msg.includes('not found') ||
+    msg.includes('permission') ||
+    msg.includes('403') ||
+    msg.includes('404')
+  );
+}
 import { purchaseRequestsApi } from './purchase-requests';
 import { purchaseQuotationsApi } from './purchase-quotations';
 import { purchaseOrdersApi } from './purchase-orders';
@@ -118,16 +135,7 @@ export const dashboardApi = {
       try {
         return await apiCall();
       } catch (error: any) {
-        const errorMessage = error?.message || String(error);
-        const isPermissionError = 
-          errorMessage.includes('permission') || 
-          errorMessage.includes('Not Found') ||
-          errorMessage.includes('403') ||
-          errorMessage.includes('404');
-        
-        if (!isPermissionError && __DEV__) {
-          console.warn('Error fetching stats:', error);
-        }
+        if (__DEV__ && !isSilentError(error)) console.warn('Error fetching stats:', error);
         return defaultValue;
       }
     };
@@ -245,35 +253,13 @@ export const dashboardApi = {
             progress: 0,
           });
         } catch (error: any) {
-          // Silently skip this project if there's a permission error
-          const errorMessage = error?.message || String(error);
-          const isPermissionError =
-            errorMessage.includes('permission') ||
-            errorMessage.includes('Not Found') ||
-            errorMessage.includes('403') ||
-            errorMessage.includes('404') ||
-            errorMessage.includes('timed out') ||
-            errorMessage.includes('timeout') ||
-            errorMessage.includes('network');
-          
-          if (!isPermissionError && __DEV__) {
-            console.warn(`Error fetching analytics for project ${project.id}:`, error);
-          }
+          if (__DEV__ && !isSilentError(error)) console.warn(`Error fetching analytics for project ${project.id}:`, error);
         }
       }
 
       return analytics.sort((a, b) => b.totalSpending - a.totalSpending).slice(0, 10);
     } catch (error: any) {
-      const errorMessage = error?.message || String(error);
-      const isPermissionError = 
-        errorMessage.includes('permission') || 
-        errorMessage.includes('Not Found') ||
-        errorMessage.includes('403') ||
-        errorMessage.includes('404');
-      
-      if (!isPermissionError && __DEV__) {
-        console.warn('Error fetching project analytics:', error);
-      }
+      if (__DEV__ && !isSilentError(error)) console.warn('Error fetching project analytics:', error);
       return [];
     }
   },
@@ -296,17 +282,7 @@ export const dashboardApi = {
           });
         }
       } catch (error: any) {
-        // Silently skip if no permission
-        const errorMessage = error?.message || String(error);
-        const isPermissionError = 
-          errorMessage.includes('permission') || 
-          errorMessage.includes('Not Found') ||
-          errorMessage.includes('403') ||
-          errorMessage.includes('404');
-        
-        if (!isPermissionError && __DEV__) {
-          console.warn('Error fetching purchase requests for activity:', error);
-        }
+        if (__DEV__ && !isSilentError(error)) console.warn('Error fetching purchase requests for activity:', error);
       }
 
       try {
@@ -323,17 +299,7 @@ export const dashboardApi = {
           });
         }
       } catch (error: any) {
-        // Silently skip if no permission
-        const errorMessage = error?.message || String(error);
-        const isPermissionError = 
-          errorMessage.includes('permission') || 
-          errorMessage.includes('Not Found') ||
-          errorMessage.includes('403') ||
-          errorMessage.includes('404');
-        
-        if (!isPermissionError && __DEV__) {
-          console.warn('Error fetching purchase orders for activity:', error);
-        }
+        if (__DEV__ && !isSilentError(error)) console.warn('Error fetching purchase orders for activity:', error);
       }
 
       try {
@@ -350,17 +316,7 @@ export const dashboardApi = {
           });
         }
       } catch (error: any) {
-        // Silently skip if no permission
-        const errorMessage = error?.message || String(error);
-        const isPermissionError = 
-          errorMessage.includes('permission') || 
-          errorMessage.includes('Not Found') ||
-          errorMessage.includes('403') ||
-          errorMessage.includes('404');
-        
-        if (!isPermissionError && __DEV__) {
-          console.warn('Error fetching invoices for activity:', error);
-        }
+        if (__DEV__ && !isSilentError(error)) console.warn('Error fetching invoices for activity:', error);
       }
 
       return activities
@@ -368,15 +324,7 @@ export const dashboardApi = {
         .slice(0, 20);
     } catch (error: any) {
       const errorMessage = error?.message || String(error);
-      const isPermissionError = 
-        errorMessage.includes('permission') || 
-        errorMessage.includes('Not Found') ||
-        errorMessage.includes('403') ||
-        errorMessage.includes('404');
-      
-      if (!isPermissionError && __DEV__) {
-        console.warn('Error fetching recent activity:', error);
-      }
+      if (__DEV__ && !isSilentError(error)) console.warn('Error fetching recent activity:', error);
       return [];
     }
   },
@@ -430,23 +378,7 @@ export const dashboardApi = {
             });
           }
         } catch (error: any) {
-          // Silently skip this user if there's a permission error or not found
-          const errorMessage = error?.message || String(error);
-          const isPermissionError =
-            errorMessage.includes('permission') ||
-            errorMessage.includes('Not Found') ||
-            errorMessage.includes('403') ||
-            errorMessage.includes('404') ||
-            errorMessage.includes('timed out') ||
-            errorMessage.includes('timeout') ||
-            errorMessage.includes('network');
-          
-          if (!isPermissionError) {
-            // Only log non-permission errors in development
-            if (__DEV__) {
-              console.warn(`Error fetching activity for user ${user.id}:`, error);
-            }
-          }
+          if (__DEV__ && !isSilentError(error)) console.warn(`Error fetching activity for user ${user.id}:`, error);
         }
       }
 
@@ -458,17 +390,7 @@ export const dashboardApi = {
         })
         .slice(0, 10);
     } catch (error: any) {
-      // Silently return empty array for permission errors
-      const errorMessage = error?.message || String(error);
-      const isPermissionError = 
-        errorMessage.includes('permission') || 
-        errorMessage.includes('Not Found') ||
-        errorMessage.includes('403') ||
-        errorMessage.includes('404');
-      
-      if (!isPermissionError && __DEV__) {
-        console.warn('Error fetching user activity:', error);
-      }
+      if (__DEV__ && !isSilentError(error)) console.warn('Error fetching user activity:', error);
       return [];
     }
   },
@@ -479,19 +401,7 @@ export const dashboardApi = {
         try {
           return await apiCall();
         } catch (error: any) {
-          const errorMessage = error?.message || String(error);
-          const isPermissionError =
-            errorMessage.includes('permission') ||
-            errorMessage.includes('Not Found') ||
-            errorMessage.includes('403') ||
-            errorMessage.includes('404') ||
-            errorMessage.includes('timed out') ||
-            errorMessage.includes('timeout') ||
-            errorMessage.includes('network');
-          
-          if (!isPermissionError && __DEV__) {
-            console.warn('Error fetching cycle metrics:', error);
-          }
+          if (__DEV__ && !isSilentError(error)) console.warn('Error fetching cycle metrics:', error);
           return defaultValue;
         }
       };
@@ -580,22 +490,8 @@ export const dashboardApi = {
         bottlenecks: bottlenecks.sort((a, b) => b.avgDays - a.avgDays),
       };
     } catch (error: any) {
-      const errorMessage = error?.message || String(error);
-      const isPermissionError = 
-        errorMessage.includes('permission') || 
-        errorMessage.includes('Not Found') ||
-        errorMessage.includes('403') ||
-        errorMessage.includes('404');
-      
-      if (!isPermissionError && __DEV__) {
-        console.warn('Error fetching procurement cycle metrics:', error);
-      }
-      return {
-        avgPRToPO: 0,
-        avgPOToGRN: 0,
-        avgGRNToInvoice: 0,
-        bottlenecks: [],
-      };
+      if (__DEV__ && !isSilentError(error)) console.warn('Error fetching procurement cycle metrics:', error);
+      return { avgPRToPO: 0, avgPOToGRN: 0, avgGRNToInvoice: 0, bottlenecks: [] };
     }
   },
 
@@ -605,19 +501,7 @@ export const dashboardApi = {
         try {
           return await apiCall();
         } catch (error: any) {
-          const errorMessage = error?.message || String(error);
-          const isPermissionError =
-            errorMessage.includes('permission') ||
-            errorMessage.includes('Not Found') ||
-            errorMessage.includes('403') ||
-            errorMessage.includes('404') ||
-            errorMessage.includes('timed out') ||
-            errorMessage.includes('timeout') ||
-            errorMessage.includes('network');
-          
-          if (!isPermissionError && __DEV__) {
-            console.warn('Error fetching chart data:', error);
-          }
+          if (__DEV__ && !isSilentError(error)) console.warn('Error fetching chart data:', error);
           return defaultValue;
         }
       };
@@ -676,20 +560,7 @@ export const dashboardApi = {
             projectSpendingMap.set(project.name, totalSpending);
           }
         } catch (error: any) {
-          // Silently skip this project
-          const errorMessage = error?.message || String(error);
-          const isPermissionError =
-            errorMessage.includes('permission') ||
-            errorMessage.includes('Not Found') ||
-            errorMessage.includes('403') ||
-            errorMessage.includes('404') ||
-            errorMessage.includes('timed out') ||
-            errorMessage.includes('timeout') ||
-            errorMessage.includes('network');
-          
-          if (!isPermissionError && __DEV__) {
-            console.warn(`Error fetching project spending for ${project.id}:`, error);
-          }
+          if (__DEV__ && !isSilentError(error)) console.warn(`Error fetching project spending for ${project.id}:`, error);
         }
       }
 
@@ -773,21 +644,10 @@ export const dashboardApi = {
         },
       };
     } catch (error: any) {
-      const errorMessage = error?.message || String(error);
-      const isPermissionError = 
-        errorMessage.includes('permission') || 
-        errorMessage.includes('Not Found') ||
-        errorMessage.includes('403') ||
-        errorMessage.includes('404');
-      
-      if (!isPermissionError && __DEV__) {
-        console.warn('Error fetching chart data:', error);
-      }
+      if (__DEV__ && !isSilentError(error)) console.warn('Error fetching chart data:', error);
       return {
-        monthlyProcurement: [],
-        monthlyInvoices: [],
-        projectSpending: [],
-        supplierComparison: [],
+        monthlyProcurement: [], monthlyInvoices: [],
+        projectSpending: [], supplierComparison: [],
         statusDistribution: {
           purchaseRequests: { pending: 0, approved: 0, rejected: 0 },
           purchaseOrders: { pending: 0, approved: 0, rejected: 0, completed: 0 },

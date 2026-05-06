@@ -15,12 +15,16 @@ export interface ApiResponse<T> {
 }
 
 type AuthClearedCallback = () => void;
+// 'ok' = new token stored, 'invalid' = refresh token expired (logout), 'network' = server unreachable (don't logout)
+type RefreshResult = 'ok' | 'invalid' | 'network';
 
 class ApiClient {
   private baseURL: string;
   private onAuthCleared: AuthClearedCallback | null = null;
   // Mutex: only one refresh in-flight at a time; concurrent callers share the result
-  private refreshPromise: Promise<boolean> | null = null;
+  private refreshPromise: Promise<RefreshResult> | null = null;
+  // Guard: clearAuth fires onAuthCleared only once per session
+  private authCleared = false;
 
   constructor() {
     this.baseURL = API_BASE_URL;
@@ -79,49 +83,61 @@ class ApiClient {
     return { status, data: data as T };
   }
 
-  private async refreshToken(): Promise<boolean> {
-    // If a refresh is already running, reuse its result instead of starting another
-    if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
+  private async refreshToken(): Promise<RefreshResult> {
+    // All concurrent callers share one refresh call
+    if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = this._doRefresh().finally(() => {
       this.refreshPromise = null;
     });
     return this.refreshPromise;
   }
 
-  private async _doRefresh(): Promise<boolean> {
+  private async _doRefresh(): Promise<RefreshResult> {
     try {
       const storedRefresh = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-      if (!storedRefresh) return false;
+      if (!storedRefresh) return 'invalid';
 
-      const response = await fetch(`${this.baseURL}${API_ENDPOINTS.REFRESH_TOKEN}`, {
-        ...this.getFetchOptions(),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ refresh: storedRefresh }),
-      });
+      // 15-second timeout — Railway may be waking from sleep
+      const response = await this.fetchWithTimeout(
+        `${this.baseURL}${API_ENDPOINTS.REFRESH_TOKEN}`,
+        {
+          ...this.getFetchOptions(),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ refresh: storedRefresh }),
+        },
+        15000,
+      );
 
       if (response.ok) {
         const data = await response.json();
         const accessToken = data.access || data.access_token;
         if (accessToken) {
           await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-          // Store rotated refresh token if backend sends a new one
           const newRefresh = data.refresh || data.refresh_token;
           if (newRefresh) {
             await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
           }
-          return true;
+          return 'ok';
         }
+        return 'invalid'; // server returned 200 but no token — treat as invalid
       }
-      return false;
+
+      // 401 or 400 from the refresh endpoint = refresh token is genuinely expired
+      if (response.status === 401 || response.status === 400) return 'invalid';
+
+      // 5xx or unexpected = server-side problem, don't logout the user
+      return 'network';
     } catch {
-      return false;
+      // Network error / AbortError (timeout) — server unreachable, don't logout
+      return 'network';
     }
   }
 
   private async clearAuth(): Promise<void> {
+    // Only fire once per session — prevents multiple onAuthCleared calls from concurrent 401s
+    if (this.authCleared) return;
+    this.authCleared = true;
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.ACCESS_TOKEN,
       STORAGE_KEYS.REFRESH_TOKEN,
@@ -161,14 +177,18 @@ class ApiClient {
 
       if (isTokenError) {
         // Mutex: all concurrent 401s share one refresh call, none runs in parallel
-        const refreshed = await this.refreshToken();
-        if (refreshed) {
+        const result = await this.refreshToken();
+        if (result === 'ok') {
           const newHeaders = await this.getAuthHeaders();
           return this.executeRequest<T>(url, { ...options, headers: newHeaders }, true);
         }
-        // Refresh token also expired — force logout
-        await this.clearAuth();
-        return { status: 401, error: 'Session expired. Please login again.' };
+        if (result === 'invalid') {
+          // Refresh token genuinely expired — force logout once
+          await this.clearAuth();
+          return { status: 401, error: 'Session expired. Please login again.' };
+        }
+        // result === 'network': server unreachable during refresh — don't logout, just fail
+        return { status: 0, error: 'Connection timed out. Please try again.' };
       }
 
       // Real auth error (wrong password, account disabled, no credentials, etc.)
@@ -255,6 +275,8 @@ class ApiClient {
           return { status: response.status, error: 'Invalid response from server: missing authentication tokens', data: response.data };
         }
 
+        // New session — reset the auth-cleared guard so clearAuth() can fire again if needed
+        this.authCleared = false;
         await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
         await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
         if (data.user) {
