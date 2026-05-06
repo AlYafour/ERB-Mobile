@@ -1,8 +1,12 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet, Modal, KeyboardAvoidingView, Platform } from 'react-native';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import React, { useState, useMemo } from 'react';
+import {
+  View, Text, TouchableOpacity, TextInput, FlatList,
+  StyleSheet, Modal, Pressable, Platform,
+} from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '@/constants/theme';
-import { IconSymbol } from './icon-symbol';
+
+const C = Colors.light;
 
 export interface DropdownOption {
   value: string | number;
@@ -10,7 +14,7 @@ export interface DropdownOption {
   searchText?: string;
 }
 
-interface SearchableDropdownProps {
+interface Props {
   options: DropdownOption[];
   value: string | number | null | undefined;
   onChange: (value: string | number | null) => void;
@@ -36,12 +40,9 @@ export default function SearchableDropdown({
   emptyMessage = 'No options found',
   allowClear = false,
   filterFunction,
-}: SearchableDropdownProps) {
+}: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const backgroundColor = useThemeColor({}, 'background');
-  const textColor = useThemeColor({}, 'text');
-  const borderColor = useThemeColor({}, 'border');
 
   const selectedOption = useMemo(() => {
     if (value === null || value === undefined || value === '') return null;
@@ -50,66 +51,59 @@ export default function SearchableDropdown({
 
   const filteredOptions = useMemo(() => {
     if (!searchQuery.trim()) return options;
-
     const query = searchQuery.toLowerCase().trim();
-    
-    if (filterFunction) {
-      return options.filter((opt) => filterFunction(opt, query));
-    }
-
-    return options.filter((opt) => {
-      const labelMatch = opt.label?.toLowerCase().includes(query);
-      const searchTextMatch = opt.searchText?.toLowerCase().includes(query);
-      const valueMatch = String(opt.value).toLowerCase().includes(query);
-      return labelMatch || searchTextMatch || valueMatch;
-    });
+    if (filterFunction) return options.filter((opt) => filterFunction(opt, query));
+    return options.filter(
+      (opt) =>
+        opt.label?.toLowerCase().includes(query) ||
+        opt.searchText?.toLowerCase().includes(query) ||
+        String(opt.value).toLowerCase().includes(query),
+    );
   }, [options, searchQuery, filterFunction]);
 
   const handleSelect = (option: DropdownOption) => {
     onChange(option.value);
+    close();
+  };
+
+  const close = () => {
     setIsOpen(false);
     setSearchQuery('');
   };
-
-  const handleClear = () => {
-    onChange(null);
-    setIsOpen(false);
-    setSearchQuery('');
-  };
-
-  const displayValue = selectedOption ? selectedOption.label : '';
 
   return (
-    <View style={styles.container}>
+    <View style={S.wrapper}>
       {label && (
-        <Text style={[styles.label, { color: textColor }]}>
-          {label} {required && <Text style={{ color: '#dc3545' }}>*</Text>}
+        <Text style={S.label}>
+          {label}
+          {required && <Text style={S.required}> *</Text>}
         </Text>
       )}
-      
+
       <TouchableOpacity
-        style={[
-          styles.input,
-          {
-            backgroundColor,
-            borderColor: isOpen ? Colors.light.tint : borderColor,
-            opacity: disabled ? 0.5 : 1,
-          },
-        ]}
+        style={[S.trigger, isOpen && S.triggerOpen, disabled && S.triggerDisabled]}
         onPress={() => !disabled && setIsOpen(true)}
+        activeOpacity={0.75}
         disabled={disabled}>
-        <View style={styles.inputContent}>
-          <Text style={[styles.inputText, { color: displayValue ? textColor : Colors.light.icon }]}>
-            {displayValue || placeholder}
-          </Text>
-          <View style={styles.inputIcons}>
-            {allowClear && selectedOption && (
-              <TouchableOpacity onPress={handleClear} style={styles.clearButton}>
-                <IconSymbol name="xmark.circle.fill" size={18} color={Colors.light.icon} />
-              </TouchableOpacity>
-            )}
-            <IconSymbol name="chevron.down" size={16} color={Colors.light.icon} />
-          </View>
+        <Text
+          style={[S.triggerText, !selectedOption && S.triggerPlaceholder]}
+          numberOfLines={1}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </Text>
+        <View style={S.triggerIcons}>
+          {allowClear && selectedOption && (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); onChange(null); }}
+              hitSlop={10}
+              style={S.clearBtn}>
+              <MaterialIcons name="cancel" size={17} color={C.textTertiary} />
+            </TouchableOpacity>
+          )}
+          <MaterialIcons
+            name={isOpen ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+            size={22}
+            color={isOpen ? C.tint : C.textTertiary}
+          />
         </View>
       </TouchableOpacity>
 
@@ -117,154 +111,175 @@ export default function SearchableDropdown({
         visible={isOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => setIsOpen(false)}>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ width: '100%' }}>
-          <View style={[styles.modalContent, { backgroundColor }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: textColor }]}>
+        onRequestClose={close}
+        statusBarTranslucent>
+        <View style={S.overlay}>
+          {/* Backdrop — tap to close */}
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} />
+
+          <View style={S.sheet}>
+            {/* Drag handle */}
+            <View style={S.handle} />
+
+            {/* Header */}
+            <View style={S.sheetHeader}>
+              <Text style={S.sheetTitle} numberOfLines={1}>
                 {label || 'Select Option'}
               </Text>
-              <TouchableOpacity onPress={() => setIsOpen(false)}>
-                <IconSymbol name="xmark" size={24} color={textColor} />
+              <TouchableOpacity onPress={close} hitSlop={10} style={S.closeIconBtn}>
+                <MaterialIcons name="close" size={20} color={C.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.searchContainer, { borderColor }]}>
-              <IconSymbol name="magnifyingglass" size={20} color={Colors.light.icon} />
+            {/* Search */}
+            <View style={S.searchWrap}>
+              <MaterialIcons name="search" size={20} color={C.textTertiary} style={S.searchIcon} />
               <TextInput
-                style={[styles.searchInput, { color: textColor }]}
+                style={S.searchInput}
                 placeholder={searchPlaceholder}
-                placeholderTextColor={Colors.light.icon}
+                placeholderTextColor={C.textTertiary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                autoFocus
+                returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={C.textTertiary} />
+                </TouchableOpacity>
+              )}
             </View>
 
+            {/* Count pill */}
+            {filteredOptions.length > 0 && searchQuery.length > 0 && (
+              <View style={S.countWrap}>
+                <Text style={S.countText}>{filteredOptions.length} result{filteredOptions.length !== 1 ? 's' : ''}</Text>
+              </View>
+            )}
+
+            {/* Options list */}
             <FlatList
               data={filteredOptions}
               keyExtractor={(item) => String(item.value)}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.optionItem,
-                    selectedOption?.value === item.value && styles.optionItemSelected,
-                    { borderColor },
-                  ]}
-                  onPress={() => handleSelect(item)}>
-                  <Text style={[styles.optionText, { color: textColor }]}>{item.label}</Text>
-                  {selectedOption?.value === item.value && (
-                    <IconSymbol name="checkmark" size={20} color={Colors.light.tint} />
-                  )}
-                </TouchableOpacity>
-              )}
+              keyboardShouldPersistTaps="always"
+              showsVerticalScrollIndicator={false}
+              style={S.list}
+              renderItem={({ item, index }) => {
+                const selected = selectedOption?.value === item.value;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      S.optionRow,
+                      index === filteredOptions.length - 1 && S.optionRowLast,
+                      selected && S.optionRowSelected,
+                    ]}
+                    onPress={() => handleSelect(item)}
+                    activeOpacity={0.55}>
+                    <Text
+                      style={[S.optionLabel, selected && S.optionLabelSelected]}
+                      numberOfLines={2}>
+                      {item.label}
+                    </Text>
+                    {selected && (
+                      <MaterialIcons name="check-circle" size={20} color={C.tint} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
               ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={[styles.emptyText, { color: Colors.light.icon }]}>{emptyMessage}</Text>
+                <View style={S.empty}>
+                  <MaterialIcons name="search-off" size={36} color={C.textTertiary} />
+                  <Text style={S.emptyText}>{emptyMessage}</Text>
                 </View>
               }
             />
           </View>
-          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
+const S = StyleSheet.create({
+  wrapper: { marginBottom: 14 },
+
+  label: { fontSize: 13, fontWeight: '600', color: C.textSecondary, marginBottom: 6 },
+  required: { color: C.error },
+
+  trigger: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.card,
+    borderWidth: 1.5, borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 11,
+    minHeight: 46,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    minHeight: 48,
-    justifyContent: 'center',
-  },
-  inputContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  inputText: {
+  triggerOpen: { borderColor: C.tint },
+  triggerDisabled: { opacity: 0.45 },
+  triggerText: { flex: 1, fontSize: 15, color: C.text, fontWeight: '500', marginRight: 6 },
+  triggerPlaceholder: { color: C.textTertiary, fontWeight: '400' },
+  triggerIcons: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  clearBtn: { paddingHorizontal: 2 },
+
+  overlay: {
     flex: 1,
-    fontSize: 16,
-  },
-  inputIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  clearButton: {
-    padding: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingBottom: 20,
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    maxHeight: '78%',
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.12, shadowRadius: 20, elevation: 24,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    margin: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-  },
-  optionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  optionItemSelected: {
-    backgroundColor: '#f0f0f0',
-  },
-  optionText: {
-    fontSize: 16,
-  },
-  emptyContainer: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-  },
-});
 
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: C.borderDark,
+    alignSelf: 'center',
+    marginTop: 10, marginBottom: 2,
+  },
+
+  sheetHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: C.borderLight,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: C.text, flex: 1 },
+  closeIconBtn: { padding: 4, marginLeft: 8 },
+
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    margin: 12,
+    backgroundColor: C.backgroundSecondary,
+    borderRadius: 10,
+    borderWidth: 1, borderColor: C.borderLight,
+    paddingHorizontal: 10, paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+  },
+  searchIcon: { marginRight: 6 },
+  searchInput: {
+    flex: 1, fontSize: 15, color: C.text,
+    padding: 0,
+  },
+
+  countWrap: { paddingHorizontal: 16, paddingBottom: 4 },
+  countText: { fontSize: 12, color: C.textTertiary, fontWeight: '500' },
+
+  list: {},
+  optionRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: C.borderLight,
+    backgroundColor: '#FFFFFF',
+  },
+  optionRowLast: { borderBottomWidth: 0 },
+  optionRowSelected: { backgroundColor: 'rgba(249,115,22,0.06)' },
+  optionLabel: { flex: 1, fontSize: 15, color: C.text, marginRight: 10 },
+  optionLabelSelected: { color: C.tint, fontWeight: '600' },
+
+  empty: { alignItems: 'center', paddingVertical: 48, gap: 10 },
+  emptyText: { fontSize: 14, color: C.textTertiary, fontWeight: '500', textAlign: 'center' },
+});
