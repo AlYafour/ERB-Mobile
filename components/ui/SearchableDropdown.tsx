@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Colors } from '@/constants/theme';
 import { IconSymbol } from './icon-symbol';
@@ -119,6 +119,9 @@ export default function SearchableDropdown({
         animationType="slide"
         onRequestClose={() => setIsOpen(false)}>
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ width: '100%' }}>
           <View style={[styles.modalContent, { backgroundColor }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: textColor }]}>
@@ -165,6 +168,7 @@ export default function SearchableDropdown({
               }
             />
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>

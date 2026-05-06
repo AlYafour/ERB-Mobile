@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import DatePickerInput from '@/components/ui/DatePickerInput';
+import AIProcurementChat, { AIFormUpdate } from '@/components/ui/AIProcurementChat';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { Product, Project, PurchaseRequestItem } from '@/types';
@@ -155,6 +156,31 @@ export default function NewPurchaseRequestScreen() {
     setItems(items.filter((_, i) => i !== index));
   };
 
+  const handleAIAddItems = (newItems: PurchaseRequestItemForm[]) => {
+    setItems((prev) => {
+      const merged = [...prev];
+      for (const ni of newItems) {
+        const existing = merged.findIndex((it) => it.product_id === ni.product_id);
+        if (existing >= 0) {
+          merged[existing] = { ...merged[existing], quantity: merged[existing].quantity + ni.quantity };
+        } else {
+          merged.push(ni);
+        }
+      }
+      return merged;
+    });
+  };
+
+  const handleAIFormUpdate = (fields: AIFormUpdate) => {
+    if (fields.project_id) handleProjectChange(fields.project_id);
+    setFormData((prev) => ({
+      ...prev,
+      ...(fields.title      ? { title: fields.title }           : {}),
+      ...(fields.required_by ? { required_by: fields.required_by } : {}),
+      ...(fields.notes      ? { notes: fields.notes }           : {}),
+    }));
+  };
+
   const handleUpdateItem = (index: number, field: keyof PurchaseRequestItemForm, value: any) => {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
@@ -273,6 +299,9 @@ export default function NewPurchaseRequestScreen() {
             textAlignVertical="top"
           />
         </Card>
+
+        {/* ── AI Chat ── */}
+        <AIProcurementChat onAddItems={handleAIAddItems} onFormUpdate={handleAIFormUpdate} />
 
         {/* ── Products ── */}
         <SectionTitle>Required Products</SectionTitle>

@@ -247,11 +247,14 @@ export const dashboardApi = {
         } catch (error: any) {
           // Silently skip this project if there's a permission error
           const errorMessage = error?.message || String(error);
-          const isPermissionError = 
-            errorMessage.includes('permission') || 
+          const isPermissionError =
+            errorMessage.includes('permission') ||
             errorMessage.includes('Not Found') ||
             errorMessage.includes('403') ||
-            errorMessage.includes('404');
+            errorMessage.includes('404') ||
+            errorMessage.includes('timed out') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('network');
           
           if (!isPermissionError && __DEV__) {
             console.warn(`Error fetching analytics for project ${project.id}:`, error);
@@ -429,11 +432,14 @@ export const dashboardApi = {
         } catch (error: any) {
           // Silently skip this user if there's a permission error or not found
           const errorMessage = error?.message || String(error);
-          const isPermissionError = 
-            errorMessage.includes('permission') || 
+          const isPermissionError =
+            errorMessage.includes('permission') ||
             errorMessage.includes('Not Found') ||
             errorMessage.includes('403') ||
-            errorMessage.includes('404');
+            errorMessage.includes('404') ||
+            errorMessage.includes('timed out') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('network');
           
           if (!isPermissionError) {
             // Only log non-permission errors in development
@@ -474,11 +480,14 @@ export const dashboardApi = {
           return await apiCall();
         } catch (error: any) {
           const errorMessage = error?.message || String(error);
-          const isPermissionError = 
-            errorMessage.includes('permission') || 
+          const isPermissionError =
+            errorMessage.includes('permission') ||
             errorMessage.includes('Not Found') ||
             errorMessage.includes('403') ||
-            errorMessage.includes('404');
+            errorMessage.includes('404') ||
+            errorMessage.includes('timed out') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('network');
           
           if (!isPermissionError && __DEV__) {
             console.warn('Error fetching cycle metrics:', error);
@@ -597,11 +606,14 @@ export const dashboardApi = {
           return await apiCall();
         } catch (error: any) {
           const errorMessage = error?.message || String(error);
-          const isPermissionError = 
-            errorMessage.includes('permission') || 
+          const isPermissionError =
+            errorMessage.includes('permission') ||
             errorMessage.includes('Not Found') ||
             errorMessage.includes('403') ||
-            errorMessage.includes('404');
+            errorMessage.includes('404') ||
+            errorMessage.includes('timed out') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('network');
           
           if (!isPermissionError && __DEV__) {
             console.warn('Error fetching chart data:', error);
@@ -666,11 +678,14 @@ export const dashboardApi = {
         } catch (error: any) {
           // Silently skip this project
           const errorMessage = error?.message || String(error);
-          const isPermissionError = 
-            errorMessage.includes('permission') || 
+          const isPermissionError =
+            errorMessage.includes('permission') ||
             errorMessage.includes('Not Found') ||
             errorMessage.includes('403') ||
-            errorMessage.includes('404');
+            errorMessage.includes('404') ||
+            errorMessage.includes('timed out') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('network');
           
           if (!isPermissionError && __DEV__) {
             console.warn(`Error fetching project spending for ${project.id}:`, error);

@@ -198,6 +198,18 @@ class ApiClient {
     });
   }
 
+  async postForm<T>(endpoint: string, formData: FormData): Promise<ApiResponse<T>> {
+    const authHeaders = await this.getAuthHeaders();
+    // Omit Content-Type so fetch sets it automatically with the multipart boundary
+    const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders as Record<string, string>;
+    return this.executeRequest<T>(`${this.baseURL}${endpoint}`, {
+      ...this.getFetchOptions(),
+      method: 'POST',
+      headers: headersWithoutContentType,
+      body: formData,
+    });
+  }
+
   async put<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
     const headers = await this.getAuthHeaders();
     return this.executeRequest<T>(`${this.baseURL}${endpoint}`, {
