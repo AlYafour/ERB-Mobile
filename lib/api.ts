@@ -19,6 +19,8 @@ type AuthClearedCallback = () => void;
 class ApiClient {
   private baseURL: string;
   private onAuthCleared: AuthClearedCallback | null = null;
+  // Mutex: only one refresh in-flight at a time; concurrent callers share the result
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor() {
     this.baseURL = API_BASE_URL;
@@ -78,15 +80,26 @@ class ApiClient {
   }
 
   private async refreshToken(): Promise<boolean> {
+    // If a refresh is already running, reuse its result instead of starting another
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+    this.refreshPromise = this._doRefresh().finally(() => {
+      this.refreshPromise = null;
+    });
+    return this.refreshPromise;
+  }
+
+  private async _doRefresh(): Promise<boolean> {
     try {
-      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-      if (!refreshToken) return false;
+      const storedRefresh = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      if (!storedRefresh) return false;
 
       const response = await fetch(`${this.baseURL}${API_ENDPOINTS.REFRESH_TOKEN}`, {
         ...this.getFetchOptions(),
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ refresh: refreshToken }),
+        body: JSON.stringify({ refresh: storedRefresh }),
       });
 
       if (response.ok) {
@@ -94,6 +107,11 @@ class ApiClient {
         const accessToken = data.access || data.access_token;
         if (accessToken) {
           await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+          // Store rotated refresh token if backend sends a new one
+          const newRefresh = data.refresh || data.refresh_token;
+          if (newRefresh) {
+            await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
+          }
           return true;
         }
       }
@@ -142,19 +160,18 @@ class ApiClient {
       const isTokenError = errorCode === 'token_not_valid' || errorCode === 'token_not_provided';
 
       if (isTokenError) {
-        // Access token expired — try to refresh
+        // Mutex: all concurrent 401s share one refresh call, none runs in parallel
         const refreshed = await this.refreshToken();
         if (refreshed) {
-          // Retry once with the new token
           const newHeaders = await this.getAuthHeaders();
           return this.executeRequest<T>(url, { ...options, headers: newHeaders }, true);
         }
-        // Refresh failed (refresh token expired too) — force logout
+        // Refresh token also expired — force logout
         await this.clearAuth();
         return { status: 401, error: 'Session expired. Please login again.' };
       }
 
-      // Real auth error (wrong password, account disabled, etc.)
+      // Real auth error (wrong password, account disabled, no credentials, etc.)
       const errMsg = body?.detail || body?.error || body?.message || 'Unauthorized';
       return { status: 401, error: errMsg, data: body };
     }
