@@ -1,17 +1,21 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Platform, Modal, StyleSheet as RNStyleSheet,
+  Modal, FlatList,
 } from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '@/constants/theme';
 
 const C = Colors.light;
 
-interface DatePickerInputProps {
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+interface Props {
   label?: string;
-  value: string;           // YYYY-MM-DD
+  value: string;        // YYYY-MM-DD
   onChange: (date: string) => void;
   placeholder?: string;
   required?: boolean;
@@ -25,17 +29,27 @@ function toDate(str: string): Date {
   return isNaN(d.getTime()) ? new Date() : d;
 }
 
-function toYMD(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+function toYMD(y: number, m: number, d: number): string {
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
 function formatDisplay(str: string): string {
   if (!str) return '';
   const d = toDate(str);
-  return d.toLocaleDateString('en-AE', { day: '2-digit', month: 'short', year: 'numeric' });
+  return `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function buildYearRange(min?: Date, max?: Date): number[] {
+  const now = new Date();
+  const start = min ? min.getFullYear() : now.getFullYear() - 5;
+  const end = max ? max.getFullYear() : now.getFullYear() + 10;
+  const arr: number[] = [];
+  for (let y = start; y <= end; y++) arr.push(y);
+  return arr;
 }
 
 export default function DatePickerInput({
@@ -43,63 +57,84 @@ export default function DatePickerInput({
   value,
   onChange,
   placeholder = 'Select date',
-  required,
   minimumDate,
   maximumDate,
-}: DatePickerInputProps) {
+}: Props) {
+  const initDate = toDate(value);
   const [show, setShow] = useState(false);
-  const [tempDate, setTempDate] = useState<Date>(toDate(value));
+  const [selYear, setSelYear] = useState(initDate.getFullYear());
+  const [selMonth, setSelMonth] = useState(initDate.getMonth() + 1); // 1-12
+  const [selDay, setSelDay] = useState(initDate.getDate());
+
+  const years = useMemo(() => buildYearRange(minimumDate, maximumDate), [minimumDate, maximumDate]);
+  const totalDays = daysInMonth(selYear, selMonth);
+  const days = Array.from({ length: totalDays }, (_, i) => i + 1);
 
   const handleOpen = () => {
-    setTempDate(toDate(value));
+    const d = value ? toDate(value) : new Date();
+    setSelYear(d.getFullYear());
+    setSelMonth(d.getMonth() + 1);
+    setSelDay(Math.min(d.getDate(), daysInMonth(d.getFullYear(), d.getMonth() + 1)));
     setShow(true);
   };
 
-  const handleAndroidChange = (_e: DateTimePickerEvent, selected?: Date) => {
-    setShow(false);
-    if (selected && _e.type !== 'dismissed') {
-      onChange(toYMD(selected));
-    }
-  };
-
-  const handleIOSChange = (_e: DateTimePickerEvent, selected?: Date) => {
-    if (selected) setTempDate(selected);
-  };
-
-  const handleIOSConfirm = () => {
-    onChange(toYMD(tempDate));
+  const handleConfirm = () => {
+    const safeDay = Math.min(selDay, daysInMonth(selYear, selMonth));
+    onChange(toYMD(selYear, selMonth, safeDay));
     setShow(false);
   };
 
-  const handleIOSCancel = () => {
-    setTempDate(toDate(value));
-    setShow(false);
+  const handleMonthChange = (m: number) => {
+    setSelMonth(m);
+    const maxDay = daysInMonth(selYear, m);
+    if (selDay > maxDay) setSelDay(maxDay);
   };
+
+  const handleYearChange = (y: number) => {
+    setSelYear(y);
+    const maxDay = daysInMonth(y, selMonth);
+    if (selDay > maxDay) setSelDay(maxDay);
+  };
+
+  // prev / next month navigation
+  const prevMonth = () => {
+    if (selMonth === 1) { handleYearChange(selYear - 1); setSelMonth(12); }
+    else handleMonthChange(selMonth - 1);
+  };
+  const nextMonth = () => {
+    if (selMonth === 12) { handleYearChange(selYear + 1); setSelMonth(1); }
+    else handleMonthChange(selMonth + 1);
+  };
+
+  // calendar grid
+  const firstWeekday = new Date(selYear, selMonth - 1, 1).getDay(); // 0=Sun
+  const gridCells = firstWeekday + totalDays;
+  const rows = Math.ceil(gridCells / 7);
+
+  const isDisabled = (day: number) => {
+    const d = new Date(toYMD(selYear, selMonth, day) + 'T00:00:00');
+    if (minimumDate && d < minimumDate) return true;
+    if (maximumDate && d > maximumDate) return true;
+    return false;
+  };
+
+  const today = new Date();
+  const isToday = (day: number) =>
+    day === today.getDate() &&
+    selMonth === today.getMonth() + 1 &&
+    selYear === today.getFullYear();
 
   return (
-    <View style={styles.wrapper}>
-      {label && (
-        <Text style={styles.label}>{label}</Text>
-      )}
+    <View style={S.wrapper}>
+      {label && <Text style={S.label}>{label}</Text>}
 
-      <TouchableOpacity
-        style={[styles.input, show && styles.inputFocused]}
-        onPress={handleOpen}
-        activeOpacity={0.75}>
-        <MaterialIcons
-          name="calendar-today"
-          size={18}
-          color={value ? C.tint : C.textTertiary}
-          style={{ marginRight: 8 }}
-        />
-        <Text style={[styles.inputText, !value && styles.placeholder]} numberOfLines={1}>
+      <TouchableOpacity style={[S.trigger, show && S.triggerFocused]} onPress={handleOpen} activeOpacity={0.75}>
+        <MaterialIcons name="calendar-today" size={18} color={value ? C.tint : C.textTertiary} style={{ marginRight: 8 }} />
+        <Text style={[S.triggerText, !value && S.placeholder]} numberOfLines={1}>
           {value ? formatDisplay(value) : placeholder}
         </Text>
         {value ? (
-          <TouchableOpacity
-            onPress={(e) => { e.stopPropagation(); onChange(''); }}
-            hitSlop={10}
-            style={styles.clearBtn}>
+          <TouchableOpacity onPress={(e) => { e.stopPropagation(); onChange(''); }} hitSlop={10}>
             <MaterialIcons name="cancel" size={18} color={C.textTertiary} />
           </TouchableOpacity>
         ) : (
@@ -107,160 +142,187 @@ export default function DatePickerInput({
         )}
       </TouchableOpacity>
 
-      {/* Android: native dialog (no custom modal needed) */}
-      {Platform.OS === 'android' && show && (
-        <DateTimePicker
-          value={tempDate}
-          mode="date"
-          display="default"
-          onChange={handleAndroidChange}
-          minimumDate={minimumDate}
-          maximumDate={maximumDate}
-        />
-      )}
+      <Modal transparent visible={show} animationType="slide" onRequestClose={() => setShow(false)}>
+        <View style={S.overlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShow(false)} />
+          <View style={S.sheet}>
 
-      {/* iOS: bottom sheet modal */}
-      {Platform.OS === 'ios' && (
-        <Modal
-          transparent
-          visible={show}
-          animationType="slide"
-          onRequestClose={handleIOSCancel}>
+            {/* Header */}
+            <View style={S.sheetHeader}>
+              <TouchableOpacity onPress={() => setShow(false)} style={S.hBtn}>
+                <Text style={S.cancelTxt}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={S.sheetTitle}>{label || 'Select Date'}</Text>
+              <TouchableOpacity onPress={handleConfirm} style={S.hBtn}>
+                <Text style={S.doneTxt}>Done</Text>
+              </TouchableOpacity>
+            </View>
 
-          {/* Full-screen container: backdrop fills top, sheet anchored at bottom */}
-          <View style={styles.modalOverlay}>
-            {/* Dimmed background — tap to cancel */}
-            <TouchableOpacity
-              style={RNStyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={handleIOSCancel}
+            {/* Month + Year navigation */}
+            <View style={S.navRow}>
+              <TouchableOpacity onPress={prevMonth} style={S.navBtn} hitSlop={8}>
+                <MaterialIcons name="chevron-left" size={26} color={C.tint} />
+              </TouchableOpacity>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={S.navMonth}>{MONTHS_LONG[selMonth - 1]} {selYear}</Text>
+              </View>
+              <TouchableOpacity onPress={nextMonth} style={S.navBtn} hitSlop={8}>
+                <MaterialIcons name="chevron-right" size={26} color={C.tint} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Year quick-select */}
+            <FlatList
+              data={years}
+              keyExtractor={(y) => String(y)}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={S.yearList}
+              initialScrollIndex={Math.max(0, years.indexOf(selYear))}
+              getItemLayout={(_, i) => ({ length: 60, offset: 60 * i, index: i })}
+              renderItem={({ item: y }) => (
+                <TouchableOpacity
+                  onPress={() => handleYearChange(y)}
+                  style={[S.yearChip, y === selYear && S.yearChipActive]}>
+                  <Text style={[S.yearChipTxt, y === selYear && S.yearChipTxtActive]}>{y}</Text>
+                </TouchableOpacity>
+              )}
             />
 
-            {/* Bottom sheet */}
-            <View style={styles.sheet}>
-              {/* Header bar */}
-              <View style={styles.sheetHeader}>
-                <TouchableOpacity onPress={handleIOSCancel} style={styles.sheetBtn} hitSlop={8}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <Text style={styles.sheetTitle} numberOfLines={1}>
-                  {label || 'Select Date'}
-                </Text>
-
-                <TouchableOpacity onPress={handleIOSConfirm} style={styles.sheetBtn} hitSlop={8}>
-                  <Text style={styles.confirmText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Date spinner */}
-              <DateTimePicker
-                value={tempDate}
-                mode="date"
-                display="spinner"
-                onChange={handleIOSChange}
-                minimumDate={minimumDate}
-                maximumDate={maximumDate}
-                style={styles.picker}
-                locale="en-AE"
-                textColor="#0F172A"
-              />
+            {/* Weekday headers */}
+            <View style={S.weekRow}>
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+                <Text key={d} style={S.weekDay}>{d}</Text>
+              ))}
             </View>
+
+            {/* Calendar grid */}
+            <View style={S.grid}>
+              {Array.from({ length: rows * 7 }, (_, i) => {
+                const day = i - firstWeekday + 1;
+                const valid = day >= 1 && day <= totalDays;
+                const disabled = valid && isDisabled(day);
+                const selected = valid && day === selDay;
+                const todayCell = valid && isToday(day);
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[S.cell, selected && S.cellSelected, todayCell && !selected && S.cellToday]}
+                    onPress={() => valid && !disabled && setSelDay(day)}
+                    disabled={!valid || disabled}
+                    activeOpacity={0.7}>
+                    {valid && (
+                      <Text style={[
+                        S.cellTxt,
+                        disabled && S.cellTxtDisabled,
+                        selected && S.cellTxtSelected,
+                        todayCell && !selected && { color: C.tint, fontWeight: '700' },
+                      ]}>
+                        {day}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Selected date display */}
+            <View style={S.footer}>
+              <Text style={S.footerTxt}>
+                {selDay} {MONTHS_LONG[selMonth - 1]} {selYear}
+              </Text>
+              <TouchableOpacity onPress={handleConfirm} style={S.confirmBtn} activeOpacity={0.85}>
+                <Text style={S.confirmTxt}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+
           </View>
-        </Modal>
-      )}
+        </View>
+      </Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: C.textSecondary,
-    marginBottom: 6,
-  },
-  input: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    minHeight: 46,
-  },
-  inputFocused: {
-    borderColor: C.tint,
-    borderWidth: 1.5,
-  },
-  inputText: {
-    flex: 1,
-    fontSize: 15,
-    color: C.text,
-    fontWeight: '500',
-  },
-  placeholder: {
-    color: C.textTertiary,
-    fontWeight: '400',
-  },
-  clearBtn: {
-    padding: 2,
-    marginLeft: 4,
-  },
+const CELL = 44;
 
-  // iOS modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',   // sheet sticks to bottom
+const S = StyleSheet.create({
+  wrapper: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: '500', color: C.textSecondary, marginBottom: 6 },
+
+  trigger: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, minHeight: 46,
   },
+  triggerFocused: { borderColor: C.tint, borderWidth: 1.5 },
+  triggerText: { flex: 1, fontSize: 15, color: C.text, fontWeight: '500' },
+  placeholder: { color: C.textTertiary, fontWeight: '400' },
+
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 0,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingBottom: 28,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12, shadowRadius: 16, elevation: 20,
   },
+
   sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
   },
-  sheetTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: 8,
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', flex: 1, textAlign: 'center' },
+  hBtn: { paddingHorizontal: 4, paddingVertical: 4, minWidth: 60 },
+  cancelTxt: { fontSize: 15, color: '#64748B', fontWeight: '500' },
+  doneTxt: { fontSize: 15, color: C.tint, fontWeight: '700', textAlign: 'right' },
+
+  navRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4,
   },
-  sheetBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-    minWidth: 60,
+  navBtn: { padding: 4 },
+  navMonth: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
+
+  yearList: { paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
+  yearChip: {
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 20, backgroundColor: '#F1F5F9',
+    minWidth: 54, alignItems: 'center',
   },
-  cancelText: {
-    fontSize: 15,
-    color: '#64748B',
-    fontWeight: '500',
+  yearChipActive: { backgroundColor: C.tint },
+  yearChipTxt: { fontSize: 14, fontWeight: '500', color: '#475569' },
+  yearChipTxtActive: { color: '#FFFFFF', fontWeight: '700' },
+
+  weekRow: {
+    flexDirection: 'row', paddingHorizontal: 8, paddingBottom: 4,
   },
-  confirmText: {
-    fontSize: 15,
-    color: '#F97316',
-    fontWeight: '700',
-    textAlign: 'right',
+  weekDay: {
+    width: CELL, textAlign: 'center',
+    fontSize: 12, fontWeight: '600', color: '#94A3B8',
   },
-  picker: {
-    height: 200,
-    width: '100%',
+
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 8 },
+  cell: {
+    width: CELL, height: CELL,
+    alignItems: 'center', justifyContent: 'center',
+    borderRadius: CELL / 2,
   },
+  cellSelected: { backgroundColor: C.tint },
+  cellToday: { borderWidth: 1.5, borderColor: C.tint },
+  cellTxt: { fontSize: 15, fontWeight: '400', color: '#1E293B' },
+  cellTxtSelected: { color: '#FFFFFF', fontWeight: '700' },
+  cellTxtDisabled: { color: '#CBD5E1' },
+
+  footer: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4,
+  },
+  footerTxt: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
+  confirmBtn: {
+    backgroundColor: C.tint, borderRadius: 10,
+    paddingHorizontal: 20, paddingVertical: 10,
+  },
+  confirmTxt: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
 });
