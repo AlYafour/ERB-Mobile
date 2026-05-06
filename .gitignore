@@ -41,3 +41,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Exclude Next.js web project folder
+ERB-core-Frontend/
+**/ERB-core-Frontend/

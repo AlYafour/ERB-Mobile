@@ -3,5 +3,17 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  "files.exclude": {
+    "**/ERB-core-Frontend/**": true
+  },
+  "search.exclude": {
+    "**/ERB-core-Frontend/**": true
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "files.watcherExclude": {
+    "**/ERB-core-Frontend/**": true
+  },
+  "typescript.preferences.excludePackageJsonAutoImports": "off"
 }

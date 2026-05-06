@@ -1,50 +1,184 @@
-# Welcome to your Expo app 👋
+# ERB Mobile App - Procurement Management
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+تطبيق موبايل لإدارة المشتريات مبني بـ React Native و Expo.
 
-## Get started
+## المميزات
 
-1. Install dependencies
+- ✅ Authentication (Login/Register)
+- ✅ Dashboard مع إحصائيات سريعة
+- ✅ إدارة المستخدمين
+- ✅ إدارة الموردين
+- ✅ إدارة المنتجات
+- ✅ إدارة المشاريع
+- ✅ طلبات الشراء
+- ✅ عروض الأسعار
+- ✅ طلبات العروض
+- ✅ أوامر الشراء
+- ✅ فواتير الشراء
+- ✅ استلام البضائع
+- ✅ الإشعارات
+- ✅ الملف الشخصي والإعدادات
 
-   ```bash
-   npm install
-   ```
+## البنية
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+erb-mobile/
+├── app/                    # الشاشات (Expo Router)
+│   ├── (tabs)/            # Tab Navigation
+│   │   ├── index.tsx      # Dashboard
+│   │   ├── notifications.tsx
+│   │   └── profile.tsx
+│   ├── login.tsx
+│   ├── register.tsx
+│   ├── dashboard.tsx
+│   ├── users.tsx
+│   ├── suppliers.tsx
+│   ├── products.tsx
+│   ├── projects.tsx
+│   ├── purchase-requests.tsx
+│   ├── purchase-quotations.tsx
+│   ├── quotation-requests.tsx
+│   ├── purchase-orders.tsx
+│   ├── purchase-invoices.tsx
+│   ├── goods-receiving.tsx
+│   ├── notifications.tsx
+│   ├── profile.tsx
+│   └── settings.tsx
+├── components/             # UI Components
+│   ├── ui/                # UI Kit
+│   │   ├── Button.tsx
+│   │   ├── Input.tsx
+│   │   └── Card.tsx
+│   └── ProtectedRoute.tsx
+├── contexts/              # React Contexts
+│   └── AuthContext.tsx
+├── lib/                   # API & Logic
+│   └── api.ts
+├── constants/             # Constants
+│   ├── api.ts
+│   └── theme.ts
+└── types/                 # TypeScript Types
+    └── index.ts
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## التثبيت
 
-## Learn more
+```bash
+# تثبيت المكتبات
+npm install
 
-To learn more about developing your project with Expo, look at the following resources:
+# أو
+yarn install
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## التشغيل
 
-## Join the community
+```bash
+# تشغيل التطبيق
+npm start
 
-Join our community of developers creating universal apps.
+# تشغيل على Android
+npm run android
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+# تشغيل على iOS
+npm run ios
+
+# تشغيل على Web
+npm run web
+```
+
+## API Configuration
+
+التطبيق متصل بـ Backend على:
+- **URL**: `https://erb-core-backend.onrender.com`
+
+جميع الـ endpoints موجودة في `constants/api.ts`
+
+## Authentication
+
+التطبيق يستخدم JWT tokens للـ authentication:
+- Access Token: مخزن في AsyncStorage
+- Refresh Token: يتم استخدامه تلقائياً عند انتهاء Access Token
+- User Data: مخزن في AsyncStorage
+
+## Navigation
+
+- **Expo Router**: File-based routing
+- **Tabs**: Dashboard, Notifications, Profile
+- **Stack Navigation**: لجميع الشاشات الأخرى
+
+## UI Components
+
+### Button
+```tsx
+<Button
+  title="Click Me"
+  onPress={() => {}}
+  variant="primary" // primary | secondary | outline | danger
+  loading={false}
+  fullWidth
+/>
+```
+
+### Input
+```tsx
+<Input
+  label="Email"
+  value={email}
+  onChangeText={setEmail}
+  placeholder="Enter email"
+  error={error}
+/>
+```
+
+### Card
+```tsx
+<Card>
+  <Text>Content</Text>
+</Card>
+```
+
+## الشاشات
+
+### Public Screens
+- `/login` - تسجيل الدخول
+- `/register` - إنشاء حساب
+
+### Protected Screens
+- `/(tabs)` - Dashboard (Tab Navigation)
+- `/users` - إدارة المستخدمين
+- `/suppliers` - إدارة الموردين
+- `/products` - إدارة المنتجات
+- `/projects` - إدارة المشاريع
+- `/purchase-requests` - طلبات الشراء
+- `/purchase-quotations` - عروض الأسعار
+- `/quotation-requests` - طلبات العروض
+- `/purchase-orders` - أوامر الشراء
+- `/purchase-invoices` - فواتير الشراء
+- `/goods-receiving` - استلام البضائع
+- `/notifications` - الإشعارات
+- `/profile` - الملف الشخصي
+- `/settings` - الإعدادات
+
+## المهام المتبقية
+
+- [ ] إضافة Pull-to-Refresh في جميع الشاشات ✅
+- [ ] إضافة Search functionality ✅
+- [ ] إضافة Detail screens لكل عنصر
+- [ ] إضافة Create/Edit forms
+- [ ] إضافة Error handling محسّن
+- [ ] إضافة Loading states
+- [ ] إضافة Offline support
+- [ ] إضافة Push notifications
+
+## التطوير
+
+المشروع مبني باستخدام:
+- **React Native** 0.81.5
+- **Expo** ~54.0.29
+- **Expo Router** ~6.0.20
+- **TypeScript** 5.9.2
+
+## License
+
+Private
