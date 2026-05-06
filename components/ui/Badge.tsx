@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useThemeColor } from '@/hooks/use-theme-color';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -10,26 +10,29 @@ interface BadgeProps {
 }
 
 export function Badge({ children, variant = 'default', style }: BadgeProps) {
-  const getVariantStyles = () => {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+
+  const getVariantColors = () => {
     switch (variant) {
       case 'success':
-        return { backgroundColor: '#d4edda', color: '#155724', borderColor: '#c3e6cb' };
+        return { bg: colors.successLight, text: colors.successText };
       case 'error':
-        return { backgroundColor: '#f8d7da', color: '#721c24', borderColor: '#f5c6cb' };
+        return { bg: colors.errorLight, text: colors.errorText };
       case 'warning':
-        return { backgroundColor: '#fff3cd', color: '#856404', borderColor: '#ffeaa7' };
+        return { bg: colors.warningLight, text: colors.warningText };
       case 'info':
-        return { backgroundColor: '#d1ecf1', color: '#0c5460', borderColor: '#bee5eb' };
+        return { bg: colors.infoLight, text: colors.infoText };
       default:
-        return { backgroundColor: '#e9ecef', color: '#495057', borderColor: '#dee2e6' };
+        return { bg: colors.backgroundTertiary, text: colors.textSecondary };
     }
   };
 
-  const variantStyles = getVariantStyles();
+  const { bg, text } = getVariantColors();
 
   return (
-    <View style={[styles.badge, { backgroundColor: variantStyles.backgroundColor, borderColor: variantStyles.borderColor }, style]}>
-      <Text style={[styles.badgeText, { color: variantStyles.color }]}>{children}</Text>
+    <View style={[styles.badge, { backgroundColor: bg }, style]}>
+      <Text style={[styles.text, { color: text }]}>{children}</Text>
     </View>
   );
 }
@@ -37,14 +40,13 @@ export function Badge({ children, variant = 'default', style }: BadgeProps) {
 const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingVertical: 3,
+    borderRadius: 6,
     alignSelf: 'flex-start',
   },
-  badgeText: {
-    fontSize: 12,
+  text: {
+    fontSize: 11,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
 });
-

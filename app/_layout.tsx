@@ -70,16 +70,16 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? PremiumDarkTheme : PremiumLightTheme}>
+      <ThemeProvider value={PremiumLightTheme}>
         <Stack
           screenOptions={{
             headerShown: false,
             contentStyle: {
-              backgroundColor: colorScheme === 'dark' ? PremiumDarkTheme.colors.background : PremiumLightTheme.colors.background,
+              backgroundColor: PremiumLightTheme.colors.background,
             },
           }}
         />
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <StatusBar style="dark" />
         <ToastContainer />
         <ConfirmDialog />
       </ThemeProvider>

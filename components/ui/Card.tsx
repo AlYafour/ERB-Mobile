@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle, TouchableOpacity, Platform } from 'react-native';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { View, ViewStyle, TouchableOpacity, Platform } from 'react-native';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const isWeb = Platform.OS === 'web' || (typeof window !== 'undefined' && window.document);
 
@@ -13,30 +13,23 @@ interface CardProps {
 }
 
 export function Card({ children, style, onPress, padding = 16 }: CardProps) {
-  const backgroundColor = useThemeColor({}, 'background');
-  const cardColor = backgroundColor === Colors.light.background ? '#fff' : '#1e1e1e';
-  const shadowColor = '#000';
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
 
   const cardStyle: ViewStyle = {
-    backgroundColor: cardColor,
+    backgroundColor: colors.card,
     borderRadius: 12,
-    padding: padding || 20,
-    marginBottom: 16,
+    padding,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: backgroundColor === Colors.light.background ? Colors.light.borderLight : Colors.dark.border,
-    // Use shadow props for native, boxShadow for web
+    borderColor: colors.border,
     ...(isWeb
-      ? {
-          boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.05)',
-        }
+      ? { boxShadow: '0px 1px 3px rgba(0,0,0,0.06)' }
       : {
-          shadowColor,
-          shadowOffset: {
-            width: 0,
-            height: 1,
-          },
-          shadowOpacity: 0.05,
-          shadowRadius: 3,
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.08,
+          shadowRadius: 4,
           elevation: 1,
         }),
   };
@@ -51,4 +44,3 @@ export function Card({ children, style, onPress, padding = 16 }: CardProps) {
 
   return <View style={[cardStyle, style]}>{children}</View>;
 }
-

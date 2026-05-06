@@ -1,421 +1,206 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { goodsReceivingApi, GoodsReceivedNote } from '@/lib/api/goods-receiving';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast, confirm } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography } from '@/constants/spacing';
-import { Layout } from '@/constants/layout';
 
-const statusColors: Record<string, string> = {
-  draft: '#6c757d',
-  partial: '#ffc107',
-  completed: '#28a745',
-  cancelled: '#dc3545',
-};
+const C = Colors.light;
 
-const qualityStatusColors: Record<string, string> = {
-  good: '#28a745',
-  damaged: '#ffc107',
-  defective: '#dc3545',
-  missing: '#dc3545',
-};
+const qualityVariant = (s?: string): 'success' | 'error' | 'warning' | 'info' =>
+  s === 'good' ? 'success' : s === 'defective' || s === 'missing' ? 'error' : 'warning';
+
+function Row({ label, value, onPress }: { label: string; value?: string | null; onPress?: () => void }) {
+  if (!value) return null;
+  return (
+    <View style={S.row}>
+      <Text style={S.rowLabel}>{label}</Text>
+      {onPress ? <TouchableOpacity onPress={onPress}><Text style={[S.rowValue, S.link]}>{value}</Text></TouchableOpacity>
+        : <Text style={S.rowValue}>{value}</Text>}
+    </View>
+  );
+}
 
 export default function GoodsReceivingDetailScreen() {
-  const params = useLocalSearchParams();
+  const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
-  const id = Number(params.id);
+  const id = Number(paramId);
   const { user } = useAuth();
   const [grn, setGrn] = useState<GoodsReceivedNote | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [markingInvoiceDelivered, setMarkingInvoiceDelivered] = useState(false);
+  const [markingDelivered, setMarkingDelivered] = useState(false);
 
-  useEffect(() => {
-    loadGRN();
-  }, [id]);
-
-  const loadGRN = async () => {
-    try {
-      setLoading(true);
-      const data = await goodsReceivingApi.getById(id);
-      setGrn(data);
-    } catch (error: any) {
-      console.error('Error loading goods receiving note:', error);
-      toast(error.message || 'Failed to load goods receiving note', 'error');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const load = async () => {
+    try { setLoading(true); setGrn(await goodsReceivingApi.getById(id)); }
+    catch (e: any) { toast(e.message || 'Failed to load', 'error'); }
+    finally { setLoading(false); setRefreshing(false); }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadGRN();
+  useEffect(() => { load(); }, [id]);
+
+  const handleMarkDelivered = async () => {
+    if (!await confirm('Mark supplier invoice as delivered?')) return;
+    try { setMarkingDelivered(true); await goodsReceivingApi.markInvoiceDelivered(id); toast('Invoice marked as delivered', 'success'); load(); }
+    catch (e: any) { toast(e.message || 'Failed', 'error'); }
+    finally { setMarkingDelivered(false); }
   };
 
-  const handleMarkInvoiceDelivered = async () => {
-    const confirmed = await confirm(
-      'Are you sure you want to mark the supplier invoice as delivered?'
-    );
-    if (!confirmed) return;
+  if (loading) return (
+    <SafeAreaView style={S.container} edges={['bottom']}>
+      <ScreenHeader title="Goods Receiving" showBack />
+      <View style={S.center}><ActivityIndicator size="large" color={C.tint} /></View>
+    </SafeAreaView>
+  );
 
-    try {
-      setMarkingInvoiceDelivered(true);
-      await goodsReceivingApi.markInvoiceDelivered(id);
-      toast('Invoice marked as delivered successfully', 'success');
-      loadGRN();
-    } catch (error: any) {
-      toast(error.message || 'Failed to mark invoice as delivered', 'error');
-    } finally {
-      setMarkingInvoiceDelivered(false);
-    }
-  };
+  if (!grn) return (
+    <SafeAreaView style={S.container} edges={['bottom']}>
+      <ScreenHeader title="Goods Receiving" showBack />
+      <View style={S.center}><Text style={S.errorText}>GRN not found</Text></View>
+    </SafeAreaView>
+  );
 
-  if (loading) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.tint} />
-        <ThemedText style={styles.loadingText}>Loading goods receiving note...</ThemedText>
-      </ThemedView>
-    );
-  }
-
-  if (!grn) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ThemedText style={styles.errorText}>Goods receiving note not found</ThemedText>
-      </ThemedView>
-    );
-  }
-
-  const getStatusColor = (status?: string) => {
-    return statusColors[status?.toLowerCase() || ''] || '#0a7ea4';
-  };
-
-  const getQualityStatusColor = (status?: string) => {
-    return qualityStatusColors[status?.toLowerCase() || ''] || '#0a7ea4';
-  };
+  const poNumber = typeof grn.purchase_order === 'object' ? (grn.purchase_order as any)?.order_number : null;
+  const poId = typeof grn.purchase_order === 'object' ? (grn.purchase_order as any)?.id : grn.purchase_order_id;
+  const grnNum = grn.grn_number || `GRN-${id}`;
+  const statusVariant = (s: string): 'success' | 'warning' | 'error' | 'info' =>
+    s === 'completed' ? 'success' : s === 'cancelled' ? 'error' : s === 'partial' ? 'warning' : 'info';
 
   return (
-    <ThemedView style={styles.container}>
+    <SafeAreaView style={S.container} edges={['bottom']}>
+      <ScreenHeader
+        title={grnNum}
+        subtitle={grn.status?.toUpperCase()}
+        showBack
+        rightElement={<Badge variant={statusVariant(grn.status)}>{grn.status || 'Draft'}</Badge>}
+      />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={20} color={Colors.light.tint} />
-            <ThemedText style={styles.backButtonText}>Back to Goods Receiving</ThemedText>
-          </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <ThemedText type="title" style={styles.mainTitle}>
-              {grn.grn_number || `GRN-${id}`}
-            </ThemedText>
-            {grn.status && (
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(grn.status) }]}>
-                <ThemedText style={styles.statusText}>{grn.status}</ThemedText>
-              </View>
-            )}
-          </View>
-        </View>
+        contentContainerStyle={S.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.tint} colors={[C.tint]} />}
+        showsVerticalScrollIndicator={false}>
 
-        {/* GRN Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            GRN Information
-          </ThemedText>
-          {typeof grn.purchase_order === 'object' && grn.purchase_order?.order_number && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Purchase Order:</ThemedText>
-              <TouchableOpacity
-                onPress={() =>
-                  router.push(`/purchase-orders/${grn.purchase_order?.id || ''}` as any)
-                }>
-                <ThemedText style={[styles.value, styles.linkValue]}>
-                  {grn.purchase_order.order_number}
-                </ThemedText>
-              </TouchableOpacity>
-            </View>
-          )}
-          {grn.receipt_date && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Receipt Date:</ThemedText>
-              <ThemedText style={styles.value}>
-                {new Date(grn.receipt_date).toLocaleDateString()}
-              </ThemedText>
-            </View>
-          )}
-          {grn.received_by_name && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Received By:</ThemedText>
-              <ThemedText style={styles.value}>{grn.received_by_name}</ThemedText>
-            </View>
-          )}
-          {grn.total_items !== undefined && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Total Items:</ThemedText>
-              <ThemedText style={styles.value}>{grn.total_items}</ThemedText>
-            </View>
-          )}
-          {grn.total_received_quantity !== undefined && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Total Received Quantity:</ThemedText>
-              <ThemedText style={styles.value}>{grn.total_received_quantity}</ThemedText>
-            </View>
-          )}
-          {grn.notes && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Notes:</ThemedText>
-              <ThemedText style={styles.value}>{grn.notes}</ThemedText>
-            </View>
-          )}
+        {/* GRN Info */}
+        <Card padding={16} style={S.card}>
+          <Text style={S.sectionTitle}>GRN Information</Text>
+          <Row label="Purchase Order" value={poNumber} onPress={poId ? () => router.push(`/purchase-orders/${poId}` as any) : undefined} />
+          <Row label="Receipt Date" value={grn.receipt_date ? new Date(grn.receipt_date).toLocaleDateString('en-AE') : null} />
+          <Row label="Received By" value={grn.received_by_name} />
+          {grn.total_items !== undefined && <Row label="Total Items" value={String(grn.total_items)} />}
+          {grn.total_received_quantity !== undefined && <Row label="Total Received Qty" value={String(grn.total_received_quantity)} />}
+          {grn.notes && <View style={S.notesBox}><Text style={S.notesText}>{grn.notes}</Text></View>}
         </Card>
 
         {/* Invoice Delivery Status */}
         {grn.invoice_delivery_status && (
-          <Card style={styles.card}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Invoice Delivery Status
-            </ThemedText>
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Status:</ThemedText>
-              <Badge
-                variant={grn.invoice_delivery_status === 'delivered' ? 'success' : 'warning'}
-                text={
-                  grn.invoice_delivery_status === 'delivered'
-                    ? 'Delivered'
-                    : 'Not Delivered'
-                }
-              />
+          <Card padding={16} style={S.card}>
+            <Text style={S.sectionTitle}>Invoice Delivery</Text>
+            <View style={S.invoiceStatusRow}>
+              <Text style={S.rowLabel}>Status</Text>
+              <Badge variant={grn.invoice_delivery_status === 'delivered' ? 'success' : 'warning'}>
+                {grn.invoice_delivery_status === 'delivered' ? 'Delivered' : 'Not Delivered'}
+              </Badge>
             </View>
-            {grn.supplier_invoice_file_url && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.label}>Invoice File:</ThemedText>
-                <ThemedText style={[styles.value, styles.linkValue]}>View File</ThemedText>
-              </View>
-            )}
           </Card>
         )}
 
         {/* Items */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Received Items
-          </ThemedText>
-          {grn.items && grn.items.length > 0 ? (
-            grn.items.map((item, index) => (
-              <View key={item.id || index} style={styles.itemRow}>
-                <View style={styles.itemDetails}>
-                  <ThemedText type="defaultSemiBold">
-                    {typeof item.product === 'object' ? item.product?.name : 'N/A'}
-                  </ThemedText>
-                  <View style={styles.quantityRow}>
-                    <ThemedText style={styles.itemSubText}>
-                      Ordered: {item.ordered_quantity}
-                    </ThemedText>
-                    <ThemedText style={styles.itemSubText}>
-                      Received: {item.received_quantity}
-                    </ThemedText>
-                    {item.rejected_quantity > 0 && (
-                      <ThemedText style={[styles.itemSubText, styles.rejectedText]}>
-                        Rejected: {item.rejected_quantity}
-                      </ThemedText>
-                    )}
-                  </View>
-                  {item.quality_status && (
-                    <View style={styles.qualityStatusContainer}>
-                      <View
-                        style={[
-                          styles.qualityBadge,
-                          { backgroundColor: getQualityStatusColor(item.quality_status) },
-                        ]}>
-                        <ThemedText style={styles.qualityStatusText}>
-                          {item.quality_status.toUpperCase()}
-                        </ThemedText>
+        {grn.items && grn.items.length > 0 && (
+          <Card padding={16} style={S.card}>
+            <Text style={S.sectionTitle}>Received Items ({grn.items.length})</Text>
+            {grn.items.map((item, i) => {
+              const name = typeof item.product === 'object' ? item.product?.name : 'N/A';
+              return (
+                <View key={item.id || i} style={[S.itemRow, i < grn.items.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.borderLight }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.itemName}>{name}</Text>
+                    <View style={S.qtyRow}>
+                      <View style={S.qtyBox}>
+                        <Text style={S.qtyLabel}>Ordered</Text>
+                        <Text style={S.qtyValue}>{item.ordered_quantity}</Text>
                       </View>
+                      <View style={[S.qtyBox, { backgroundColor: C.successLight }]}>
+                        <Text style={S.qtyLabel}>Received</Text>
+                        <Text style={[S.qtyValue, { color: C.success }]}>{item.received_quantity}</Text>
+                      </View>
+                      {item.rejected_quantity > 0 && (
+                        <View style={[S.qtyBox, { backgroundColor: C.errorLight }]}>
+                          <Text style={S.qtyLabel}>Rejected</Text>
+                          <Text style={[S.qtyValue, { color: C.error }]}>{item.rejected_quantity}</Text>
+                        </View>
+                      )}
                     </View>
-                  )}
-                  {item.notes && (
-                    <ThemedText style={styles.itemSubText}>Notes: {item.notes}</ThemedText>
-                  )}
+                    {item.quality_status && (
+                      <View style={{ marginTop: 6 }}>
+                        <Badge variant={qualityVariant(item.quality_status)}>{item.quality_status.toUpperCase()}</Badge>
+                      </View>
+                    )}
+                    {item.notes && <Text style={S.itemNote}>{item.notes}</Text>}
+                  </View>
                 </View>
-              </View>
-            ))
-          ) : (
-            <ThemedText style={styles.emptyText}>No items found</ThemedText>
-          )}
-        </Card>
-
-        {/* Actions */}
-        {grn.invoice_delivery_status === 'not_delivered' && (
-          <View style={styles.actionsContainer}>
-            <Button
-              title={
-                markingInvoiceDelivered
-                  ? 'Processing...'
-                  : 'Mark Invoice as Delivered'
-              }
-              onPress={handleMarkInvoiceDelivered}
-              disabled={markingInvoiceDelivered}
-              variant="primary"
-              style={styles.actionButton}
-            />
-          </View>
+              );
+            })}
+          </Card>
         )}
+
+        {/* Mark invoice delivered */}
+        {grn.invoice_delivery_status === 'not_delivered' && (
+          <Card padding={16} style={S.card}>
+            <Button title={markingDelivered ? 'Processing...' : 'Mark Invoice as Delivered'} variant="primary" onPress={handleMarkDelivered} disabled={markingDelivered} loading={markingDelivered} />
+          </Card>
+        )}
+
+        {/* Next step: Create Invoice */}
+        {(grn.status === 'completed' || grn.status === 'partial') && (
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push(`/purchase-invoices/new?goods_receiving_id=${id}&purchase_order_id=${poId}` as any)}>
+            <Card padding={16} style={[S.card, { backgroundColor: C.tintSubtle }]}>
+              <View style={S.nextRow}>
+                <View style={[S.nextIcon, { backgroundColor: C.tint }]}>
+                  <IconSymbol name="doc.fill" size={18} color="#FFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[S.sectionTitle, { marginBottom: 2 }]}>Next Step: Create Invoice</Text>
+                  <Text style={{ fontSize: 12, color: C.textSecondary }}>Create a purchase invoice for these received goods</Text>
+                </View>
+                <IconSymbol name="chevron.right" size={18} color={C.tint} />
+              </View>
+            </Card>
+          </TouchableOpacity>
+        )}
+
+        <View style={{ height: 8 }} />
       </ScrollView>
-    </ThemedView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: Colors.light.text,
-  },
-  errorText: {
-    fontSize: 16,
-    color: Colors.light.error,
-    textAlign: 'center',
-  },
-  scrollContent: {
-    padding: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xl + Spacing.lg, // Extra bottom padding to avoid buttons
-  },
-  header: {
-    marginBottom: 20,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: Colors.light.tint,
-    marginLeft: 4,
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  mainTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginRight: 10,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  card: {
-    marginBottom: 15,
-    padding: 15,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-    flex: 1,
-  },
-  value: {
-    fontSize: 14,
-    color: Colors.light.text,
-    flex: 1,
-    textAlign: 'right',
-  },
-  linkValue: {
-    color: Colors.light.tint,
-    textDecorationLine: 'underline',
-  },
-  itemRow: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  itemDetails: {
-    flex: 1,
-  },
-  quantityRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
-  },
-  itemSubText: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-  },
-  rejectedText: {
-    color: Colors.light.error,
-  },
-  qualityStatusContainer: {
-    marginTop: 8,
-  },
-  qualityBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  qualityStatusText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 20,
-    color: Colors.light.textSecondary,
-  },
-  actionsContainer: {
-    marginTop: 20,
-    gap: 10,
-  },
-  actionButton: {
-    marginBottom: 10,
-  },
+const S = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { fontSize: 15, color: C.error },
+  content: { padding: 16, paddingBottom: 24 },
+  card: { marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 14, letterSpacing: -0.2 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.borderLight },
+  rowLabel: { fontSize: 13, color: C.textSecondary, fontWeight: '500', flex: 1 },
+  rowValue: { fontSize: 13, color: C.text, fontWeight: '500', flex: 1.2, textAlign: 'right' },
+  link: { color: C.tint, textDecorationLine: 'underline' },
+  notesBox: { marginTop: 10, padding: 12, backgroundColor: C.backgroundSecondary, borderRadius: 8 },
+  notesText: { fontSize: 13, color: C.textSecondary, lineHeight: 20 },
+  invoiceStatusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  itemRow: { paddingVertical: 12 },
+  itemName: { fontSize: 14, fontWeight: '600', color: C.text, marginBottom: 8 },
+  qtyRow: { flexDirection: 'row', gap: 8 },
+  qtyBox: { flex: 1, backgroundColor: C.backgroundSecondary, borderRadius: 8, padding: 8, alignItems: 'center' },
+  qtyLabel: { fontSize: 10, color: C.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 },
+  qtyValue: { fontSize: 16, fontWeight: '700', color: C.text },
+  itemNote: { fontSize: 12, color: C.textTertiary, marginTop: 6 },
+  nextRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  nextIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });
-

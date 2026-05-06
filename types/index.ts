@@ -27,6 +27,8 @@ export interface Product {
   name: string;
   description?: string;
   sku?: string;
+  code?: string;
+  unit?: string;
   unit_price?: number;
   category?: string;
   [key: string]: any;

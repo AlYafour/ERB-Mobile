@@ -1,265 +1,153 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseOrdersApi } from '@/lib/api/purchase-orders';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast, confirm } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { PurchaseOrder } from '@/types';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography } from '@/constants/spacing';
-import { Layout } from '@/constants/layout';
 
-const statusColors: Record<string, string> = {
-  pending: '#ffc107',
-  approved: '#28a745',
-  rejected: '#dc3545',
-  completed: '#28a745',
-  cancelled: '#dc3545',
-  'in transit': '#17a2b8',
-};
+const C = Colors.light;
+
+const statusVariant = (s?: string): 'success' | 'error' | 'warning' | 'info' =>
+  s === 'approved' || s === 'completed' ? 'success' : s === 'rejected' || s === 'cancelled' ? 'error' : s === 'pending' ? 'warning' : 'info';
+
+function Row({ label, value, onPress }: { label: string; value?: string | null; onPress?: () => void }) {
+  if (!value) return null;
+  return (
+    <View style={S.row}>
+      <Text style={S.rowLabel}>{label}</Text>
+      {onPress ? <TouchableOpacity onPress={onPress}><Text style={[S.rowValue, S.link]}>{value}</Text></TouchableOpacity>
+        : <Text style={S.rowValue}>{value}</Text>}
+    </View>
+  );
+}
 
 export default function PurchaseOrderDetailScreen() {
-  const params = useLocalSearchParams();
+  const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
-  const id = Number(params.id);
+  const id = Number(paramId);
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const [order, setOrder] = useState<PurchaseOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
 
-  const isSuperuser = user?.is_superuser ?? false;
-  const canApprove =
-    isSuperuser || (hasPermission('purchase_order', 'approve') ?? false);
-  const canReject =
-    isSuperuser || (hasPermission('purchase_order', 'reject') ?? false);
+  const su = user?.is_superuser ?? false;
+  const canApprove = su || (hasPermission('purchase_order', 'approve') ?? false);
+  const canReject = su || (hasPermission('purchase_order', 'reject') ?? false);
+  const isProcurement = user?.role === 'procurement_officer' || user?.role === 'super_admin' || su;
 
-  useEffect(() => {
-    loadOrder();
-  }, [id]);
-
-  const loadOrder = async () => {
-    try {
-      setLoading(true);
-      const data = await purchaseOrdersApi.getById(id);
-      setOrder(data);
-    } catch (error: any) {
-      console.error('Error loading purchase order:', error);
-      toast(error.message || 'Failed to load purchase order', 'error');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const load = async () => {
+    try { setLoading(true); setOrder(await purchaseOrdersApi.getById(id)); }
+    catch (e: any) { toast(e.message || 'Failed to load', 'error'); }
+    finally { setLoading(false); setRefreshing(false); }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadOrder();
-  };
+  useEffect(() => { load(); }, [id]);
 
   const handleApprove = async () => {
-    const confirmed = await confirm('Are you sure you want to approve this order?');
-    if (!confirmed) return;
-
-    try {
-      setApproving(true);
-      await purchaseOrdersApi.approve(id);
-      toast('Order approved successfully', 'success');
-      loadOrder();
-    } catch (error: any) {
-      toast(error.message || 'Failed to approve order', 'error');
-    } finally {
-      setApproving(false);
-    }
+    if (!await confirm('Approve this purchase order?')) return;
+    try { setApproving(true); await purchaseOrdersApi.approve(id); toast('Approved', 'success'); load(); }
+    catch (e: any) { toast(e.message || 'Failed to approve', 'error'); }
+    finally { setApproving(false); }
   };
 
   const handleReject = (reason: string) => {
-    if (!reason.trim()) {
-      toast('Please provide a rejection reason', 'error');
-      return;
-    }
-
-    purchaseOrdersApi
-      .reject(id, reason)
-      .then(() => {
-        toast('Order rejected successfully', 'success');
-        setRejectDialogOpen(false);
-        loadOrder();
-      })
-      .catch((error: any) => {
-        toast(error.message || 'Failed to reject order', 'error');
-      });
+    purchaseOrdersApi.reject(id, reason)
+      .then(() => { toast('Rejected', 'success'); setRejectOpen(false); load(); })
+      .catch((e: any) => { toast(e.message || 'Failed to reject', 'error'); });
   };
 
-  if (loading) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.tint} />
-        <ThemedText style={styles.loadingText}>Loading purchase order...</ThemedText>
-      </ThemedView>
-    );
-  }
+  if (loading) return (
+    <SafeAreaView style={S.container} edges={['bottom']}>
+      <ScreenHeader title="Purchase Order" showBack />
+      <View style={S.center}><ActivityIndicator size="large" color={C.tint} /></View>
+    </SafeAreaView>
+  );
 
-  if (!order) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ThemedText style={styles.errorText}>Purchase order not found</ThemedText>
-      </ThemedView>
-    );
-  }
+  if (!order) return (
+    <SafeAreaView style={S.container} edges={['bottom']}>
+      <ScreenHeader title="Purchase Order" showBack />
+      <View style={S.center}><Text style={S.errorText}>Order not found</Text></View>
+    </SafeAreaView>
+  );
 
-  const getStatusColor = (status?: string) => {
-    return statusColors[status?.toLowerCase() || ''] || '#0a7ea4';
-  };
+  const o = order as any;
+  const supplierName = typeof order.supplier === 'object' ? order.supplier?.name : null;
+  const orderNum = order.order_number || `LPO-${id}`;
 
   return (
-    <ThemedView style={styles.container}>
+    <SafeAreaView style={S.container} edges={['bottom']}>
+      <ScreenHeader
+        title={orderNum}
+        subtitle={order.status?.toUpperCase()}
+        showBack
+        rightElement={<Badge variant={statusVariant(order.status)}>{order.status || 'Unknown'}</Badge>}
+      />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={20} color={Colors.light.tint} />
-            <ThemedText style={styles.backButtonText}>Back to Purchase Orders</ThemedText>
-          </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <ThemedText type="title" style={styles.mainTitle}>
-              {order.order_number || `PO-${id}`}
-            </ThemedText>
-            {order.status && (
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                <ThemedText style={styles.statusText}>{order.status}</ThemedText>
-              </View>
-            )}
-          </View>
-        </View>
+        contentContainerStyle={S.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.tint} colors={[C.tint]} />}
+        showsVerticalScrollIndicator={false}>
 
-        {/* Order Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Order Information
-          </ThemedText>
-          {typeof order.supplier === 'object' && order.supplier?.name && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Supplier:</ThemedText>
-              <ThemedText style={styles.value}>{order.supplier.name}</ThemedText>
-            </View>
+        {/* Order Info */}
+        <Card padding={16} style={S.card}>
+          <Text style={S.sectionTitle}>Order Information</Text>
+          <Row label="Supplier" value={supplierName} />
+          <Row label="Order Date" value={order.order_date ? new Date(order.order_date).toLocaleDateString('en-AE') : null} />
+          <Row label="Delivery Date" value={order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('en-AE') : null} />
+          <Row label="Payment Terms" value={order.payment_terms} />
+          <Row label="Delivery Terms" value={order.delivery_terms} />
+          {o.purchase_request_number && (
+            <Row label="Purchase Request" value={o.purchase_request_number}
+              onPress={() => router.push(`/purchase-requests/${o.purchase_request_id}` as any)} />
           )}
-          {order.order_date && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Order Date:</ThemedText>
-              <ThemedText style={styles.value}>
-                {new Date(order.order_date).toLocaleDateString()}
-              </ThemedText>
-            </View>
-          )}
-          {order.delivery_date && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Delivery Date:</ThemedText>
-              <ThemedText style={styles.value}>
-                {new Date(order.delivery_date).toLocaleDateString()}
-              </ThemedText>
-            </View>
-          )}
-          {order.payment_terms && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Payment Terms:</ThemedText>
-              <ThemedText style={styles.value}>{order.payment_terms}</ThemedText>
-            </View>
-          )}
-          {order.delivery_terms && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Delivery Terms:</ThemedText>
-              <ThemedText style={styles.value}>{order.delivery_terms}</ThemedText>
-            </View>
-          )}
-          {order.notes && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Notes:</ThemedText>
-              <ThemedText style={styles.value}>{order.notes}</ThemedText>
-            </View>
-          )}
+          {order.notes && <View style={S.notesBox}><Text style={S.notesText}>{order.notes}</Text></View>}
         </Card>
 
         {/* Items */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Order Items
-          </ThemedText>
-          {order.items && order.items.length > 0 ? (
-            order.items.map((item, index) => (
-              <View key={item.id || index} style={styles.itemRow}>
-                <View style={styles.itemDetails}>
-                  <ThemedText type="defaultSemiBold">
-                    {typeof item.product === 'object'
-                      ? item.product?.name
-                      : item.product || 'N/A'}
-                  </ThemedText>
-                  <ThemedText style={styles.itemSubText}>
-                    Quantity: {item.quantity} {item.unit || ''}
-                  </ThemedText>
-                  {item.unit_price && (
-                    <ThemedText style={styles.itemSubText}>
-                      Unit Price: ${item.unit_price.toFixed(2)}
-                    </ThemedText>
-                  )}
-                  {item.total && (
-                    <ThemedText style={styles.itemSubText}>
-                      Total: ${item.total.toFixed(2)}
-                    </ThemedText>
-                  )}
+        {order.items && order.items.length > 0 && (
+          <Card padding={16} style={S.card}>
+            <Text style={S.sectionTitle}>Items ({order.items.length})</Text>
+            {order.items.map((item, i) => {
+              const it = item as any;
+              const name = typeof item.product === 'object' ? item.product?.name : it.product_name || 'N/A';
+              return (
+                <View key={item.id || i} style={[S.itemRow, i < order.items!.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.borderLight }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.itemName}>{name}</Text>
+                    <View style={S.itemMeta}>
+                      <Text style={S.metaChip}>Qty: {item.quantity} {item.unit || ''}</Text>
+                      {item.unit_price && <Text style={S.metaChip}>Unit: AED {Number(item.unit_price).toFixed(2)}</Text>}
+                    </View>
+                  </View>
+                  {item.total && <Text style={S.itemTotal}>AED {Number(item.total).toFixed(2)}</Text>}
                 </View>
-              </View>
-            ))
-          ) : (
-            <ThemedText style={styles.emptyText}>No items found</ThemedText>
-          )}
-        </Card>
+              );
+            })}
+          </Card>
+        )}
 
         {/* Totals */}
         {(order.subtotal || order.tax_amount || order.total_amount) && (
-          <Card style={styles.card}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Totals
-            </ThemedText>
-            {order.subtotal !== undefined && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.label}>Subtotal:</ThemedText>
-                <ThemedText style={styles.value}>${order.subtotal.toFixed(2)}</ThemedText>
-              </View>
-            )}
-            {order.tax_amount !== undefined && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.label}>Tax:</ThemedText>
-                <ThemedText style={styles.value}>${order.tax_amount.toFixed(2)}</ThemedText>
-              </View>
-            )}
+          <Card padding={16} style={S.card}>
+            <Text style={S.sectionTitle}>Summary</Text>
+            {order.subtotal !== undefined && <Row label="Subtotal" value={`AED ${Number(order.subtotal).toFixed(2)}`} />}
+            {order.tax_amount !== undefined && order.tax_amount > 0 && <Row label="Tax" value={`AED ${Number(order.tax_amount).toFixed(2)}`} />}
             {order.total_amount !== undefined && (
-              <View style={[styles.detailRow, styles.totalRow]}>
-                <ThemedText style={[styles.label, styles.totalLabel]}>Total:</ThemedText>
-                <ThemedText style={[styles.value, styles.totalValue]}>
-                  ${order.total_amount.toFixed(2)}
-                </ThemedText>
+              <View style={S.totalRow}>
+                <Text style={S.totalLabel}>Total</Text>
+                <Text style={S.totalValue}>AED {Number(order.total_amount).toFixed(2)}</Text>
               </View>
             )}
           </Card>
@@ -267,172 +155,63 @@ export default function PurchaseOrderDetailScreen() {
 
         {/* Actions */}
         {order.status === 'pending' && (canApprove || canReject) && (
-          <View style={styles.actionsContainer}>
-            {canApprove && (
-              <Button
-                title={approving ? 'Processing...' : 'Approve'}
-                onPress={handleApprove}
-                disabled={approving}
-                variant="primary"
-                style={styles.approveButton}
-              />
-            )}
-            {canReject && (
-              <Button
-                title={rejecting ? 'Processing...' : 'Reject'}
-                onPress={() => setRejectDialogOpen(true)}
-                disabled={rejecting}
-                variant="danger"
-                style={styles.rejectButton}
-              />
-            )}
-          </View>
+          <Card padding={16} style={S.card}>
+            <Text style={S.sectionTitle}>Actions</Text>
+            <View style={S.actionRow}>
+              {canApprove && <Button title={approving ? 'Processing...' : 'Approve'} variant="primary" onPress={handleApprove} disabled={approving} loading={approving} style={{ flex: 1 }} />}
+              {canReject && <Button title="Reject" variant="danger" onPress={() => setRejectOpen(true)} style={{ flex: 1 }} />}
+            </View>
+          </Card>
         )}
 
-        <RejectionReasonDialog
-          isOpen={rejectDialogOpen}
-          onClose={() => setRejectDialogOpen(false)}
-          onConfirm={handleReject}
-          title="Reject Purchase Order"
-          message="Please provide a reason for rejecting this order."
-        />
+        {/* Next Step: Create GRN */}
+        {order.status === 'approved' && isProcurement && (
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push(`/goods-receiving/new?purchase_order_id=${id}` as any)}>
+            <Card padding={16} style={[S.card, { backgroundColor: C.successLight }]}>
+              <View style={S.nextStepRow}>
+                <View style={[S.nextIcon, { backgroundColor: C.success }]}>
+                  <IconSymbol name="shippingbox.fill" size={18} color="#FFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[S.sectionTitle, { marginBottom: 2, color: C.success }]}>Next Step: Create GRN</Text>
+                  <Text style={{ fontSize: 12, color: C.textSecondary }}>Record goods received against this LPO</Text>
+                </View>
+                <IconSymbol name="chevron.right" size={18} color={C.success} />
+              </View>
+            </Card>
+          </TouchableOpacity>
+        )}
+
+        <View style={{ height: 8 }} />
       </ScrollView>
-    </ThemedView>
+
+      <RejectionReasonDialog isOpen={rejectOpen} onClose={() => setRejectOpen(false)} onConfirm={handleReject} title="Reject Purchase Order" message="Please provide a rejection reason." />
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: Colors.light.text,
-  },
-  errorText: {
-    fontSize: 16,
-    color: Colors.light.error,
-    textAlign: 'center',
-  },
-  scrollContent: {
-    padding: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xl + Spacing.lg, // Extra bottom padding to avoid buttons
-  },
-  header: {
-    marginBottom: 20,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: Colors.light.tint,
-    marginLeft: 4,
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  mainTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginRight: 10,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  card: {
-    marginBottom: 15,
-    padding: 15,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-    flex: 1,
-  },
-  value: {
-    fontSize: 14,
-    color: Colors.light.text,
-    flex: 1,
-    textAlign: 'right',
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  itemDetails: {
-    flex: 1,
-  },
-  itemSubText: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    marginTop: 4,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 20,
-    color: Colors.light.textSecondary,
-  },
-  totalRow: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.light.success,
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
-    gap: 10,
-  },
-  approveButton: {
-    flex: 1,
-    backgroundColor: Colors.light.success,
-  },
-  rejectButton: {
-    flex: 1,
-    backgroundColor: Colors.light.error,
-  },
+const S = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { fontSize: 15, color: C.error },
+  content: { padding: 16, paddingBottom: 24 },
+  card: { marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 14, letterSpacing: -0.2 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.borderLight },
+  rowLabel: { fontSize: 13, color: C.textSecondary, fontWeight: '500', flex: 1 },
+  rowValue: { fontSize: 13, color: C.text, fontWeight: '500', flex: 1.2, textAlign: 'right' },
+  link: { color: C.tint, textDecorationLine: 'underline' },
+  notesBox: { marginTop: 10, padding: 12, backgroundColor: C.backgroundSecondary, borderRadius: 8 },
+  notesText: { fontSize: 13, color: C.textSecondary, lineHeight: 20 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
+  itemName: { fontSize: 14, fontWeight: '600', color: C.text, marginBottom: 4 },
+  itemMeta: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  metaChip: { fontSize: 12, color: C.textSecondary, backgroundColor: C.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  itemTotal: { fontSize: 14, fontWeight: '700', color: C.text },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, marginTop: 4, borderTopWidth: 2, borderTopColor: C.tint },
+  totalLabel: { fontSize: 15, fontWeight: '700', color: C.text },
+  totalValue: { fontSize: 16, fontWeight: '800', color: C.tint },
+  actionRow: { flexDirection: 'row', gap: 10 },
+  nextStepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  nextIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });
-

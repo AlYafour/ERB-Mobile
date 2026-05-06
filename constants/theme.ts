@@ -1,157 +1,141 @@
-/**
- * Premium Design System - Colors
- * Professional color palette with sharp and clear colors
- */
-
 import { Platform } from 'react-native';
 
-const tintColorLight = '#2563EB'; // Premium Blue
-const tintColorDark = '#3B82F6';
-
+// Exact match to web design system (ERB-core-Frontend)
 export const Colors = {
   light: {
-    // Primary Colors
-    tint: tintColorLight, // Premium Blue #2563EB
-    tintSecondary: '#1D4ED8',
-    tintLight: '#3B82F6',
-    tintDark: '#1E40AF',
-    
-    // Background Colors
+    // Brand
+    tint: '#F97316',
+    tintSecondary: '#EA580C',
+    tintLight: '#FED7AA',
+    tintDark: '#C2410C',
+    tintSubtle: 'rgba(249,115,22,0.08)',
+
+    // Backgrounds
     background: '#F8FAFC',
     backgroundSecondary: '#F1F5F9',
     backgroundTertiary: '#E2E8F0',
-    
-    // Card Colors
+
+    // Surface
     card: '#FFFFFF',
     cardHighlight: '#F8FAFC',
-    
-    // Text Colors
-    text: '#1E293B',
-    textSecondary: '#64748B',
+
+    // Text
+    text: '#0F172A',
+    textSecondary: '#475569',
     textTertiary: '#94A3B8',
+    textDisabled: '#CBD5E1',
     textInverse: '#FFFFFF',
-    
-    // Border Colors
+
+    // Borders
     border: '#E2E8F0',
     borderLight: '#F1F5F9',
     borderDark: '#CBD5E1',
-    
-    // Status Colors
-    success: '#10B981',
-    successLight: '#D1FAE5',
-    warning: '#F59E0B',
+    borderFocus: '#F97316',
+
+    // Status
+    success: '#16A34A',
+    successLight: '#DCFCE7',
+    successText: '#15803D',
+    warning: '#D97706',
     warningLight: '#FEF3C7',
-    danger: '#EF4444',
-    dangerLight: '#FEE2E2',
-    error: '#EF4444',
+    warningText: '#92400E',
+    error: '#DC2626',
     errorLight: '#FEE2E2',
-    info: '#3B82F6',
+    errorText: '#B91C1C',
+    danger: '#DC2626',
+    dangerLight: '#FEE2E2',
+    info: '#2563EB',
     infoLight: '#DBEAFE',
-    
-    // Chart Colors
-    chartPrimary: '#2563EB',
-    chartSecondary: '#8B5CF6',
-    chartTertiary: '#10B981',
-    chartQuaternary: '#F59E0B',
-    
-    // Icon Colors
+    infoText: '#1D4ED8',
+
+    // Nav
+    tabBar: '#FFFFFF',
+    tabBarBorder: '#E2E8F0',
+    tabBarActive: '#F97316',
+    tabBarInactive: '#94A3B8',
+    header: '#FFFFFF',
+    headerBorder: '#E2E8F0',
+
+    // Shadows
+    shadow: 'rgba(0,0,0,0.06)',
+    shadowDark: 'rgba(0,0,0,0.1)',
+
+    // Icon
     icon: '#64748B',
-    iconActive: '#2563EB',
+    iconActive: '#F97316',
     iconInactive: '#94A3B8',
-    tabIconDefault: '#64748B',
-    tabIconSelected: tintColorLight,
-    
-    // Shadow
-    shadow: 'rgba(0, 0, 0, 0.05)',
-    shadowDark: 'rgba(0, 0, 0, 0.1)',
-    
-    // Gradient Colors
-    gradientStart: '#2563EB',
-    gradientEnd: '#1D4ED8',
+    tabIconDefault: '#94A3B8',
+    tabIconSelected: '#F97316',
   },
   dark: {
-    // Primary Colors
-    tint: tintColorDark,
-    tintSecondary: '#2563EB',
-    tintLight: '#60A5FA',
-    tintDark: '#1E40AF',
-    
-    // Background Colors
+    // Brand
+    tint: '#FB923C',
+    tintSecondary: '#F97316',
+    tintLight: '#9A3412',
+    tintDark: '#EA580C',
+    tintSubtle: 'rgba(249,115,22,0.12)',
+
+    // Backgrounds
     background: '#0F172A',
-    backgroundSecondary: '#1E293B',
-    backgroundTertiary: '#334155',
-    
-    // Card Colors
-    card: '#1E293B',
-    cardHighlight: '#334155',
-    
-    // Text Colors
+    backgroundSecondary: '#131C2E',
+    backgroundTertiary: '#1E2D45',
+
+    // Surface
+    card: '#162032',
+    cardHighlight: '#1E2D45',
+
+    // Text
     text: '#F1F5F9',
-    textSecondary: '#CBD5E1',
-    textTertiary: '#94A3B8',
+    textSecondary: '#94A3B8',
+    textTertiary: '#64748B',
+    textDisabled: '#334155',
     textInverse: '#0F172A',
-    
-    // Border Colors
-    border: '#334155',
-    borderLight: '#475569',
-    borderDark: '#64748B',
-    
-    // Status Colors
-    success: '#10B981',
-    successLight: '#065F46',
+
+    // Borders
+    border: '#1E2D45',
+    borderLight: '#1A2840',
+    borderDark: '#334155',
+    borderFocus: '#FB923C',
+
+    // Status
+    success: '#22C55E',
+    successLight: '#052E16',
+    successText: '#4ADE80',
     warning: '#F59E0B',
-    warningLight: '#92400E',
-    danger: '#EF4444',
-    dangerLight: '#7F1D1D',
+    warningLight: '#431407',
+    warningText: '#FCD34D',
     error: '#EF4444',
-    errorLight: '#7F1D1D',
+    errorLight: '#450A0A',
+    errorText: '#FCA5A5',
+    danger: '#EF4444',
+    dangerLight: '#450A0A',
     info: '#3B82F6',
-    infoLight: '#1E40AF',
-    
-    // Chart Colors
-    chartPrimary: '#3B82F6',
-    chartSecondary: '#8B5CF6',
-    chartTertiary: '#10B981',
-    chartQuaternary: '#F59E0B',
-    
-    // Icon Colors
-    icon: '#CBD5E1',
-    iconActive: '#60A5FA',
-    iconInactive: '#64748B',
-    tabIconDefault: '#CBD5E1',
-    tabIconSelected: tintColorDark,
-    
-    // Shadow
-    shadow: 'rgba(0, 0, 0, 0.3)',
-    shadowDark: 'rgba(0, 0, 0, 0.5)',
-    
-    // Gradient Colors
-    gradientStart: '#3B82F6',
-    gradientEnd: '#2563EB',
+    infoLight: '#1E3A5F',
+    infoText: '#93C5FD',
+
+    // Nav
+    tabBar: '#0F172A',
+    tabBarBorder: '#1E2D45',
+    tabBarActive: '#FB923C',
+    tabBarInactive: '#475569',
+    header: '#0F172A',
+    headerBorder: '#1E2D45',
+
+    // Shadows
+    shadow: 'rgba(0,0,0,0.3)',
+    shadowDark: 'rgba(0,0,0,0.5)',
+
+    // Icon
+    icon: '#94A3B8',
+    iconActive: '#FB923C',
+    iconInactive: '#475569',
+    tabIconDefault: '#475569',
+    tabIconSelected: '#FB923C',
   },
 };
 
 export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
+  ios: { sans: 'system-ui', mono: 'ui-monospace' },
+  default: { sans: 'normal', mono: 'monospace' },
+  web: { sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", mono: "monospace" },
 });

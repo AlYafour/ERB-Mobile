@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   FlatList,
   RefreshControl,
@@ -18,8 +19,7 @@ import { projectsApi } from '@/lib/api/projects';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast, confirm } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -31,6 +31,7 @@ import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { PurchaseRequest, Project, PaginatedResponse } from '@/types';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 
@@ -44,6 +45,8 @@ export default function PurchaseRequestsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({});
@@ -327,9 +330,9 @@ export default function PurchaseRequestsScreen() {
               </View>
             )}
             <View style={styles.itemInfo}>
-              <ThemedText type="defaultSemiBold" style={styles.itemCode}>
+              <Text style={[styles.itemCode, { color: colors.text }]}>
                 {(item as any).code || `PR-${String(item.id).slice(0, 8)}`}
-              </ThemedText>
+              </Text>
               <Badge variant={getStatusVariant(item.status)}>
                 {statusLabels[item.status || ''] || item.status || 'Unknown'}
               </Badge>
@@ -338,48 +341,48 @@ export default function PurchaseRequestsScreen() {
 
           <View style={styles.itemDetails}>
             <View style={styles.detailRow}>
-              <ThemedText style={styles.detailLabel}>Project:</ThemedText>
-              <ThemedText style={styles.detailValue}>{projectName}</ThemedText>
+              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Project:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{projectName}</Text>
               {projectCode && (
-                <ThemedText style={styles.detailValueSecondary}> ({projectCode})</ThemedText>
+                <Text style={[styles.detailValueSecondary, { color: colors.textTertiary }]}> ({projectCode})</Text>
               )}
             </View>
             {(item as any).title && (
               <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Title:</ThemedText>
-                <ThemedText style={styles.detailValue} numberOfLines={1}>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Title:</Text>
+                <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1}>
                   {(item as any).title}
-                </ThemedText>
+                </Text>
               </View>
             )}
             {(item as any).created_by_name && (
               <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Requester:</ThemedText>
-                <ThemedText style={styles.detailValue}>{(item as any).created_by_name}</ThemedText>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Requester:</Text>
+                <Text style={[styles.detailValue, { color: colors.text }]}>{(item as any).created_by_name}</Text>
               </View>
             )}
             {(item as any).request_date && (
               <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Request Date:</ThemedText>
-                <ThemedText style={styles.detailValue}>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Request Date:</Text>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
                   {new Date((item as any).request_date).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric',
                   })}
-                </ThemedText>
+                </Text>
               </View>
             )}
             {(item as any).required_by && (
               <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Required By:</ThemedText>
-                <ThemedText style={styles.detailValue}>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Required By:</Text>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
                   {new Date((item as any).required_by).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric',
                   })}
-                </ThemedText>
+                </Text>
               </View>
             )}
           </View>
@@ -428,34 +431,23 @@ export default function PurchaseRequestsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ThemedView style={styles.innerContainer}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)' as any)}
-              style={styles.backButton}>
-              <IconSymbol name="arrow.left" size={24} color={Colors.light.tint} />
-            </TouchableOpacity>
-            <View style={styles.headerTitleContainer}>
-              <ThemedText type="title" style={styles.headerTitle}>
-                Purchase Requests
-              </ThemedText>
-              <ThemedText style={styles.headerSubtitle}>Manage requests and approvals</ThemedText>
-            </View>
-          </View>
-          <View style={styles.headerActions}>
-            {canCreate && (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+      <View style={styles.innerContainer}>
+        <ScreenHeader
+          title="Purchase Requests"
+          subtitle="Manage requests and approvals"
+          showBack
+          rightElement={
+            canCreate ? (
               <Button
-                title="New Request"
+                title="+ New"
                 variant="primary"
                 onPress={() => router.push('/purchase-requests/new' as any)}
-                style={styles.newRequestButton}
+                style={{ paddingHorizontal: 14, minHeight: 34 }}
               />
-            )}
-          </View>
-        </View>
+            ) : undefined
+          }
+        />
 
         {/* Select Mode Row - Only show when in select mode */}
         {isAdmin && (selectedItems.size > 0 || selectMode !== null) && (
@@ -470,13 +462,13 @@ export default function PurchaseRequestsScreen() {
                   setSelectMode('page');
                   setSelectedItems(new Set());
                 }}>
-                <ThemedText
+                <Text
                   style={[
                     styles.selectModeToggleText,
-                    selectMode === 'page' && styles.selectModeToggleTextActive,
+                    { color: selectMode === 'page' ? '#FFF' : colors.textSecondary },
                   ]}>
                   Page
-                </ThemedText>
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -487,13 +479,13 @@ export default function PurchaseRequestsScreen() {
                   setSelectMode('all');
                   setSelectedItems(new Set());
                 }}>
-                <ThemedText
+                <Text
                   style={[
                     styles.selectModeToggleText,
-                    selectMode === 'all' && styles.selectModeToggleTextActive,
+                    { color: selectMode === 'all' ? '#FFF' : colors.textSecondary },
                   ]}>
                   All
-                </ThemedText>
+                </Text>
               </TouchableOpacity>
             </View>
             {selectedItems.size > 0 && (
@@ -513,7 +505,7 @@ export default function PurchaseRequestsScreen() {
                   setSelectedItems(new Set());
                 }}
                 style={styles.cancelSelectButton}>
-                <IconSymbol name="xmark.circle.fill" size={24} color={Colors.light.textSecondary} />
+                <IconSymbol name="xmark.circle.fill" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             )}
           </View>
@@ -529,7 +521,7 @@ export default function PurchaseRequestsScreen() {
               onChangeText={setSearch}
               containerStyle={styles.searchInput}
               style={styles.searchInputField}
-              leftIcon={<IconSymbol name="magnifyingglass" size={20} color={Colors.light.icon} />}
+              leftIcon={<IconSymbol name="magnifyingglass" size={20} color={colors.textTertiary} />}
             />
           </View>
           <View style={styles.filterButtonWrapper}>
@@ -557,24 +549,24 @@ export default function PurchaseRequestsScreen() {
       {/* Content */}
       {loading && !refreshing ? (
         <Card style={styles.loadingCard}>
-          <ActivityIndicator size="large" color={Colors.light.tint} />
-          <ThemedText style={styles.loadingText}>Loading...</ThemedText>
+          <ActivityIndicator size="large" color={colors.tint} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading...</Text>
         </Card>
       ) : !data || !data.results || data.results.length === 0 ? (
         <Card style={styles.emptyCard}>
-          <ThemedText style={styles.emptyText}>No purchase requests found</ThemedText>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No purchase requests found</Text>
         </Card>
       ) : (
         <>
           {isAdmin && selectMode !== null && (
-            <View style={styles.selectAllContainer}>
+            <View style={[styles.selectAllContainer, { backgroundColor: colors.backgroundSecondary, borderBottomColor: colors.borderLight }]}>
               <View style={styles.selectAllContent}>
                 <Checkbox
                   checked={allPageSelected}
                   indeterminate={somePageSelected}
                   onChange={handleSelectAll}
                 />
-                <ThemedText style={styles.selectAllText}>Select All</ThemedText>
+                <Text style={[styles.selectAllText, { color: colors.text }]}>Select All</Text>
               </View>
             </View>
           )}
@@ -583,10 +575,17 @@ export default function PurchaseRequestsScreen() {
             renderItem={renderItem}
             keyExtractor={(item) => String(item.id || Math.random())}
             contentContainerStyle={styles.listContent}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.tint}
+                colors={[colors.tint]}
+              />
+            }
             ListFooterComponent={
               data && data.count > 50 ? (
-                <View style={styles.pagination}>
+                <View style={[styles.pagination, { backgroundColor: colors.backgroundSecondary, borderTopColor: colors.borderLight }]}>
                   <Button
                     title="Previous"
                     variant="secondary"
@@ -594,12 +593,9 @@ export default function PurchaseRequestsScreen() {
                     disabled={!data.previous || page === 1}
                     style={styles.paginationButton}
                   />
-                  <ThemedText style={styles.paginationText}>
-                    Showing {((page - 1) * 50) + 1} to {Math.min(page * 50, data.count)} of {data.count} requests
-                    {selectMode === 'all' && selectedItems.size > 0 && (
-                      <ThemedText style={styles.selectedCount}> ({selectedItems.size} selected)</ThemedText>
-                    )}
-                  </ThemedText>
+                  <Text style={[styles.paginationText, { color: colors.textSecondary }]}>
+                    {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
+                  </Text>
                   <Button
                     title="Next"
                     variant="secondary"
@@ -624,81 +620,28 @@ export default function PurchaseRequestsScreen() {
         title="Reject Purchase Request"
         message="Please provide a reason for rejecting this request. This reason will be saved and visible to the requester."
       />
-      </ThemedView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  innerContainer: {
-    flex: 1,
-  },
-  
-  // --- Header Styles ---
-  header: {
-    paddingHorizontal: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.background,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  backButton: {
-    padding: Spacing.xs,
-    marginLeft: -Spacing.xs,
-  },
-  headerTitleContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.bold,
-    letterSpacing: -0.5,
-    marginBottom: Spacing.xs,
-  },
-  headerSubtitle: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.light.textSecondary,
-    opacity: 0.8,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  newRequestButton: {
-    minWidth: 120,
-  },
-  
+  container: { flex: 1 },
+  innerContainer: { flex: 1 },
+
   // --- Selection Mode Styles ---
   selectModeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.sm,
+    paddingVertical: Spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.light.borderLight,
     paddingHorizontal: Layout.screenPadding,
   },
   selectModeContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.light.backgroundSecondary,
     borderRadius: BorderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.light.borderLight,
+    borderWidth: 1,
     overflow: 'hidden',
     marginRight: Spacing.xs,
   },
@@ -709,16 +652,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectModeToggleActive: {
-    backgroundColor: Colors.light.tint,
+    backgroundColor: '#F97316',
   },
   selectModeToggleText: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.medium,
-    color: Colors.light.textSecondary,
-  },
-  selectModeToggleTextActive: {
-    color: Colors.light.textInverse,
-    fontWeight: Typography.weights.semibold,
   },
   bulkDeleteButton: {
     minWidth: 100,
@@ -726,43 +664,33 @@ const styles = StyleSheet.create({
   },
   cancelSelectButton: {
     padding: Spacing.xs,
-    marginLeft: -Spacing.xs,
   },
-  
+
   // --- Search & Filters ---
   searchContainer: {
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
-    backgroundColor: Colors.light.background,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  searchInputWrapper: {
-    flex: 1,
-  },
-  searchInput: {
-    marginBottom: 0,
-  },
+  searchInputWrapper: { flex: 1 },
+  searchInput: { marginBottom: 0 },
   searchInputField: {
     includeFontPadding: false,
     textAlignVertical: 'center',
     fontSize: Typography.sizes.base,
   },
-  filterButtonWrapper: {
-    alignSelf: 'flex-start',
-  },
-  
+  filterButtonWrapper: { alignSelf: 'flex-start' },
+
   // --- Selection Header ---
   selectAllContainer: {
     paddingHorizontal: Layout.screenPadding,
     paddingVertical: Spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.backgroundSecondary,
   },
   selectAllContent: {
     flexDirection: 'row',
@@ -773,40 +701,30 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.base,
     fontWeight: Typography.weights.medium,
   },
-  
+
   // --- List Styles ---
   listContent: {
     padding: Layout.screenPadding,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing['2xl'] + 80, // Extra space for bottom navigation
+    paddingBottom: 120,
   },
-  
+
   // --- Item Card Styles ---
   itemCard: {
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
     padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.light.card,
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
   itemCardSelected: {
     borderWidth: 2,
-    borderColor: Colors.light.tint,
-    backgroundColor: Colors.light.tint + '15',
+    borderColor: '#F97316',
   },
-  itemContent: {
-    flex: 1,
-  },
-  
+  itemContent: { flex: 1 },
+
   // --- Item Header ---
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   checkboxContainer: {
     marginRight: Spacing.sm,
@@ -841,188 +759,68 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.medium,
-    color: Colors.light.textSecondary,
     minWidth: 90,
   },
   detailValue: {
     fontSize: Typography.sizes.sm,
     flex: 1,
-    color: Colors.light.text,
   },
   detailValueSecondary: {
     fontSize: Typography.sizes.sm,
-    color: Colors.light.textTertiary,
   },
-  
+
   // --- Item Actions ---
   itemActions: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.md,
+    marginTop: Spacing.sm,
   },
   actionButton: {
     flex: 1,
-    minHeight: ComponentSizes.button.medium.height,
+    minHeight: 38,
   },
-  
+
   // --- Loading & Empty States ---
   loadingCard: {
     margin: Layout.screenPadding,
     marginTop: Spacing.xl,
     padding: Spacing.xl,
     alignItems: 'center',
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.light.card,
   },
   loadingText: {
     marginTop: Spacing.md,
     fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
   },
   emptyCard: {
     margin: Layout.screenPadding,
     marginTop: Spacing.xl,
     padding: Spacing.xl,
     alignItems: 'center',
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.light.card,
   },
   emptyText: {
     fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
   },
-  
+
   // --- Pagination ---
   pagination: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.lg,
+    paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.md,
     gap: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.backgroundSecondary,
   },
   paginationButton: {
-    minWidth: 90,
+    minWidth: 80,
     paddingHorizontal: Spacing.md,
   },
   paginationText: {
     fontSize: Typography.sizes.sm,
-    color: Colors.light.textSecondary,
     textAlign: 'center',
     flex: 1,
   },
   selectedCount: {
     fontWeight: Typography.weights.semibold,
-    color: Colors.light.text,
   },
 });
-
-// إضافة ثوابت للظلال
-const cardShadow: ViewStyle = {
-    ...(Platform.OS === 'web'
-      ? {
-          boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
-        }
-      : {
-          shadowColor: Colors.light.shadow,
-          shadowOffset: {
-            width: 0,
-            height: 2,
-          },
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
-          elevation: 2,
-        }),
-};
-
-// إضافة ستايلات ديناميكية للأحجام
-const getFontSize = (size: keyof typeof Typography.sizes) => ({
-  fontSize: Typography.sizes[size],
-});
-
-const getSpacing = (size: keyof typeof Spacing) => ({
-  padding: Spacing[size],
-});
-
-// دالة للمسافات المتسقة
-const spacing = {
-  xs: Spacing.xs,
-  sm: Spacing.sm,
-  md: Spacing.md,
-  lg: Spacing.lg,
-  xl: Spacing.xl,
-} as const;
-
-// إضافة ثوابت للزوايا
-const borderRadius = {
-  sm: BorderRadius.sm,
-  md: BorderRadius.md,
-  lg: BorderRadius.lg,
-  xl: BorderRadius.xl,
-} as const;
-
-// دالة للمسافات المتسقة
-const getSpacingStyle = (vertical: keyof typeof Spacing, horizontal: keyof typeof Spacing) => ({
-  paddingVertical: Spacing[vertical],
-  paddingHorizontal: Spacing[horizontal],
-});
-
-// إضافة ستايلات مساعدة
-const helperStyles = StyleSheet.create({
-  flexRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  flexColumn: {
-    flexDirection: 'column',
-  },
-  flexCenter: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  flexBetween: {
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  flexStart: {
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  },
-  flexEnd: {
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  textTruncate: {
-    overflow: 'hidden',
-  },
-  textEllipsis: {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  fullWidth: {
-    width: '100%',
-  },
-  fullHeight: {
-    height: '100%',
-  },
-});
-
-// دالة لدمج الستايلات بطريقة آمنة
-const mergeStyles = (...styles: (ViewStyle | TextStyle | undefined)[]): ViewStyle | TextStyle => {
-  return StyleSheet.flatten(styles.filter(Boolean) as (ViewStyle | TextStyle)[]);
-};
-
-// تصدير الستايلات الإضافية للاستخدام في أماكن أخرى
-export const PurchaseRequestStyles = {
-  cardShadow,
-  getFontSize,
-  getSpacing,
-  spacing,
-  borderRadius,
-  getSpacingStyle,
-  helperStyles,
-  mergeStyles,
-};

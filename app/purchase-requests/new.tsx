@@ -1,29 +1,30 @@
 import { useState, useEffect } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { purchaseRequestsApi } from '@/lib/api/purchase-requests';
 import { productsApi } from '@/lib/api/products';
 import { projectsApi } from '@/lib/api/projects';
 import { toast } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
-import { Layout } from '@/constants/layout';
 import { Product, Project, PurchaseRequestItem } from '@/types';
 import { usePermissions } from '@/lib/hooks/use-permissions';
+
+const C = Colors.light;
 
 const units = [
   { value: 'piece', label: 'Piece' },
@@ -75,7 +76,6 @@ export default function NewPurchaseRequestScreen() {
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
-  // Check permissions
   const canCreate = hasPermission('purchase_request', 'create');
 
   useEffect(() => {
@@ -93,11 +93,7 @@ export default function NewPurchaseRequestScreen() {
       setLoadingProjects(true);
       const response = await projectsApi.getAll({ page: 1, page_size: 1000, is_active: true });
       setProjectsData(response);
-    } catch (error) {
-      console.error('Error loading projects:', error);
-    } finally {
-      setLoadingProjects(false);
-    }
+    } catch { } finally { setLoadingProjects(false); }
   };
 
   const loadProducts = async () => {
@@ -105,68 +101,40 @@ export default function NewPurchaseRequestScreen() {
       setLoadingProducts(true);
       const response = await productsApi.getAll({ page: 1, page_size: 1000 });
       setProductsData(response);
-    } catch (error) {
-      console.error('Error loading products:', error);
-    } finally {
-      setLoadingProducts(false);
-    }
+    } catch { } finally { setLoadingProducts(false); }
   };
 
-  // Handle project selection
   const handleProjectChange = (projectId: number | null | undefined) => {
     if (projectId) {
-      const selectedProject = projectsData?.results.find((p: Project) => Number(p.id) === Number(projectId));
-      if (selectedProject) {
-        setFormData({
-          ...formData,
-          project_id: projectId,
-          project_code: selectedProject.code || '',
-          title: selectedProject.name || '', // Auto-fill title from project name
-        });
+      const p = projectsData?.results.find((p: Project) => Number(p.id) === Number(projectId));
+      if (p) {
+        setFormData({ ...formData, project_id: projectId, project_code: p.code || '', title: p.name || '' });
       }
     } else {
-      setFormData({
-        ...formData,
-        project_id: undefined,
-        project_code: '',
-        title: '',
-      });
+      setFormData({ ...formData, project_id: undefined, project_code: '', title: '' });
     }
   };
 
-  // Handle product selection
   const handleProductSelect = (product: Product | null) => {
     setSelectedProduct(product);
-    if (product) {
-      setCurrentItem({
-        ...currentItem,
-        unit: product.unit || '',
-      });
-    }
+    if (product) setCurrentItem({ ...currentItem, unit: product.unit || '' });
   };
 
-  // Filter products by category
-  const filteredProducts = productsData?.results?.filter((product: Product) => {
-    if (!selectedCategory) return true;
-    return product.category === selectedCategory;
-  }) || [];
+  const filteredProducts = productsData?.results?.filter((p: Product) =>
+    !selectedCategory || p.category === selectedCategory
+  ) || [];
 
-  // Get unique categories
   const categories = Array.from(
-    new Set(productsData?.results?.map((p: Product) => p.category).filter((cat): cat is string => Boolean(cat)) || [])
+    new Set(productsData?.results?.map((p: Product) => p.category).filter((c): c is string => Boolean(c)) || [])
   );
 
   const handleAddItem = () => {
-    if (!selectedProduct) {
-      toast('Please select a product first', 'warning');
-      return;
-    }
+    if (!selectedProduct) { toast('Please select a product first', 'warning'); return; }
     if (currentItem.quantity <= 0 || !Number.isInteger(currentItem.quantity)) {
       toast('Please enter a valid whole number quantity', 'warning');
       return;
     }
-
-    const newItem: PurchaseRequestItemForm = {
+    setItems([...items, {
       product_id: Number(selectedProduct.id),
       product: selectedProduct,
       quantity: Math.floor(currentItem.quantity),
@@ -174,74 +142,47 @@ export default function NewPurchaseRequestScreen() {
       project_site: currentItem.project_site || '',
       reason: currentItem.reason,
       notes: currentItem.notes,
-    };
-
-    setItems([...items, newItem]);
-    
-    // Reset form
+    }]);
     setSelectedProduct(null);
-    setCurrentItem({
-      quantity: 1,
-      unit: '',
-      project_site: '',
-      reason: '',
-      notes: '',
-    });
-    
-    toast('Product added successfully!', 'success');
+    setCurrentItem({ quantity: 1, unit: '', project_site: '', reason: '', notes: '' });
+    toast('Product added', 'success');
   };
 
   const handleRemoveItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
-    toast('Product removed', 'info');
   };
 
   const handleUpdateItem = (index: number, field: keyof PurchaseRequestItemForm, value: any) => {
-    const updatedItems = [...items];
-    updatedItems[index] = { ...updatedItems[index], [field]: value };
-    setItems(updatedItems);
+    const updated = [...items];
+    updated[index] = { ...updated[index], [field]: value };
+    setItems(updated);
   };
 
   const handleSubmit = async () => {
-    if (items.length === 0) {
-      toast('Please add at least one product', 'warning');
-      return;
-    }
-    if (!formData.title) {
-      toast('Title is required', 'warning');
-      return;
-    }
-    if (!formData.request_date) {
-      toast('Request date is required', 'warning');
-      return;
-    }
-    if (!formData.required_by) {
-      toast('Required by date is required', 'warning');
-      return;
-    }
+    if (items.length === 0) { toast('Please add at least one product', 'warning'); return; }
+    if (!formData.title) { toast('Title is required', 'warning'); return; }
+    if (!formData.request_date) { toast('Request date is required', 'warning'); return; }
+    if (!formData.required_by) { toast('Required by date is required', 'warning'); return; }
 
     try {
       setLoading(true);
-      const itemsToSubmit = items.map((item) => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit: item.unit,
-        project_site: item.project_site || '',
-        reason: item.reason,
-        notes: item.notes,
-      }));
-
-      await purchaseRequestsApi.create({
+      const result = await purchaseRequestsApi.create({
         project_id: formData.project_id || null,
         title: formData.title,
         request_date: formData.request_date,
         required_by: formData.required_by,
         notes: formData.notes || '',
-        items: itemsToSubmit,
+        items: items.map((item) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit: item.unit,
+          project_site: item.project_site || '',
+          reason: item.reason,
+          notes: item.notes,
+        })),
       });
-
       toast('Purchase request created successfully', 'success');
-      router.back();
+      router.replace(`/purchase-requests/${result.id}` as any);
     } catch (error: any) {
       toast(error.message || 'Failed to create purchase request', 'error');
     } finally {
@@ -249,525 +190,456 @@ export default function NewPurchaseRequestScreen() {
     }
   };
 
-  if (!canCreate) {
-    return null;
-  }
+  if (!canCreate) return null;
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={24} color={Colors.light.text} />
-          </TouchableOpacity>
-          <ThemedText type="title" style={styles.headerTitle}>
-            Create Purchase Request
-          </ThemedText>
-        </View>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScreenHeader title="New Purchase Request" showBack />
 
-        {/* Form Card */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Request Details
-          </ThemedText>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
 
-          {/* Project Selection */}
-          <View style={styles.formGroup}>
-            <ThemedText style={styles.label}>
-              Project <ThemedText style={styles.required}>*</ThemedText>
-            </ThemedText>
-            <SearchableDropdown
-              options={
-                projectsData?.results.map((project: Project) => ({
-                  value: project.id,
-                  label: `${project.name} (${project.code || ''})`,
-                  searchText: `${project.name} ${project.code || ''} ${project.location || ''}`,
-                })) || []
-              }
-              value={formData.project_id}
-              onChange={(val) => handleProjectChange(val ? Number(val) : undefined)}
-              placeholder="Select Project"
-              searchPlaceholder="Search by name or code..."
-              allowClear
-            />
+        {/* ── Request Details ── */}
+        <SectionTitle>Request Details</SectionTitle>
+        <Card padding={16} style={styles.card}>
+
+          <FieldLabel required>Project</FieldLabel>
+          <SearchableDropdown
+            options={
+              projectsData?.results.map((p: Project) => ({
+                value: p.id,
+                label: `${p.name} (${p.code || ''})`,
+                searchText: `${p.name} ${p.code || ''} ${p.location || ''}`,
+              })) || []
+            }
+            value={formData.project_id}
+            onChange={(val) => handleProjectChange(val ? Number(val) : undefined)}
+            placeholder="Select Project"
+            searchPlaceholder="Search projects..."
+            allowClear
+          />
+
+          <FieldLabel>Project Code</FieldLabel>
+          <Input
+            placeholder="Auto-filled from project"
+            value={formData.project_code}
+            onChangeText={(t) => setFormData({ ...formData, project_code: t })}
+          />
+
+          <FieldLabel required>Title</FieldLabel>
+          <Input
+            placeholder="Auto-filled from project name"
+            value={formData.title}
+            onChangeText={(t) => setFormData({ ...formData, title: t })}
+          />
+
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <FieldLabel required>Request Date</FieldLabel>
+              <Input
+                placeholder="YYYY-MM-DD"
+                value={formData.request_date}
+                onChangeText={(t) => setFormData({ ...formData, request_date: t })}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <FieldLabel required>Required By</FieldLabel>
+              <Input
+                placeholder="YYYY-MM-DD"
+                value={formData.required_by}
+                onChangeText={(t) => setFormData({ ...formData, required_by: t })}
+              />
+            </View>
           </View>
 
-          {/* Project Code */}
-          <View style={styles.formGroup}>
-            <ThemedText style={styles.label}>Project Code</ThemedText>
-            <Input
-              placeholder="Enter project code"
-              value={formData.project_code}
-              onChangeText={(text) => setFormData({ ...formData, project_code: text })}
-            />
-          </View>
-
-          {/* Title */}
-          <View style={styles.formGroup}>
-            <ThemedText style={styles.label}>
-              Title <ThemedText style={styles.required}>*</ThemedText>
-            </ThemedText>
-            <Input
-              placeholder="Auto-filled from project name"
-              value={formData.title}
-              onChangeText={(text) => setFormData({ ...formData, title: text })}
-            />
-          </View>
-
-          {/* Request Date */}
-          <View style={styles.formGroup}>
-            <ThemedText style={styles.label}>
-              Request Date <ThemedText style={styles.required}>*</ThemedText>
-            </ThemedText>
-            <Input
-              placeholder="YYYY-MM-DD"
-              value={formData.request_date}
-              onChangeText={(text) => setFormData({ ...formData, request_date: text })}
-            />
-          </View>
-
-          {/* Required By */}
-          <View style={styles.formGroup}>
-            <ThemedText style={styles.label}>
-              Required By <ThemedText style={styles.required}>*</ThemedText>
-            </ThemedText>
-            <Input
-              placeholder="YYYY-MM-DD"
-              value={formData.required_by}
-              onChangeText={(text) => setFormData({ ...formData, required_by: text })}
-            />
-          </View>
-
-          {/* Notes */}
-          <View style={styles.formGroup}>
-            <ThemedText style={styles.label}>General Notes</ThemedText>
-            <TextInput
-              style={[styles.textArea, { color: Colors.light.text, borderColor: Colors.light.border }]}
-              placeholder="Additional notes..."
-              value={formData.notes}
-              onChangeText={(text) => setFormData({ ...formData, notes: text })}
-              multiline
-              numberOfLines={3}
-              placeholderTextColor={Colors.light.textSecondary}
-            />
-          </View>
+          <FieldLabel>General Notes</FieldLabel>
+          <TextInput
+            style={styles.textArea}
+            placeholder="Additional notes (optional)"
+            placeholderTextColor={C.textTertiary}
+            value={formData.notes}
+            onChangeText={(t) => setFormData({ ...formData, notes: t })}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
         </Card>
 
-        {/* Items Section */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Required Products
-          </ThemedText>
+        {/* ── Products ── */}
+        <SectionTitle>Required Products</SectionTitle>
+        <Card padding={16} style={styles.card}>
 
-          {/* Category Filter */}
           {categories.length > 0 && (
-            <View style={styles.formGroup}>
-              <ThemedText style={styles.label}>Filter by Category</ThemedText>
+            <>
+              <FieldLabel>Category Filter</FieldLabel>
               <SearchableDropdown
                 options={[
                   { value: '', label: 'All Categories' },
-                  ...categories.filter(Boolean).map((cat) => ({ value: cat, label: cat })),
+                  ...categories.filter(Boolean).map((c) => ({ value: c, label: c })),
                 ]}
                 value={selectedCategory}
                 onChange={(val) => setSelectedCategory(val ? String(val) : '')}
                 placeholder="All Categories"
                 allowClear
               />
-            </View>
+            </>
           )}
 
-          {/* Product Selection */}
-          <View style={styles.formGroup}>
-            <ThemedText style={styles.label}>Select Product</ThemedText>
-            <SearchableDropdown
-              options={filteredProducts.map((product: Product) => ({
-                value: product.id,
-                label: `${product.name} (${product.code || 'N/A'})`,
-                searchText: `${product.name} ${product.code || ''} ${product.category || ''}`,
-              }))}
-              value={selectedProduct?.id}
-              onChange={(val) => {
-                const product = filteredProducts.find((p: Product) => p.id === val);
-                handleProductSelect(product || null);
-              }}
-              placeholder="Select Product"
-              searchPlaceholder="Search products..."
-              allowClear
-            />
-          </View>
+          <FieldLabel>Select Product</FieldLabel>
+          <SearchableDropdown
+            options={filteredProducts.map((p: Product) => ({
+              value: p.id,
+              label: `${p.name} (${p.code || 'N/A'})`,
+              searchText: `${p.name} ${p.code || ''} ${p.category || ''}`,
+            }))}
+            value={selectedProduct?.id}
+            onChange={(val) => {
+              const p = filteredProducts.find((p: Product) => p.id === val);
+              handleProductSelect(p || null);
+            }}
+            placeholder="Search and select product..."
+            searchPlaceholder="Search products..."
+            allowClear
+          />
 
-          {/* Product Details Form */}
+          {/* Product detail form */}
           {selectedProduct && (
-            <Card style={styles.itemFormCard}>
-              <ThemedText type="defaultSemiBold" style={styles.productName}>
-                {selectedProduct.name}
-              </ThemedText>
-              {selectedProduct.code && (
-                <ThemedText style={styles.productCode}>Code: {selectedProduct.code}</ThemedText>
-              )}
+            <View style={styles.productForm}>
+              <View style={styles.productHeader}>
+                <View style={[styles.productBadge, { backgroundColor: C.tintSubtle }]}>
+                  <IconSymbol name="cube.box.fill" size={14} color={C.tint} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.productName}>{selectedProduct.name}</Text>
+                  {selectedProduct.code && (
+                    <Text style={styles.productCode}>Code: {selectedProduct.code}</Text>
+                  )}
+                </View>
+              </View>
 
-              <View style={styles.formRow}>
-                <View style={styles.formGroupHalf}>
-                  <ThemedText style={styles.label}>
-                    Quantity <ThemedText style={styles.required}>*</ThemedText>
-                  </ThemedText>
+              <View style={styles.row}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <FieldLabel required>Quantity</FieldLabel>
                   <Input
                     placeholder="1"
                     value={String(currentItem.quantity)}
-                    onChangeText={(text) => {
-                      const num = parseInt(text) || 1;
-                      setCurrentItem({ ...currentItem, quantity: num });
-                    }}
+                    onChangeText={(t) => setCurrentItem({ ...currentItem, quantity: parseInt(t) || 1 })}
                     keyboardType="numeric"
                   />
                 </View>
-
-                <View style={styles.formGroupHalf}>
-                  <ThemedText style={styles.label}>Unit</ThemedText>
+                <View style={{ flex: 1 }}>
+                  <FieldLabel>Unit</FieldLabel>
                   <SearchableDropdown
                     options={units}
                     value={currentItem.unit}
                     onChange={(val) => setCurrentItem({ ...currentItem, unit: String(val || '') })}
-                    placeholder="Select Unit"
+                    placeholder="Select unit"
                     allowClear
                   />
                 </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <ThemedText style={styles.label}>Reason/Purpose</ThemedText>
-                <TextInput
-                  style={[styles.textArea, { color: Colors.light.text, borderColor: Colors.light.border }]}
-                  placeholder="Why is this needed?"
-                  value={currentItem.reason}
-                  onChangeText={(text) => setCurrentItem({ ...currentItem, reason: text })}
-                  multiline
-                  numberOfLines={2}
-                  placeholderTextColor={Colors.light.textSecondary}
-                />
-              </View>
+              <FieldLabel>Reason / Purpose</FieldLabel>
+              <TextInput
+                style={styles.textArea}
+                placeholder="Why is this product needed?"
+                placeholderTextColor={C.textTertiary}
+                value={currentItem.reason}
+                onChangeText={(t) => setCurrentItem({ ...currentItem, reason: t })}
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+              />
 
-              <View style={styles.formGroup}>
-                <ThemedText style={styles.label}>Notes</ThemedText>
-                <TextInput
-                  style={[styles.textArea, { color: Colors.light.text, borderColor: Colors.light.border }]}
-                  placeholder="Additional notes"
-                  value={currentItem.notes}
-                  onChangeText={(text) => setCurrentItem({ ...currentItem, notes: text })}
-                  multiline
-                  numberOfLines={2}
-                  placeholderTextColor={Colors.light.textSecondary}
-                />
-              </View>
+              <FieldLabel>Notes</FieldLabel>
+              <TextInput
+                style={styles.textArea}
+                placeholder="Additional notes"
+                placeholderTextColor={C.textTertiary}
+                value={currentItem.notes}
+                onChangeText={(t) => setCurrentItem({ ...currentItem, notes: t })}
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+              />
 
-              <View style={styles.buttonRow}>
+              <View style={styles.btnRow}>
                 <Button
                   title="Add Product"
                   variant="primary"
                   onPress={handleAddItem}
-                  style={styles.addButton}
+                  style={{ flex: 1 }}
                 />
                 <Button
                   title="Cancel"
                   variant="secondary"
-                  onPress={() => {
-                    setSelectedProduct(null);
-                    setCurrentItem({
-                      quantity: 1,
-                      unit: '',
-                      project_site: '',
-                      reason: '',
-                      notes: '',
-                    });
-                  }}
+                  onPress={() => setSelectedProduct(null)}
+                  style={{ flex: 1 }}
                 />
               </View>
-            </Card>
+            </View>
           )}
 
-          {/* Items List */}
+          {/* Added items list */}
           {items.length > 0 && (
             <View style={styles.itemsList}>
-              <ThemedText type="defaultSemiBold" style={styles.itemsTitle}>
-                Added Products ({items.length})
-              </ThemedText>
+              <View style={styles.itemsHeader}>
+                <Text style={styles.itemsTitle}>Added Products</Text>
+                <View style={[styles.countBadge, { backgroundColor: C.tintSubtle }]}>
+                  <Text style={[styles.countText, { color: C.tint }]}>{items.length}</Text>
+                </View>
+              </View>
+
               {items.map((item, index) => {
-                const product = item.product || productsData?.results.find((p: Product) => Number(p.id) === Number(item.product_id));
+                const product = item.product || productsData?.results.find(
+                  (p: Product) => Number(p.id) === Number(item.product_id)
+                );
                 return (
-                  <Card key={index} style={styles.itemCard}>
-                    <View style={styles.itemHeader}>
-                      <View style={styles.itemInfo}>
-                        <ThemedText type="defaultSemiBold">{product?.name || 'Unknown Product'}</ThemedText>
-                        {product?.code && (
-                          <ThemedText style={styles.itemCode}>Code: {product.code}</ThemedText>
-                        )}
-                      </View>
+                  <View key={index} style={styles.addedItem}>
+                    <View style={styles.addedItemTop}>
+                      <Text style={styles.addedItemName} numberOfLines={1}>
+                        {product?.name || 'Unknown Product'}
+                      </Text>
                       <TouchableOpacity
                         onPress={() => handleRemoveItem(index)}
-                        style={styles.deleteButton}
-                      >
-                        <IconSymbol name="trash" size={20} color={Colors.light.error} />
+                        style={styles.removeBtn}
+                        hitSlop={8}>
+                        <IconSymbol name="trash" size={16} color={C.error} />
                       </TouchableOpacity>
                     </View>
+                    <Text style={styles.addedItemSub}>
+                      {item.quantity} {item.unit}{product?.code ? ` · ${product.code}` : ''}
+                    </Text>
+                    {item.reason ? (
+                      <Text style={styles.addedItemReason} numberOfLines={2}>{item.reason}</Text>
+                    ) : null}
 
-                    <View style={styles.itemDetails}>
-                      <View style={styles.itemDetailRow}>
-                        <ThemedText style={styles.itemLabel}>Quantity:</ThemedText>
+                    <View style={styles.itemEditRow}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
                         <Input
+                          label="Qty"
                           value={String(item.quantity)}
-                          onChangeText={(text) => {
-                            const num = parseInt(text) || 1;
-                            handleUpdateItem(index, 'quantity', num);
-                          }}
+                          onChangeText={(t) => handleUpdateItem(index, 'quantity', parseInt(t) || 1)}
                           keyboardType="numeric"
-                          containerStyle={styles.quantityInput}
+                          containerStyle={{ marginBottom: 0 }}
                         />
                       </View>
-
-                      <View style={styles.itemDetailRow}>
-                        <ThemedText style={styles.itemLabel}>Unit:</ThemedText>
-                        <View style={styles.unitDropdown}>
-                          <SearchableDropdown
-                            options={units}
-                            value={item.unit}
-                            onChange={(val) => handleUpdateItem(index, 'unit', String(val || ''))}
-                            placeholder="Select Unit"
-                            allowClear
-                          />
-                        </View>
-                      </View>
-
-                      <View style={styles.itemDetailRow}>
-                        <ThemedText style={styles.itemLabel}>Reason:</ThemedText>
-                        <TextInput
-                          style={[styles.itemTextArea, { color: Colors.light.text, borderColor: Colors.light.border }]}
-                          placeholder="Purpose"
-                          value={item.reason}
-                          onChangeText={(text) => handleUpdateItem(index, 'reason', text)}
-                          multiline
-                          numberOfLines={2}
-                          placeholderTextColor={Colors.light.textSecondary}
-                        />
-                      </View>
-
-                      <View style={styles.itemDetailRow}>
-                        <ThemedText style={styles.itemLabel}>Notes:</ThemedText>
-                        <TextInput
-                          style={[styles.itemTextArea, { color: Colors.light.text, borderColor: Colors.light.border }]}
-                          placeholder="Notes"
-                          value={item.notes}
-                          onChangeText={(text) => handleUpdateItem(index, 'notes', text)}
-                          multiline
-                          numberOfLines={2}
-                          placeholderTextColor={Colors.light.textSecondary}
+                      <View style={{ flex: 2 }}>
+                        <Text style={styles.miniLabel}>Unit</Text>
+                        <SearchableDropdown
+                          options={units}
+                          value={item.unit}
+                          onChange={(val) => handleUpdateItem(index, 'unit', String(val || ''))}
+                          placeholder="Unit"
+                          allowClear
                         />
                       </View>
                     </View>
-                  </Card>
+                  </View>
                 );
               })}
             </View>
           )}
         </Card>
 
-        {/* Submit Button */}
-        <View style={styles.submitContainer}>
+        {/* ── Submit ── */}
+        <View style={styles.submitArea}>
           <Button
-            title={loading ? 'Saving...' : 'Save Purchase Request'}
+            title={loading ? 'Saving…' : `Submit Request${items.length > 0 ? ` (${items.length} items)` : ''}`}
             variant="primary"
             onPress={handleSubmit}
             disabled={loading || items.length === 0}
             loading={loading}
-            style={styles.submitButton}
+            fullWidth
           />
           <Button
             title="Cancel"
             variant="secondary"
             onPress={() => router.back()}
-            style={styles.cancelButton}
+            fullWidth
           />
         </View>
+
+        <View style={{ height: 48 }} />
       </ScrollView>
-    </ThemedView>
+    </SafeAreaView>
   );
 }
+
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <Text style={sectionTitleStyle}>{children}</Text>
+  );
+}
+
+function FieldLabel({ children, required }: { children: string; required?: boolean }) {
+  return (
+    <Text style={labelStyle}>
+      {children}{required ? <Text style={{ color: C.error }}> *</Text> : ''}
+    </Text>
+  );
+}
+
+const sectionTitleStyle = {
+  fontSize: 13,
+  fontWeight: '700' as const,
+  color: C.textSecondary,
+  letterSpacing: 0.5,
+  textTransform: 'uppercase' as const,
+  marginBottom: 8,
+  marginTop: 20,
+  paddingHorizontal: 4,
+};
+
+const labelStyle = {
+  fontSize: 13,
+  fontWeight: '500' as const,
+  color: C.textSecondary,
+  marginBottom: 6,
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: C.background,
   },
-  scrollView: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   scrollContent: {
-    padding: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xl + Spacing.lg, // Extra bottom padding to avoid buttons
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Layout.sectionMarginBottom,
-    paddingTop: Spacing.sm,
-  },
-  backButton: {
-    marginRight: Spacing.md,
-    padding: Spacing.xs,
-  },
-  headerTitle: {
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.bold,
-    letterSpacing: -0.5,
+    paddingHorizontal: 16,
+    paddingBottom: 32,
   },
   card: {
-    marginBottom: Layout.cardMarginBottom,
-    padding: Layout.cardPadding,
+    marginBottom: 4,
   },
-  sectionTitle: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.semibold,
-    marginBottom: Spacing.md,
-    letterSpacing: -0.3,
-  },
-  formGroup: {
-    marginBottom: Layout.formGroupMarginBottom,
-  },
-  formGroupHalf: {
-    flex: 1,
-    marginRight: Spacing.sm,
-  },
-  formRow: {
+  row: {
     flexDirection: 'row',
-    gap: Spacing.sm,
     alignItems: 'flex-start',
   },
-  label: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.medium,
-    marginBottom: Spacing.sm,
-    color: Colors.light.text,
-    letterSpacing: 0.1,
-  },
-  required: {
-    color: Colors.light.error,
-    fontWeight: Typography.weights.bold,
-  },
   textArea: {
-    borderWidth: 1.5,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    fontSize: Typography.sizes.md,
-    minHeight: 80,
-    textAlignVertical: 'top',
-    borderColor: Colors.light.border,
-    color: Colors.light.text,
-    backgroundColor: Colors.light.background,
-  },
-  itemFormCard: {
-    marginTop: Spacing.md,
-    padding: Layout.cardPadding,
-    backgroundColor: Colors.light.backgroundSecondary,
+    backgroundColor: C.card,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: C.text,
+    minHeight: 72,
+    marginBottom: 16,
+  },
+  productForm: {
+    marginTop: 12,
+    backgroundColor: C.backgroundSecondary,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+  },
+  productHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  productBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productName: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.semibold,
-    marginBottom: Spacing.xs,
-    color: Colors.light.text,
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.text,
+    marginBottom: 2,
   },
   productCode: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.light.textSecondary,
-    marginBottom: Spacing.md,
-    fontWeight: Typography.weights.normal,
+    fontSize: 12,
+    color: C.textSecondary,
   },
-  buttonRow: {
+  btnRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    alignItems: 'center',
-  },
-  addButton: {
-    flex: 1,
+    gap: 8,
+    marginTop: 4,
   },
   itemsList: {
-    marginTop: Spacing.md,
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: C.borderLight,
+    paddingTop: 16,
+  },
+  itemsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
   },
   itemsTitle: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.semibold,
-    marginBottom: Spacing.md,
-    color: Colors.light.text,
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.text,
   },
-  itemCard: {
-    marginBottom: Spacing.md,
-    padding: Layout.cardPadding,
+  countBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  addedItem: {
+    backgroundColor: C.backgroundSecondary,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight,
+    borderColor: C.borderLight,
+    padding: 12,
+    marginBottom: 8,
   },
-  itemHeader: {
+  addedItemTop: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 3,
   },
-  itemInfo: {
+  addedItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.text,
     flex: 1,
   },
-  itemCode: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.light.textSecondary,
-    marginTop: Spacing.xs,
-    fontWeight: Typography.weights.normal,
+  removeBtn: {
+    padding: 4,
   },
-  deleteButton: {
-    padding: Spacing.sm,
+  addedItemSub: {
+    fontSize: 12,
+    color: C.textSecondary,
+    marginBottom: 4,
   },
-  itemDetails: {
-    gap: Spacing.md,
+  addedItemReason: {
+    fontSize: 12,
+    color: C.textTertiary,
+    marginBottom: 8,
   },
-  itemDetailRow: {
+  itemEditRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    alignItems: 'flex-end',
+    marginTop: 4,
   },
-  itemLabel: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.medium,
-    width: 80,
-    color: Colors.light.text,
+  miniLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: C.textSecondary,
+    marginBottom: 6,
   },
-  quantityInput: {
-    flex: 1,
-  },
-  unitDropdown: {
-    flex: 1,
-  },
-  itemTextArea: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-    fontSize: Typography.sizes.base,
-    minHeight: 60,
-    textAlignVertical: 'top',
-    borderColor: Colors.light.border,
-    color: Colors.light.text,
-    backgroundColor: Colors.light.background,
-  },
-  submitContainer: {
-    marginTop: Layout.sectionMarginTop,
-    marginBottom: Spacing.xl,
-    gap: Spacing.md,
-  },
-  submitButton: {
-    marginBottom: 0,
-  },
-  cancelButton: {
-    marginBottom: 0,
+  submitArea: {
+    gap: 10,
+    marginTop: 24,
   },
 });
-

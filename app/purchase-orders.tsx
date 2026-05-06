@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   FlatList,
   RefreshControl,
@@ -29,6 +30,9 @@ import { Colors } from '@/constants/theme';
 import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 import { CommonStyles } from '@/constants/common-styles';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+
+const C = Colors.light;
 
 const statusLabels: Record<string, string> = {
   pending: 'Pending',
@@ -309,7 +313,7 @@ export default function PurchaseOrdersScreen() {
               <View style={styles.detailRow}>
                 <ThemedText style={styles.detailLabel}>Total:</ThemedText>
                 <ThemedText type="defaultSemiBold" style={[styles.detailValue, { color: '#28a745' }]}>
-                  ${((item as any).total || 0).toFixed(2)}
+                  AED {(Number((item as any).total) || 0).toFixed(2)}
                 </ThemedText>
               </View>
             )}
@@ -358,58 +362,29 @@ export default function PurchaseOrdersScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ThemedView style={styles.innerContainer}>
-        <View style={styles.header}>
-        <View>
-          <ThemedText type="title" style={styles.headerTitle}>
-            Purchase Orders
-          </ThemedText>
-          <ThemedText style={styles.headerSubtitle}>Manage purchase orders and approvals</ThemedText>
-        </View>
-        <View style={styles.headerActions}>
-          {isAdmin && (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.innerContainer}>
+        <ScreenHeader title="Purchase Orders"
+          rightAction={canCreate ? { icon: 'plus', label: 'New', onPress: () => router.push('/purchase-orders/new' as any) } : undefined}
+        />
+        {isAdmin && (
+          <View style={styles.adminBar}>
             <View style={styles.selectModeContainer}>
-              <ThemedText style={styles.selectModeLabel}>Select:</ThemedText>
-              <Button
-                title="Page"
-                variant={selectMode === 'page' ? 'primary' : 'secondary'}
-                onPress={() => {
-                  setSelectMode('page');
-                  setSelectedItems(new Set());
-                }}
-                style={styles.selectModeButton}
-              />
-              <Button
-                title="All"
-                variant={selectMode === 'all' ? 'primary' : 'secondary'}
-                onPress={() => {
-                  setSelectMode('all');
-                  setSelectedItems(new Set());
-                }}
-                style={styles.selectModeButton}
-              />
+              <Text style={styles.selectModeLabel}>Select:</Text>
+              <Button title="Page" variant={selectMode === 'page' ? 'primary' : 'secondary'}
+                onPress={() => { setSelectMode('page'); setSelectedItems(new Set()); }}
+                style={styles.selectModeButton} />
+              <Button title="All" variant={selectMode === 'all' ? 'primary' : 'secondary'}
+                onPress={() => { setSelectMode('all'); setSelectedItems(new Set()); }}
+                style={styles.selectModeButton} />
             </View>
-          )}
-          {isAdmin && selectedItems.size > 0 && (
-            <Button
-              title={bulkDeleting ? 'Deleting...' : `Delete ${selectedItems.size}`}
-              variant="danger"
-              onPress={handleBulkDelete}
-              disabled={bulkDeleting}
-              loading={bulkDeleting}
-              style={styles.bulkDeleteButton}
-            />
-          )}
-          {canCreate && (
-            <Button
-              title="New Order"
-              variant="primary"
-              onPress={() => router.push('/purchase-orders/new' as any)}
-            />
-          )}
-        </View>
-      </View>
+            {selectedItems.size > 0 && (
+              <Button title={bulkDeleting ? 'Deleting...' : `Delete ${selectedItems.size}`}
+                variant="danger" onPress={handleBulkDelete}
+                disabled={bulkDeleting} loading={bulkDeleting} style={styles.bulkDeleteButton} />
+            )}
+          </View>
+        )}
 
       <Card style={styles.searchCard}>
         <View style={styles.searchRow}>
@@ -503,7 +478,7 @@ export default function PurchaseOrdersScreen() {
         title="Reject Purchase Order"
         message="Please provide a reason for rejecting this order. This reason will be saved and visible to the requester."
       />
-      </ThemedView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -515,7 +490,18 @@ const styles = StyleSheet.create({
   },
   innerContainer: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: C.background,
+  },
+  adminBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: C.background,
+    borderBottomWidth: 1,
+    borderBottomColor: C.borderLight,
+    gap: 8,
   },
   header: {
     ...CommonStyles.header,

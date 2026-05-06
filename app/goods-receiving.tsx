@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
-import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { GoodsReceiving, PaginatedResponse } from '@/types';
 import { Colors } from '@/constants/theme';
 import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 import { CommonStyles } from '@/constants/common-styles';
+
+const C = Colors.light;
 
 export default function GoodsReceivingScreen() {
   const router = useRouter();
@@ -75,9 +78,9 @@ export default function GoodsReceivingScreen() {
               {item.receipt_number || `GR-${item.id ? String(item.id).slice(0, 8) : 'N/A'}`}
             </ThemedText>
             {item.status && (
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                <ThemedText style={styles.statusText}>{item.status}</ThemedText>
-              </View>
+              <Badge variant={item.status === 'completed' ? 'success' : item.status === 'partial' ? 'warning' : 'info'}>
+                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              </Badge>
             )}
           </View>
         </View>
@@ -104,29 +107,30 @@ export default function GoodsReceivingScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ThemedView style={styles.innerContainer}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.innerContainer}>
+        <ScreenHeader title="Goods Receiving" />
         <View style={styles.searchContainer}>
-        <Input
-          placeholder="Search goods receiving..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          containerStyle={styles.searchInput}
+          <Input
+            placeholder="Search goods receiving..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            containerStyle={styles.searchInput}
+          />
+        </View>
+        <FlatList
+          data={filteredReceipts}
+          renderItem={renderItem}
+          keyExtractor={(item) => String(item.id || Math.random())}
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <ThemedText style={styles.emptyText}>
+              {loading ? 'Loading goods receiving...' : 'No goods receiving records found'}
+            </ThemedText>
+          }
         />
       </View>
-      <FlatList
-        data={filteredReceipts}
-        renderItem={renderItem}
-        keyExtractor={(item) => String(item.id || Math.random())}
-        contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <ThemedText style={styles.emptyText}>
-            {loading ? 'Loading goods receiving...' : 'No goods receiving records found'}
-          </ThemedText>
-        }
-      />
-      </ThemedView>
     </SafeAreaView>
   );
 }
@@ -137,7 +141,7 @@ const styles = StyleSheet.create({
   },
   innerContainer: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: C.background,
   },
   searchContainer: {
     paddingHorizontal: Layout.screenPadding,
