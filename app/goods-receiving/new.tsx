@@ -8,6 +8,7 @@ import { toast } from '@/lib/hooks/use-toast';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import DatePickerInput from '@/components/ui/DatePickerInput';
 import { Colors } from '@/constants/theme';
 
 const C = Colors.light;
@@ -138,8 +139,13 @@ export default function NewGoodsReceivingScreen() {
           {/* Receipt Date */}
           <Card padding={14} style={S.card}>
             <Text style={S.sectionTitle}>Receipt Details</Text>
-            <FieldLabel label="Receipt Date" required />
-            <StyledInput value={receiptDate} onChangeText={setReceiptDate} placeholder="YYYY-MM-DD" />
+            <DatePickerInput
+              label="Receipt Date *"
+              value={receiptDate}
+              onChange={setReceiptDate}
+              placeholder="Select date"
+              maximumDate={new Date()}
+            />
             <FieldLabel label="Notes" />
             <StyledInput value={notes} onChangeText={setNotes} placeholder="Any delivery notes..." multiline />
           </Card>

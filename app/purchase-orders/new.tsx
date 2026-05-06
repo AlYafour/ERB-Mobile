@@ -11,6 +11,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import SearchableDropdown, { DropdownOption } from '@/components/ui/SearchableDropdown';
+import DatePickerInput from '@/components/ui/DatePickerInput';
 import { Colors } from '@/constants/theme';
 
 const C = Colors.light;
@@ -172,12 +173,21 @@ export default function NewPurchaseOrderScreen() {
             <SearchableDropdown options={suppliers} value={selectedSupplier} onChange={(v) => setSelectedSupplier(v ? Number(v) : null)} placeholder="Select supplier..." />
             <View style={S.twoCol}>
               <View style={{ flex: 1 }}>
-                <FieldLabel label="Order Date" required />
-                <StyledInput value={orderDate} onChangeText={setOrderDate} placeholder="YYYY-MM-DD" />
+                <DatePickerInput
+                  label="Order Date *"
+                  value={orderDate}
+                  onChange={setOrderDate}
+                  placeholder="Select date"
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <FieldLabel label="Delivery Date" />
-                <StyledInput value={deliveryDate} onChangeText={setDeliveryDate} placeholder="YYYY-MM-DD" />
+                <DatePickerInput
+                  label="Delivery Date"
+                  value={deliveryDate}
+                  onChange={setDeliveryDate}
+                  placeholder="Select date"
+                  minimumDate={orderDate ? new Date(orderDate) : undefined}
+                />
               </View>
             </View>
             <FieldLabel label="Payment Terms" />

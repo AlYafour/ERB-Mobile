@@ -21,6 +21,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
+import DatePickerInput from '@/components/ui/DatePickerInput';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { Product, Project, PurchaseRequestItem } from '@/types';
@@ -242,19 +243,20 @@ export default function NewPurchaseRequestScreen() {
 
           <View style={styles.row}>
             <View style={{ flex: 1, marginRight: 8 }}>
-              <FieldLabel required>Request Date</FieldLabel>
-              <Input
-                placeholder="YYYY-MM-DD"
+              <DatePickerInput
+                label="Request Date *"
                 value={formData.request_date}
-                onChangeText={(t) => setFormData({ ...formData, request_date: t })}
+                onChange={(d) => setFormData({ ...formData, request_date: d })}
+                placeholder="Select date"
               />
             </View>
             <View style={{ flex: 1 }}>
-              <FieldLabel required>Required By</FieldLabel>
-              <Input
-                placeholder="YYYY-MM-DD"
+              <DatePickerInput
+                label="Required By *"
                 value={formData.required_by}
-                onChangeText={(t) => setFormData({ ...formData, required_by: t })}
+                onChange={(d) => setFormData({ ...formData, required_by: d })}
+                placeholder="Select date"
+                minimumDate={formData.request_date ? new Date(formData.request_date) : undefined}
               />
             </View>
           </View>

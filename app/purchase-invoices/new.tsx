@@ -8,6 +8,7 @@ import { toast } from '@/lib/hooks/use-toast';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import DatePickerInput from '@/components/ui/DatePickerInput';
 import { Colors } from '@/constants/theme';
 
 const C = Colors.light;
@@ -138,12 +139,21 @@ export default function NewPurchaseInvoiceScreen() {
             <Text style={S.sectionTitle}>Invoice Dates</Text>
             <View style={S.twoCol}>
               <View style={{ flex: 1 }}>
-                <FieldLabel label="Invoice Date" required />
-                <StyledInput value={invoiceDate} onChangeText={setInvoiceDate} placeholder="YYYY-MM-DD" />
+                <DatePickerInput
+                  label="Invoice Date *"
+                  value={invoiceDate}
+                  onChange={setInvoiceDate}
+                  placeholder="Select date"
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <FieldLabel label="Due Date" />
-                <StyledInput value={dueDate} onChangeText={setDueDate} placeholder="YYYY-MM-DD" />
+                <DatePickerInput
+                  label="Due Date"
+                  value={dueDate}
+                  onChange={setDueDate}
+                  placeholder="Select date"
+                  minimumDate={invoiceDate ? new Date(invoiceDate) : undefined}
+                />
               </View>
             </View>
           </Card>
