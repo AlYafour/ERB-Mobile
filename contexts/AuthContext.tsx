@@ -20,6 +20,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // When tokens are cleared (expired refresh token), force logout
+    apiClient.setOnAuthCleared(() => setUser(null));
     loadUser();
   }, []);
 
