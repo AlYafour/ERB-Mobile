@@ -1,5 +1,7 @@
 // API Configuration
-export const API_BASE_URL = 'https://erp-backend-production-fc5b.up.railway.app';
+// For local development: use your computer's local IP (run Django on port 8000)
+// For production: use the Railway URL
+export const API_BASE_URL = 'http://192.168.1.29:8000';
 
 export const API_ENDPOINTS = {
   // Authentication
