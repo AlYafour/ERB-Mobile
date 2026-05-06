@@ -1,0 +1,28 @@
+import React from 'react';
+import { View, ViewStyle } from 'react-native';
+import { SvgXml } from 'react-native-svg';
+
+interface LogoProps {
+  size?: number;
+  style?: ViewStyle;
+  variant?: 'full' | 'icon';
+}
+
+// SVG Logo from icon.svg - AL Yafour Logo
+const logoSvg = `<svg width="2122" height="2155" viewBox="0 0 2122 2155" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M510.331 583C559.965 597.573 613.511 610.225 670.244 620.675C542.142 730.713 461 893.88 461 1076C461 1407.37 729.629 1676 1061 1676C1392.37 1676 1661 1407.37 1661 1076C1661 893.936 1579.91 730.814 1451.87 620.777C1508.32 610.398 1561.62 597.841 1611.05 583.38L2121 1093.41L1060.5 2154.07L0 1093.41L510.331 583Z" fill="#6A6A6A"/>
+<path d="M216.339 0C271.928 232.296 636.518 411.68 1078 411.68C1502.34 411.68 1855.64 245.958 1931.8 26.8174L2121.32 216.34L1060.66 1277L0 216.34L216.339 0Z" fill="#ED7E07"/>
+</svg>`;
+
+export function Logo({ size = 120, style, variant = 'full' }: LogoProps) {
+  return (
+    <View style={style}>
+      <SvgXml
+        xml={logoSvg}
+        width={size}
+        height={size}
+      />
+    </View>
+  );
+}
+

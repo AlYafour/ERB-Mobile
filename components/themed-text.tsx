@@ -1,6 +1,7 @@
-import { StyleSheet, Text, type TextProps } from 'react-native';
+import { StyleSheet, Text, type TextProps, Platform } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { Typography } from '@/constants/spacing';
 
 export type ThemedTextProps = TextProps & {
   lightColor?: string;
@@ -16,6 +17,17 @@ export function ThemedText({
   ...rest
 }: ThemedTextProps) {
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+
+  // Use system fonts with better weights
+  const getFontFamily = (weight: string) => {
+    // For now, we use system fonts. When custom fonts are loaded, use them here
+    // Example: return Typography.families.inter[weight] || 'System';
+    return Platform.select({
+      ios: 'System',
+      android: 'Roboto',
+      default: 'System',
+    });
+  };
 
   return (
     <Text
@@ -35,26 +47,54 @@ export function ThemedText({
 
 const styles = StyleSheet.create({
   default: {
-    fontSize: 16,
+    fontSize: Typography.sizes.base,
     lineHeight: 24,
+    fontWeight: Typography.weights.normal,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'Roboto',
+      default: 'System',
+    }),
   },
   defaultSemiBold: {
-    fontSize: 16,
+    fontSize: Typography.sizes.base,
     lineHeight: 24,
-    fontWeight: '600',
+    fontWeight: Typography.weights.semibold,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'Roboto',
+      default: 'System',
+    }),
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    lineHeight: 32,
+    fontSize: Typography.sizes['3xl'],
+    fontWeight: Typography.weights.bold,
+    lineHeight: 36,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'Roboto',
+      default: 'System',
+    }),
   },
   subtitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: Typography.sizes.xl,
+    fontWeight: Typography.weights.bold,
+    lineHeight: 28,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'Roboto',
+      default: 'System',
+    }),
   },
   link: {
-    lineHeight: 30,
-    fontSize: 16,
-    color: '#0a7ea4',
+    lineHeight: 24,
+    fontSize: Typography.sizes.base,
+    color: '#2563EB',
+    fontWeight: Typography.weights.medium,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'Roboto',
+      default: 'System',
+    }),
   },
 });
