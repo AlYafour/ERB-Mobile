@@ -27,13 +27,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUser = async () => {
     try {
-      const isAuth = await apiClient.isAuthenticated();
-      if (isAuth) {
-        const userData = await apiClient.getCurrentUser();
-        setUser(userData);
-      }
-    } catch (error) {
-      console.error('Error loading user:', error);
+      const hasTokens = await apiClient.isAuthenticated();
+      if (!hasTokens) return; // No tokens → login screen
+
+      // 1. Load user from AsyncStorage cache instantly (no network needed)
+      const cachedUser = await apiClient.getCurrentUser();
+      if (cachedUser) setUser(cachedUser);
+
+      // 2. Proactively refresh the access token BEFORE the home screen fires
+      //    API calls. Capped at 25 seconds so the splash never hangs forever.
+      //    If Railway cold-start takes longer we still proceed — individual
+      //    requests will auto-retry via the mutex refresh logic.
+      await Promise.race([
+        apiClient.proactiveRefresh(),
+        new Promise<void>((resolve) => setTimeout(resolve, 25000)),
+      ]);
+
+    } catch {
+      // Network failure — keep cached user and proceed to app
     } finally {
       setIsLoading(false);
     }
@@ -41,50 +52,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string) => {
     try {
-      console.log('🚀 AuthContext: Starting login...');
       const response = await apiClient.login(username, password);
-      
-      console.log('📥 AuthContext: Login response received:', {
-        status: response.status,
-        hasData: !!response.data,
-        hasError: !!response.error,
-      });
-      
-      // If apiClient.login() succeeded, tokens are already stored
-      // We only need to check if the response was successful
+
       if (response.data && response.status >= 200 && response.status < 300) {
-        console.log('✅ AuthContext: Login successful, fetching user data...');
-        
-        // Try to get user data - if this fails, tokens might be invalid
         try {
           const userData = await apiClient.getCurrentUser();
-          console.log('👤 AuthContext: User data:', userData ? 'Received' : 'Not available');
-          
-          if (userData) {
-            setUser(userData);
-            console.log('✅ AuthContext: Login complete, user set');
-            return { success: true };
-          } else {
-            // User data not available, but tokens are stored
-            // This might happen if user endpoint fails, but login was successful
-            console.log('⚠️ AuthContext: User data not available, but login successful');
-            return { success: true };
-          }
-        } catch (userError) {
-          console.error('❌ AuthContext: Error fetching user after login:', userError);
-          // Even if user fetch fails, login was successful and tokens are stored
-          // User can be fetched later
-          return { success: true };
+          if (userData) setUser(userData);
+        } catch {
+          // Profile fetch failed — tokens are stored, user will load on next request
         }
+        return { success: true };
       }
-      
-      // Login failed - return error message
-      console.error('❌ AuthContext: Login failed');
-      const errorMessage = response.error || 
+
+      const errorMessage = response.error ||
         (response.status === 400 ? 'Invalid username or password' : 'Login failed');
       return { success: false, error: errorMessage };
     } catch (error: any) {
-      console.error('❌ AuthContext: Login exception:', error);
       return { success: false, error: error.message || 'Login failed' };
     }
   };

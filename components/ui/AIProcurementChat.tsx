@@ -206,54 +206,56 @@ export default function AIProcurementChat({ onAddItems, onFormUpdate }: Props) {
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)} statusBarTranslucent>
       <View style={S.overlay}>
+        {/* Backdrop */}
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setOpen(false)} />
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
-          <View style={S.sheet}>
+        {/* Sheet — positioned at bottom by justifyContent:'flex-end' on overlay */}
+        <View style={S.sheet}>
 
-            {/* Header */}
-            <View style={S.header}>
-              <View style={S.headerLeft}>
-                <View style={S.headerIcon}>
-                  <MaterialIcons name="auto-awesome" size={18} color="#fff" />
-                </View>
-                <View>
-                  <Text style={S.headerTitle}>
-                    <Text style={S.headerTitleAI}>AI</Text>
-                    {' '}Procurement Assistant
-                  </Text>
-                  <Text style={S.headerSub}>Claude · عربي / English</Text>
-                </View>
+          {/* Header */}
+          <View style={S.header}>
+            <View style={S.headerLeft}>
+              <View style={S.headerIcon}>
+                <MaterialIcons name="auto-awesome" size={18} color="#fff" />
               </View>
-              <TouchableOpacity onPress={() => setOpen(false)} hitSlop={10} style={S.headerClose}>
-                <MaterialIcons name="close" size={20} color="rgba(255,255,255,0.8)" />
-              </TouchableOpacity>
+              <View>
+                <Text style={S.headerTitle}>
+                  <Text style={S.headerTitleAI}>AI</Text>
+                  {' '}Procurement Assistant
+                </Text>
+                <Text style={S.headerSub}>Claude · عربي / English</Text>
+              </View>
             </View>
+            <TouchableOpacity onPress={() => setOpen(false)} hitSlop={10} style={S.headerClose}>
+              <MaterialIcons name="close" size={20} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+          </View>
 
-            {/* Messages */}
-            <FlatList
-              ref={listRef}
-              data={messages}
-              keyExtractor={(m) => m.id}
-              renderItem={renderMessage}
-              style={S.list}
-              contentContainerStyle={S.listContent}
-              keyboardShouldPersistTaps="handled"
-              onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-              ListFooterComponent={
-                loading ? (
-                  <View style={S.thinking}>
-                    <ActivityIndicator size="small" color={C.tint} />
-                    <Text style={S.thinkingText}>جاري التفكير…</Text>
-                  </View>
-                ) : null
-              }
-            />
+          {/* Messages */}
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(m) => m.id}
+            renderItem={renderMessage}
+            style={S.list}
+            contentContainerStyle={S.listContent}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            ListFooterComponent={
+              loading ? (
+                <View style={S.thinking}>
+                  <ActivityIndicator size="small" color={C.tint} />
+                  <Text style={S.thinkingText}>جاري التفكير…</Text>
+                </View>
+              ) : null
+            }
+          />
 
-            {/* Divider */}
-            <View style={S.divider} />
+          {/* Divider */}
+          <View style={S.divider} />
 
-            {/* Input row */}
+          {/* Input — KAV only around the input bar, not the whole sheet */}
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <View style={S.inputRow}>
               <TextInput
                 ref={inputRef}
@@ -277,9 +279,9 @@ export default function AIProcurementChat({ onAddItems, onFormUpdate }: Props) {
                 }
               </TouchableOpacity>
             </View>
+          </KeyboardAvoidingView>
 
-          </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );
@@ -320,7 +322,6 @@ const S = StyleSheet.create({
     maxHeight: '88%',
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15, shadowRadius: 20, elevation: 24,
-    overflow: 'hidden',
   },
 
   // Header

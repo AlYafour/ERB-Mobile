@@ -97,7 +97,7 @@ class ApiClient {
       const storedRefresh = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
       if (!storedRefresh) return 'invalid';
 
-      // 15-second timeout — Railway may be waking from sleep
+      // 40-second timeout — Railway cold starts can take 30-60 seconds
       const response = await this.fetchWithTimeout(
         `${this.baseURL}${API_ENDPOINTS.REFRESH_TOKEN}`,
         {
@@ -106,7 +106,7 @@ class ApiClient {
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify({ refresh: storedRefresh }),
         },
-        15000,
+        40000,
       );
 
       if (response.ok) {
@@ -322,6 +322,26 @@ class ApiClient {
   async isAuthenticated(): Promise<boolean> {
     const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     return !!token;
+  }
+
+  /**
+   * Call this on app startup BEFORE the home screen loads.
+   * Silently refreshes the access token so the first wave of API calls
+   * gets a fresh token instead of hitting 401 bursts.
+   * Never throws — network errors are swallowed so startup is never blocked.
+   */
+  async proactiveRefresh(): Promise<void> {
+    try {
+      const hasToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      if (!hasToken) return;
+      const result = await this.refreshToken();
+      if (result === 'invalid') {
+        await this.clearAuth();
+      }
+      // 'ok' — fresh token stored; 'network' — proceed, first API call will retry
+    } catch {
+      // Never block startup
+    }
   }
 }
 
