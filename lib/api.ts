@@ -70,54 +70,41 @@ class ApiClient {
     }
 
     const status = response.status;
-    
-    if (status === 401) {
-      // Token expired, try to refresh
-      const refreshed = await this.refreshToken();
-      if (!refreshed) {
-        // Clear storage and redirect to login
-        await this.clearAuth();
-        return { status: 401, error: 'Unauthorized' };
-      }
-      // Retry the request
-      return this.handleResponse(response);
-    }
 
+    // Read body first so we have the actual error message
     const contentType = response.headers.get('content-type');
     const isJson = contentType?.includes('application/json');
-    
     let data: any;
     try {
       const text = await response.text();
       if (isJson && text) {
-        try {
-          data = JSON.parse(text);
-        } catch (parseError) {
-          console.error('JSON parse error:', parseError, 'Response text:', text);
-          data = { raw: text };
-        }
+        try { data = JSON.parse(text); } catch { data = { raw: text }; }
       } else {
         data = text || null;
       }
-    } catch (e) {
-      console.error('Response handling error:', e);
-      data = null;
+    } catch { data = null; }
+
+    if (status === 401) {
+      // If response contains an error message (e.g. "Invalid credentials"), show it directly
+      const bodyError = data?.detail || data?.error || data?.message;
+      if (bodyError) {
+        return { status: 401, error: bodyError, data };
+      }
+      // Otherwise it's an expired token — try to refresh
+      const refreshed = await this.refreshToken();
+      if (!refreshed) {
+        await this.clearAuth();
+        return { status: 401, error: 'Session expired. Please login again.' };
+      }
+      return { status: 401, error: 'Session expired. Please login again.' };
     }
 
     if (!response.ok) {
-      // Extract error message from various possible formats
-      const errorMessage = 
-        data?.detail ||
-        data?.message ||
-        data?.error ||
+      const errorMessage =
+        data?.detail || data?.message || data?.error ||
         (typeof data === 'string' ? data : null) ||
         `HTTP ${status}`;
-      
-      return {
-        status,
-        error: errorMessage,
-        data: data,
-      };
+      return { status, error: errorMessage, data };
     }
 
     return {
