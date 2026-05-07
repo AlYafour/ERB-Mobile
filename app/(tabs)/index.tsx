@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Dimensions, Image, ScrollView, StatusBar,
@@ -11,6 +11,7 @@ import Animated, {
   withSpring, withTiming,
 } from 'react-native-reanimated';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/lib/hooks/use-permissions';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -30,7 +31,14 @@ interface Module {
   available: boolean;
 }
 
-const MODULES: Module[] = [
+/* Categories that grant procurement module access */
+const PROCUREMENT_CATEGORIES = [
+  'purchase_request', 'purchase_order', 'purchase_quotation',
+  'quotation_request', 'goods_receiving', 'purchase_invoice',
+  'supplier', 'product',
+];
+
+const ALL_MODULES: Module[] = [
   {
     id: 'procurement',
     label: 'Procurement',
@@ -86,6 +94,7 @@ function getGreeting() {
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { permissions, hasPermission } = usePermissions();
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
   const colors = Colors[cs];
@@ -103,6 +112,24 @@ export default function HomeScreen() {
     logoOpacity.value = withTiming(1, { duration: 550 });
     logoScale.value   = withSpring(1, { damping: 13, stiffness: 85 });
   }, []);
+
+  const isSuperuser = user?.is_superuser || user?.role === 'super_admin';
+
+  /* Determine which modules this user can access */
+  const hasProcurementAccess = useMemo(() =>
+    isSuperuser ||
+    PROCUREMENT_CATEGORIES.some(cat => hasPermission(cat, 'view')),
+    [permissions, isSuperuser]
+  );
+
+  /* HR access = everyone with a user account (personal data only) */
+  const hasHRAccess = true;
+
+  const MODULES = useMemo(() => ALL_MODULES.map(m => {
+    if (m.id === 'procurement') return { ...m, available: hasProcurementAccess };
+    if (m.id === 'hr')          return { ...m, available: hasHRAccess };
+    return m; // sales, accounts stay false
+  }), [hasProcurementAccess]);
 
   const firstName = user?.first_name || user?.username || '';
 
