@@ -1,531 +1,430 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  TouchableOpacity,
-  ActivityIndicator,
-  Platform,
-  Dimensions,
+  View, Text, StyleSheet, TouchableOpacity,
+  Dimensions, Image, ScrollView, StatusBar,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Animated, {
+  FadeIn, FadeInDown, FadeInUp,
+  useSharedValue, useAnimatedStyle,
+  withSpring, withTiming,
+} from 'react-native-reanimated';
 import { useAuth } from '@/contexts/AuthContext';
-import { dashboardApi, DashboardStats, ProcurementCycleMetrics, ProjectAnalytics, RecentActivity } from '@/lib/api/dashboard';
-import { Card } from '@/components/ui/Card';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Badge } from '@/components/ui/Badge';
-import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { usePermissions } from '@/lib/hooks/use-permissions';
+import { Colors } from '@/constants/theme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
-const { width: W } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+const CARD = (width - 48) / 2;
 
-export default function DashboardScreen() {
-  const { user, logout } = useAuth();
-  const { hasPermission } = usePermissions();
+interface Module {
+  id: string;
+  label: string;
+  subtitle: string;
+  icon: string;
+  color: string;
+  bgLight: string;
+  bgDark: string;
+  route: string | null;
+  available: boolean;
+}
+
+const MODULES: Module[] = [
+  {
+    id: 'procurement',
+    label: 'Procurement',
+    subtitle: 'LPO · PR · GRN · Quotations',
+    icon: 'cart.fill',
+    color: '#3b82f6',
+    bgLight: '#eff6ff',
+    bgDark: '#172030',
+    route: '/purchase-requests',
+    available: true,
+  },
+  {
+    id: 'hr',
+    label: 'Human Resources',
+    subtitle: 'Attendance · Leave · Payroll',
+    icon: 'person.2.fill',
+    color: '#f97316',
+    bgLight: '#fff7ed',
+    bgDark: '#2a1400',
+    route: '/(tabs)/hr',
+    available: true,
+  },
+  {
+    id: 'sales',
+    label: 'Sales',
+    subtitle: 'Invoices · Clients · Pipeline',
+    icon: 'chart.bar.fill',
+    color: '#10b981',
+    bgLight: '#f0fdf4',
+    bgDark: '#0a1f18',
+    route: null,
+    available: false,
+  },
+  {
+    id: 'accounts',
+    label: 'Accounts',
+    subtitle: 'Ledger · Reports · Payables',
+    icon: 'dollarsign.circle.fill',
+    color: '#8b5cf6',
+    bgLight: '#faf5ff',
+    bgDark: '#1a1030',
+    route: null,
+    available: false,
+  },
+];
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+export default function HomeScreen() {
+  const { user } = useAuth();
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = (Platform.OS === 'ios' ? 49 : 52) + Math.max(insets.bottom, 8);
+  const cs = useColorScheme() ?? 'light';
+  const colors = Colors[cs];
+  const isDark = cs === 'dark';
 
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [cycleMetrics, setCycleMetrics] = useState<ProcurementCycleMetrics | null>(null);
-  const [projectAnalytics, setProjectAnalytics] = useState<ProjectAnalytics[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const logoScale   = useSharedValue(0.25);
+  const logoOpacity = useSharedValue(0);
 
-  useEffect(() => {
-    if (user && user.role !== 'super_admin' && !user.is_superuser) {
-      router.replace('/purchase-requests' as any);
-    }
-  }, [user]);
-
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      const canView =
-        user?.is_superuser ||
-        user?.is_staff ||
-        hasPermission('dashboard', 'view') ||
-        hasPermission('purchase_request', 'view');
-
-      if (!canView) {
-        setStats(null);
-        return;
-      }
-
-      const safe = async <T,>(fn: () => Promise<T>, def: T): Promise<T> => {
-        try { return await fn(); } catch { return def; }
-      };
-
-      const emptyStats: DashboardStats = {
-        purchaseRequests: { total: 0, pending: 0, approved: 0, rejected: 0 },
-        quotationRequests: { total: 0, pending: 0, completed: 0 },
-        suppliers: { total: 0 },
-        products: { total: 0 },
-        purchaseOrders: { total: 0, pending: 0, approved: 0, rejected: 0, completed: 0 },
-        goodsReceiving: { total: 0 },
-        invoices: { total: 0, pending: 0, approved: 0, paid: 0 },
-      };
-
-      const [statsData, cycleData, projectsData, activityData] = await Promise.all([
-        safe(() => dashboardApi.getStats(), emptyStats),
-        safe(() => dashboardApi.getProcurementCycleMetrics(), { avgPRToPO: 0, avgPOToGRN: 0, avgGRNToInvoice: 0, bottlenecks: [] }),
-        safe(() => dashboardApi.getProjectAnalytics(), []),
-
-        safe(() => dashboardApi.getRecentActivity(), []),
-      ]);
-
-      setStats(statsData);
-      setCycleMetrics(cycleData);
-      setProjectAnalytics(projectsData);
-      setRecentActivity(activityData);
-    } catch (error) {
-      if (__DEV__) console.error('Dashboard error:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const logoStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: logoScale.value }],
+    opacity: logoOpacity.value,
+  }));
 
   useEffect(() => {
-    if (!user || user.role === 'super_admin' || user.is_superuser) {
-      loadDashboardData();
-    }
-  }, [user]);
-  const onRefresh = () => { setRefreshing(true); loadDashboardData(); };
+    logoOpacity.value = withTiming(1, { duration: 550 });
+    logoScale.value   = withSpring(1, { damping: 13, stiffness: 85 });
+  }, []);
 
-  const getGreeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good Morning';
-    if (h < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  };
-
-  const getInitial = () =>
-    (user?.first_name || user?.username || 'U').charAt(0).toUpperCase();
-
-  const formatAED = (n: number) =>
-    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', maximumFractionDigits: 0 }).format(n);
-
-  const getActionVariant = (action: string): 'success' | 'error' | 'warning' | 'info' => {
-    if (action === 'approved' || action === 'paid') return 'success';
-    if (action === 'rejected') return 'error';
-    return 'info';
-  };
-
-  const menuItems = [
-    { title: 'Purchase Requests', route: '/purchase-requests', icon: 'doc.text.fill' },
-    { title: 'Purchase Orders', route: '/purchase-orders', icon: 'cart.fill' },
-    { title: 'Purchase Invoices', route: '/purchase-invoices', icon: 'doc.fill' },
-    { title: 'Quotation Requests', route: '/quotation-requests', icon: 'quote.bubble.fill' },
-    { title: 'Purchase Quotations', route: '/purchase-quotations', icon: 'list.bullet.rectangle.fill' },
-    { title: 'Goods Receiving', route: '/goods-receiving', icon: 'shippingbox.fill' },
-    { title: 'Suppliers', route: '/suppliers', icon: 'building.2.fill' },
-    { title: 'Products', route: '/products', icon: 'cube.box.fill' },
-    { title: 'Projects', route: '/projects', icon: 'folder.fill' },
-    { title: 'Users', route: '/users', icon: 'person.2.fill' },
-    { title: 'Settings', route: '/settings', icon: 'gearshape.fill' },
-  ];
+  const firstName = user?.first_name || user?.username || '';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 16 }]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.tint}
-            colors={[colors.tint]}
-          />
-        }>
+    <SafeAreaView style={[s.root, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-          <View style={styles.headerRow}>
-            <View style={[styles.logoBox, { backgroundColor: colors.tint }]}>
-              <IconSymbol name="building.columns.fill" size={22} color="#FFFFFF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.greeting, { color: colors.text }]}>
-                {getGreeting()}, {user?.first_name || 'User'}
-              </Text>
-              <Text style={[styles.greetingSub, { color: colors.textSecondary }]}>
-                Dashboard Overview
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/notifications' as any)}
-              style={[styles.headerBtn, { backgroundColor: colors.backgroundSecondary }]}>
-              <IconSymbol name="bell" size={20} color={colors.text} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/profile' as any)}
-              style={[styles.avatarBtn, { backgroundColor: colors.tint }]}>
-              <Text style={styles.avatarText}>{getInitial()}</Text>
-            </TouchableOpacity>
-          </View>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Logo hero ── */}
+        <View style={s.hero}>
+          <Animated.View
+            style={[
+              s.logoRing,
+              logoStyle,
+              { backgroundColor: isDark ? '#1e2d45' : '#ffffff' },
+            ]}
+          >
+            <Image
+              source={require('@/assets/images/icon.png')}
+              style={s.logo}
+              resizeMode="contain"
+            />
+          </Animated.View>
+
+          <Animated.View entering={FadeInUp.delay(400).duration(500)} style={s.heroText}>
+            <Text style={[s.companyLine1, { color: colors.text }]}>
+              AL YAFOUR GEN. CONT.
+            </Text>
+            <Text style={[s.companyLine2, { color: colors.tint }]}>
+              {'& TRANSPORT LLC.'}
+            </Text>
+          </Animated.View>
         </View>
 
-        {/* Stats */}
-        {loading ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={colors.tint} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading...</Text>
+        {/* ── Greeting card ── */}
+        <Animated.View
+          entering={FadeInDown.delay(550).duration(450)}
+          style={[s.greetCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[s.greetHi, { color: colors.textSecondary }]}>
+              {getGreeting()}{firstName ? ',' : ''}{' '}
+            </Text>
+            {firstName ? (
+              <Text style={[s.greetName, { color: colors.text }]}>
+                {firstName} 👋
+              </Text>
+            ) : (
+              <Text style={[s.greetName, { color: colors.text }]}>Welcome 👋</Text>
+            )}
           </View>
-        ) : stats ? (
-          <>
-            {/* KPI Grid */}
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Overview</Text>
-                <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>Last 30 days</Text>
-              </View>
-              <View style={styles.kpiGrid}>
-                {[
-                  { label: 'Total PRs', value: stats.purchaseRequests.total, icon: 'doc.text.fill', color: colors.tint, bg: colors.tintSubtle },
-                  { label: 'Pending', value: stats.purchaseRequests.pending, icon: 'clock.fill', color: colors.warning, bg: colors.warningLight },
-                  { label: 'Approved', value: stats.purchaseRequests.approved, icon: 'checkmark.circle.fill', color: colors.success, bg: colors.successLight },
-                  { label: 'Rejected', value: stats.purchaseRequests.rejected, icon: 'xmark.circle.fill', color: colors.error, bg: colors.errorLight },
-                ].map((kpi) => (
-                  <Card key={kpi.label} style={[styles.kpiCard, { width: (W - 48) / 2 }]} padding={14}>
-                    <View style={[styles.kpiIcon, { backgroundColor: kpi.bg }]}>
-                      <IconSymbol name={kpi.icon as any} size={18} color={kpi.color} />
-                    </View>
-                    <Text style={[styles.kpiValue, { color: colors.text }]}>{kpi.value}</Text>
-                    <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{kpi.label}</Text>
-                  </Card>
-                ))}
-              </View>
-            </View>
+          <TouchableOpacity
+            style={[s.notifBtn, { backgroundColor: colors.tintSubtle }]}
+            onPress={() => router.push('/(tabs)/notifications' as any)}
+          >
+            <IconSymbol name="bell.fill" size={18} color={colors.tint} />
+          </TouchableOpacity>
+        </Animated.View>
 
-            {/* Purchase Requests Row */}
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Purchase Requests</Text>
-                <TouchableOpacity onPress={() => router.push('/purchase-requests' as any)}>
-                  <Text style={[styles.viewAll, { color: colors.tint }]}>View All</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.rowGrid}>
-                {[
-                  { label: 'Total', value: stats.purchaseRequests.total, route: '/purchase-requests' },
-                  { label: 'Pending', value: stats.purchaseRequests.pending, route: '/purchase-requests?status=pending' },
-                  { label: 'Approved', value: stats.purchaseRequests.approved, route: '/purchase-requests?status=approved' },
-                  { label: 'Rejected', value: stats.purchaseRequests.rejected, route: '/purchase-requests?status=rejected' },
-                ].map((s) => (
-                  <TouchableOpacity
-                    key={s.label}
-                    onPress={() => router.push(s.route as any)}
-                    style={[styles.rowStatBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.borderLight }]}>
-                    <Text style={[styles.rowStatLabel, { color: colors.textSecondary }]}>{s.label}</Text>
-                    <Text style={[styles.rowStatValue, { color: colors.tint }]}>{s.value}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+        {/* ── Section label ── */}
+        <Animated.Text
+          entering={FadeIn.delay(720).duration(350)}
+          style={[s.sectionLabel, { color: colors.textSecondary }]}
+        >
+          SELECT A MODULE
+        </Animated.Text>
 
-            {/* Orders & Invoices */}
-            <View style={styles.twoCol}>
-              {[
-                {
-                  title: 'Orders',
-                  route: '/purchase-orders',
-                  items: [
-                    { label: 'Total', value: stats.purchaseOrders.total },
-                    { label: 'Pending', value: stats.purchaseOrders.pending },
-                    { label: 'Approved', value: stats.purchaseOrders.approved },
-                    { label: 'Done', value: stats.purchaseOrders.completed },
-                  ],
-                },
-                {
-                  title: 'Invoices',
-                  route: '/purchase-invoices',
-                  items: [
-                    { label: 'Total', value: stats.invoices.total },
-                    { label: 'Pending', value: stats.invoices.pending },
-                    { label: 'Approved', value: stats.invoices.approved },
-                    { label: 'Paid', value: stats.invoices.paid },
-                  ],
-                },
-              ].map((section) => (
-                <Card key={section.title} style={styles.halfCard} padding={14}>
-                  <View style={styles.sectionHead}>
-                    <Text style={[styles.cardTitle, { color: colors.text }]}>{section.title}</Text>
-                    <TouchableOpacity onPress={() => router.push(section.route as any)}>
-                      <Text style={[styles.viewAll, { color: colors.tint }]}>All</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {section.items.map((item) => (
-                    <View key={item.label} style={[styles.miniRow, { borderBottomColor: colors.borderLight }]}>
-                      <Text style={[styles.miniLabel, { color: colors.textSecondary }]}>{item.label}</Text>
-                      <Text style={[styles.miniValue, { color: colors.text }]}>{item.value}</Text>
-                    </View>
-                  ))}
-                </Card>
-              ))}
-            </View>
+        {/* ── Module grid ── */}
+        <View style={s.grid}>
+          {MODULES.map((mod, idx) => (
+            <Animated.View
+              key={mod.id}
+              entering={FadeInDown.delay(820 + idx * 100).duration(420).springify()}
+              style={{ width: CARD }}
+            >
+              <TouchableOpacity
+                style={[
+                  s.card,
+                  {
+                    backgroundColor: isDark ? mod.bgDark : mod.bgLight,
+                    borderColor: mod.available ? mod.color + '50' : colors.border,
+                    opacity: mod.available ? 1 : 0.52,
+                  },
+                ]}
+                onPress={() => {
+                  if (mod.available && mod.route) {
+                    router.push(mod.route as any);
+                  }
+                }}
+                activeOpacity={mod.available ? 0.7 : 1}
+              >
+                {/* Color accent strip */}
+                <View style={[s.accentBar, { backgroundColor: mod.color }]} />
 
-            {/* Quick Stats */}
-            <View style={styles.section}>
-              <View style={styles.quickGrid}>
-                {[
-                  { label: 'Quotation Requests', value: stats.quotationRequests.total, route: '/quotation-requests', icon: 'dollarsign.circle.fill' },
-                  { label: 'Suppliers', value: stats.suppliers.total, route: '/suppliers', icon: 'building.2.fill' },
-                  { label: 'Products', value: stats.products.total, route: '/products', icon: 'cube.box.fill' },
-                  { label: 'GRN', value: stats.goodsReceiving.total, route: '/goods-receiving', icon: 'shippingbox.fill' },
-                ].map((q) => (
-                  <TouchableOpacity
-                    key={q.label}
-                    onPress={() => router.push(q.route as any)}
-                    style={[styles.quickCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <IconSymbol name={q.icon as any} size={24} color={colors.tint} />
-                    <Text style={[styles.quickValue, { color: colors.text }]}>{q.value}</Text>
-                    <Text style={[styles.quickLabel, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {q.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </>
-        ) : null}
-
-        {/* Project Analytics */}
-        {projectAnalytics.length > 0 && (
-          <View style={styles.section}>
-            <Card padding={16}>
-              <View style={styles.sectionHead}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Top Projects</Text>
-                <TouchableOpacity onPress={() => router.push('/projects' as any)}>
-                  <Text style={[styles.viewAll, { color: colors.tint }]}>View All</Text>
-                </TouchableOpacity>
-              </View>
-              {projectAnalytics.slice(0, 5).map((p) => (
-                <View key={p.id} style={[styles.listRow, { borderBottomColor: colors.borderLight }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.listRowTitle, { color: colors.text }]} numberOfLines={1}>{p.name}</Text>
-                    <Text style={[styles.listRowSub, { color: colors.textSecondary }]}>{p.code}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                    <Text style={[styles.listRowValue, { color: colors.text }]}>{formatAED(p.totalSpending)}</Text>
-                    <Badge variant="info">{p.poCount} POs</Badge>
-                  </View>
+                {/* Icon bubble */}
+                <View style={[s.iconBubble, { backgroundColor: mod.color + '20' }]}>
+                  <IconSymbol name={mod.icon as any} size={28} color={mod.color} />
                 </View>
-              ))}
-            </Card>
-          </View>
-        )}
 
-        {/* Recent Activity */}
-        {recentActivity.length > 0 && (
-          <View style={styles.section}>
-            <Card padding={16}>
-              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12 }]}>Recent Activity</Text>
-              {recentActivity.slice(0, 6).map((a) => (
-                <TouchableOpacity
-                  key={`${a.type}-${a.id}`}
-                  onPress={() => router.push(a.link as any)}
-                  style={[styles.activityRow, { backgroundColor: colors.backgroundSecondary, borderColor: colors.borderLight }]}>
-                  <View style={styles.activityTop}>
-                    <Badge variant={getActionVariant(a.action)}>{a.action}</Badge>
-                    <Text style={[styles.activityType, { color: colors.textSecondary }]}>{a.type.replace('_', ' ')}</Text>
-                  </View>
-                  <Text style={[styles.activityTitle, { color: colors.text }]} numberOfLines={1}>{a.title}</Text>
-                  <Text style={[styles.activityMeta, { color: colors.textTertiary }]}>
-                    {a.user} · {new Date(a.timestamp).toLocaleDateString()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </Card>
-          </View>
-        )}
+                {/* Text */}
+                <Text style={[s.cardLabel, { color: colors.text }]} numberOfLines={2}>
+                  {mod.label}
+                </Text>
+                <Text style={[s.cardSub, { color: colors.textSecondary }]} numberOfLines={2}>
+                  {mod.subtitle}
+                </Text>
 
-        {/* Quick Access */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12 }]}>Quick Access</Text>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.route}
-              onPress={() => router.push(item.route as any)}
-              activeOpacity={0.7}
-              style={[styles.menuRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={[styles.menuIcon, { backgroundColor: colors.tintSubtle }]}>
-                <IconSymbol name={item.icon as any} size={20} color={colors.tint} />
-              </View>
-              <Text style={[styles.menuLabel, { color: colors.text }]}>{item.title}</Text>
-              <IconSymbol name="chevron.right" size={16} color={colors.textTertiary} />
-            </TouchableOpacity>
+                {/* Footer */}
+                <View style={s.cardFooter}>
+                  {mod.available ? (
+                    <View style={[s.openBtn, { backgroundColor: mod.color }]}>
+                      <Text style={s.openBtnText}>Open</Text>
+                      <IconSymbol name="chevron.right" size={10} color="#fff" />
+                    </View>
+                  ) : (
+                    <View style={[s.soonBadge, { borderColor: colors.border }]}>
+                      <Text style={[s.soonText, { color: colors.textSecondary }]}>
+                        Coming soon
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
           ))}
         </View>
 
-        <View style={{ height: 32 }} />
+        {/* ── Profile shortcut ── */}
+        <Animated.View entering={FadeIn.delay(1250).duration(450)}>
+          <TouchableOpacity
+            style={[s.profileRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push('/(tabs)/profile' as any)}
+            activeOpacity={0.75}
+          >
+            <View style={[s.avatarCircle, { backgroundColor: colors.tint }]}>
+              <Text style={s.avatarText}>
+                {(user?.first_name || user?.username || 'U')[0].toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.profileName, { color: colors.text }]}>
+                {user?.first_name
+                  ? `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}`
+                  : user?.username || 'My Profile'}
+              </Text>
+              <Text style={[s.profileRole, { color: colors.textSecondary }]}>
+                {user?.role?.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Employee'}
+              </Text>
+            </View>
+            <IconSymbol name="chevron.right" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* ── Footer ── */}
+        <Animated.Text
+          entering={FadeIn.delay(1400).duration(500)}
+          style={[s.footer, { color: colors.textSecondary }]}
+        >
+          Abu Dhabi, United Arab Emirates
+        </Animated.Text>
+
+        <View style={{ height: 28 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { paddingBottom: 20 },
+const SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.10,
+  shadowRadius: 12,
+  elevation: 5,
+};
 
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    marginBottom: 4,
+const s = StyleSheet.create({
+  root: { flex: 1 },
+  scroll: { paddingTop: 12, paddingHorizontal: 16 },
+
+  /* Hero */
+  hero: {
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingBottom: 22,
   },
-  headerRow: {
+  logoRing: {
+    width: 104,
+    height: 104,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW,
+  },
+  logo: { width: 76, height: 76 },
+  heroText: { alignItems: 'center', marginTop: 16, gap: 2 },
+  companyLine1: { fontSize: 14, fontWeight: '800', letterSpacing: 0.6, textAlign: 'center' },
+  companyLine2: { fontSize: 14, fontWeight: '800', letterSpacing: 0.6, textAlign: 'center' },
+
+  /* Greeting */
+  greetCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 22,
+    gap: 12,
+    ...SHADOW,
+    shadowOpacity: 0.05,
   },
-  logoBox: {
+  greetHi: { fontSize: 13, fontWeight: '500' },
+  greetName: { fontSize: 21, fontWeight: '800', letterSpacing: -0.4, marginTop: 1 },
+  notifBtn: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  greeting: { fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
-  greetingSub: { fontSize: 12, marginTop: 1 },
-  headerBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 
-  loadingWrap: { padding: 40, alignItems: 'center', gap: 12 },
-  loadingText: { fontSize: 14 },
-
-  section: { paddingHorizontal: 16, marginBottom: 4 },
-  sectionHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 16,
+  /* Section label */
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    marginBottom: 13,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
-  sectionSub: { fontSize: 12 },
-  viewAll: { fontSize: 13, fontWeight: '600' },
 
-  kpiGrid: {
+  /* Grid */
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 14,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  kpiCard: { marginBottom: 0 },
-  kpiIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+
+  /* Card */
+  card: {
+    borderRadius: 18,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    paddingBottom: 16,
+    ...SHADOW,
+    shadowOpacity: 0.08,
+  },
+  accentBar: { height: 5, width: '100%', marginBottom: 16 },
+  iconBubble: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginHorizontal: 14,
+    marginBottom: 12,
   },
-  kpiValue: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, marginBottom: 2 },
-  kpiLabel: { fontSize: 12, fontWeight: '500' },
-
-  rowGrid: { flexDirection: 'row', gap: 8 },
-  rowStatBox: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
+  cardLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    paddingHorizontal: 14,
+    marginBottom: 5,
+    lineHeight: 20,
+    letterSpacing: -0.2,
   },
-  rowStatLabel: { fontSize: 11, fontWeight: '500', marginBottom: 4 },
-  rowStatValue: { fontSize: 20, fontWeight: '700' },
-
-  twoCol: {
+  cardSub: {
+    fontSize: 11,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    lineHeight: 16,
+  },
+  cardFooter: { paddingHorizontal: 14 },
+  openBtn: {
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    marginBottom: 4,
-    marginTop: 16,
-  },
-  halfCard: { flex: 1, marginBottom: 0 },
-  cardTitle: { fontSize: 14, fontWeight: '700' },
-  miniRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-  },
-  miniLabel: { fontSize: 12 },
-  miniValue: { fontSize: 13, fontWeight: '600' },
-
-  quickGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-  },
-  quickCard: {
-    flex: 1,
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 12,
     alignItems: 'center',
     gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 9,
   },
-  quickValue: { fontSize: 20, fontWeight: '700' },
-  quickLabel: { fontSize: 10, fontWeight: '500', textAlign: 'center' },
-
-  listRow: {
-    flexDirection: 'row',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    alignItems: 'center',
-    gap: 8,
-  },
-  listRowTitle: { fontSize: 14, fontWeight: '500', marginBottom: 2 },
-  listRowSub: { fontSize: 12 },
-  listRowValue: { fontSize: 13, fontWeight: '600' },
-
-  activityRow: {
-    borderRadius: 8,
+  openBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  soonBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
     borderWidth: 1,
-    padding: 10,
-    marginBottom: 6,
   },
-  activityTop: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  activityType: { fontSize: 12, textTransform: 'capitalize' },
-  activityTitle: { fontSize: 13, fontWeight: '500', marginBottom: 3 },
-  activityMeta: { fontSize: 11 },
+  soonText: { fontSize: 11, fontWeight: '600' },
 
-  menuRow: {
+  /* Profile row */
+  profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 16,
     borderWidth: 1,
-    marginBottom: 6,
     gap: 12,
+    marginBottom: 20,
+    ...SHADOW,
+    shadowOpacity: 0.05,
   },
-  menuIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
+  avatarCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuLabel: { flex: 1, fontSize: 15, fontWeight: '500' },
+  avatarText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  profileName: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  profileRole: { fontSize: 12, marginTop: 2, textTransform: 'capitalize' },
+
+  /* Footer */
+  footer: {
+    textAlign: 'center',
+    fontSize: 11,
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
 });

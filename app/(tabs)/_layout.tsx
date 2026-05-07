@@ -76,6 +76,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="hr"
+        options={{
+          title: 'HR',
+          tabBarIcon: ({ focused, color }) => (
+            <IconSymbol
+              name={focused ? 'person.2.fill' : 'person.2'}
+              size={22}
+              color={focused ? colors.tint : color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="explore"
         options={{ href: null }}
       />

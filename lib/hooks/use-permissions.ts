@@ -12,14 +12,22 @@ export function usePermissions() {
     loadPermissions();
   }, [user]);
 
-  const loadPermissions = async () => {
+  const loadPermissions = async (attempt = 0) => {
     try {
       setIsLoading(true);
       const data = await permissionsApi.getMyPermissions();
       setPermissions(data.permissions || []);
       setPermissionSet(data.permission_set);
-    } catch (error) {
-      console.error('Error loading permissions:', error);
+    } catch (error: any) {
+      const isNetworkError =
+        error.message?.includes('timed out') ||
+        error.message?.includes('Network') ||
+        error.message?.includes('fetch');
+      if (attempt === 0 && isNetworkError) {
+        // Retry once after 5s — covers ngrok tunnel reconnects and cold starts
+        setTimeout(() => loadPermissions(1), 5000);
+        return;
+      }
       setPermissions([]);
     } finally {
       setIsLoading(false);

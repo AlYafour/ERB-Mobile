@@ -53,5 +53,21 @@ export const API_ENDPOINTS = {
   NOTIFICATIONS: '/api/notifications/',
   NOTIFICATION_DETAIL: (id: string) => `/api/notifications/${id}/`,
   MARK_NOTIFICATION_READ: (id: string) => `/api/notifications/${id}/read/`,
+
+  // HR Module
+  HR_EMPLOYEES: '/api/hr/employees/',
+  HR_EMPLOYEE_DETAIL: (id: string) => `/api/hr/employees/${id}/`,
+  HR_DEPARTMENTS: '/api/hr/employees/departments/',
+  HR_POSITIONS: '/api/hr/employees/positions/',
+  HR_ATTENDANCE: '/api/hr/attendance/',
+  HR_ATTENDANCE_CHECK_IN: '/api/hr/attendance/check-in/',
+  HR_ATTENDANCE_CHECK_OUT: '/api/hr/attendance/check-out/',
+  HR_REQUESTS: '/api/hr/requests/',
+  HR_REQUEST_DETAIL: (id: string) => `/api/hr/requests/${id}/`,
+  HR_REQUEST_APPROVE: (id: string) => `/api/hr/requests/${id}/approve/`,
+  HR_REQUEST_REJECT: (id: string) => `/api/hr/requests/${id}/reject/`,
+  HR_LEAVE_BALANCES: '/api/hr/requests/leave-balances/',
+  HR_PAYROLL: '/api/hr/payroll/',
+  HR_PAYROLL_DETAIL: (id: string) => `/api/hr/payroll/${id}/`,
 };
 
