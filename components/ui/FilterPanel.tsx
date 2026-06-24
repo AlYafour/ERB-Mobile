@@ -84,7 +84,7 @@ export default function FilterPanel({ fields, filters, onFilterChange, onReset, 
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Save',
-          onPress: async (name) => {
+          onPress: async (name: string | undefined) => {
             if (!name || !name.trim()) return;
             
             try {
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: '#F97316',
+    backgroundColor: '#0D1B2A',
     borderRadius: 10,
     minWidth: 20,
     height: 20,

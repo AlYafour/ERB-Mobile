@@ -50,12 +50,13 @@ export default function AttendanceHistoryScreen() {
   const [stats, setStats] = useState({ present: 0, absent: 0, late: 0, total: 0 });
 
   const loadData = useCallback(async (pg = 1, append = false) => {
+    if (!user) { setLoading(false); setRefreshing(false); return; }
     try {
       if (!append) setLoading(true);
       else setLoadingMore(true);
 
-      const empRes = await apiClient.get(`${API_ENDPOINTS.HR_EMPLOYEES}?page_size=100`);
-      const employees = empRes.data?.results ?? [];
+      const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
+      const employees: any[] = Array.isArray(empRes.data) ? empRes.data : (empRes.data?.results ?? []);
       const me = employees.find(
         (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
       );

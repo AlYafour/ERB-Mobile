@@ -1,587 +1,293 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  FlatList,
-  RefreshControl,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { productsApi } from '@/lib/api/products';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Checkbox } from '@/components/ui/Checkbox';
 import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
 import FilterTags from '@/components/ui/FilterTags';
-import { Product, PaginatedResponse } from '@/types';
+import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppBadge } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Product, PaginatedResponse } from '@/types';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Spacing, Typography } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
+
+type AppColors = typeof Colors.light | typeof Colors.dark;
 
 export default function ProductsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({});
-  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
-  const [selectMode, setSelectMode] = useState<'page' | 'all'>('page');
   const [data, setData] = useState<PaginatedResponse<Product> | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [deleting, setDeleting] = useState<number | null>(null);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isSuperuser = user?.is_superuser ?? false;
-  const isAdmin = isSuperuser || user?.role === 'super_admin' || user?.is_staff;
   const canCreate = isSuperuser || (hasPermission('product', 'create') ?? false);
-  const canDelete = isSuperuser;
 
+  // Debounce search 400ms
   useEffect(() => {
-    loadProducts();
-  }, [page, search, filters]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => { loadProducts(); }, [page, debouncedSearch, filters]);
 
   const loadProducts = async () => {
     try {
+      setError(null);
       setLoading(true);
       const response = await productsApi.getAll({
         page,
         page_size: 50,
-        search,
+        search: debouncedSearch,
         ...filters,
       });
       setData(response);
-    } catch (error: any) {
-      console.error('Error loading products:', error);
-      toast(error.message || 'Failed to load products', 'error');
+    } catch (err: any) {
+      setError(err.message || 'Failed to load products');
+      toast(err.message || 'Failed to load products', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadProducts();
-  };
+  const onRefresh = () => { setRefreshing(true); loadProducts(); };
 
   const filterFields: FilterField[] = [
-    { name: 'name', label: 'Name', type: 'text', group: 'Basic Info' },
-    { name: 'code', label: 'Code', type: 'text', group: 'Basic Info' },
-    { name: 'sku', label: 'SKU', type: 'text', group: 'Basic Info' },
+    { name: 'code',     label: 'Code',     type: 'text', group: 'Basic Info' },
+    { name: 'sku',      label: 'SKU',      type: 'text', group: 'Basic Info' },
     { name: 'category', label: 'Category', type: 'text', group: 'Basic Info' },
-    { name: 'brand', label: 'Brand', type: 'text', group: 'Basic Info' },
+    { name: 'brand',    label: 'Brand',    type: 'text', group: 'Basic Info' },
+    { name: 'unit',     label: 'Unit',     type: 'text', group: 'Basic Info' },
     {
-      name: 'is_active',
-      label: 'Active Status',
-      type: 'boolean',
-      group: 'Status',
+      name: 'is_active', label: 'Status', type: 'select', group: 'Status',
+      options: [{ value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }],
     },
-    {
-      name: 'unit_price',
-      label: 'Unit Price',
-      type: 'range',
-      group: 'Pricing',
-    },
-    { name: 'created_at_after', label: 'Created From', type: 'date', group: 'Dates' },
-    { name: 'created_at_before', label: 'Created To', type: 'date', group: 'Dates' },
+    { name: 'created_at_after',  label: 'Created From', type: 'date', group: 'Dates' },
+    { name: 'created_at_before', label: 'Created To',   type: 'date', group: 'Dates' },
   ];
 
-  const handleFilterChange = (newFilters: Record<string, any>) => {
-    setFilters(newFilters);
-    setPage(1);
-  };
-
-  const handleFilterReset = () => {
-    setFilters({});
-    setPage(1);
-  };
-
+  const handleFilterChange = (f: Record<string, any>) => { setFilters(f); setPage(1); };
+  const handleFilterReset  = () => { setFilters({}); setPage(1); };
   const handleRemoveFilter = (key: string) => {
-    const newFilters = { ...filters };
-    delete newFilters[key];
-    setFilters(newFilters);
-    setPage(1);
+    const f = { ...filters }; delete f[key]; setFilters(f); setPage(1);
   };
 
-  const handleClearAllFilters = () => {
-    setFilters({});
-    setPage(1);
-  };
-
-  const handleDelete = async (id: number) => {
-    try {
-      setDeleting(id);
-      await productsApi.delete(id);
-      toast('Product deleted successfully', 'success');
-      loadProducts();
-    } catch (error: any) {
-      toast(error.message || 'Failed to delete product', 'error');
-    } finally {
-      setDeleting(null);
-    }
-  };
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked && data?.results) {
-      setSelectedItems(new Set(data.results.map((p) => Number(p.id))));
-    } else {
-      setSelectedItems(new Set());
-    }
-  };
-
-  const handleSelectItem = (id: number, checked: boolean) => {
-    const newSelected = new Set(selectedItems);
-    if (checked) {
-      newSelected.add(id);
-    } else {
-      newSelected.delete(id);
-    }
-    setSelectedItems(newSelected);
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedItems.size === 0) return;
-    try {
-      setBulkDeleting(true);
-      await Promise.all(Array.from(selectedItems).map((id) => productsApi.delete(id)));
-      toast(`${selectedItems.size} product(s) deleted successfully`, 'success');
-      setSelectedItems(new Set());
-      loadProducts();
-    } catch (error: any) {
-      toast(error.message || 'Failed to delete some products', 'error');
-    } finally {
-      setBulkDeleting(false);
-    }
-  };
-
-  const currentPageIds = data?.results?.map((p) => Number(p.id)) || [];
-  const allPageSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedItems.has(id));
-  const somePageSelected = currentPageIds.some((id) => selectedItems.has(id)) && !allPageSelected;
+  const S = makeStyles(C);
 
   const renderItem = ({ item }: { item: Product }) => {
-    const itemId = Number(item.id);
-    const isSelected = selectedItems.has(itemId);
+    const itemId   = Number(item.id);
+    const isActive = (item as any).is_active;
+    const code     = (item as any).code || item.sku || null;
+    const category = item.category || null;
+    const unit     = item.unit || null;
+    const price    = item.unit_price != null ? `AED ${Number(item.unit_price).toFixed(2)}` : null;
+    const stock    = (item as any).stock_balance != null
+      ? `${(item as any).stock_balance} ${unit || ''}`.trim()
+      : null;
+    const trackStock = (item as any).track_stock ?? false;
 
     return (
-      <Card style={styles.itemCard}>
-        {isAdmin && (
-          <View style={styles.checkboxContainer}>
-            <Checkbox
-              checked={isSelected}
-              onChange={(checked) => handleSelectItem(itemId, checked)}
-            />
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.itemContent}
-          onPress={() => router.push(`/products/${itemId}` as any)}
-          activeOpacity={0.7}>
-          <View style={styles.itemHeader}>
-            <View style={styles.itemInfo}>
-              <ThemedText type="defaultSemiBold" style={styles.itemName}>
-                {item.name || 'Unnamed Product'}
-              </ThemedText>
-              {(item as any).is_active !== undefined && (
-                <Badge variant={(item as any).is_active ? 'success' : 'error'}>
-                  {(item as any).is_active ? 'Active' : 'Inactive'}
-                </Badge>
-              )}
-            </View>
-            {item.unit_price && (
-              <ThemedText type="defaultSemiBold" style={styles.itemPrice}>
-                ${item.unit_price.toFixed(2)}
-              </ThemedText>
-            )}
-          </View>
+      <AppCard style={S.itemCard} onPress={() => router.push(`/products/${itemId}` as any)}>
+        {/* Name + active badge */}
+        <View style={S.topRow}>
+          <Text style={[S.itemName, { color: C.textPrimary }]} numberOfLines={2}>{item.name || 'Unnamed Product'}</Text>
+          {isActive !== undefined ? (
+            <AppBadge variant={isActive ? 'success' : 'danger'}>
+              {isActive ? 'Active' : 'Inactive'}
+            </AppBadge>
+          ) : null}
+        </View>
 
-          <View style={styles.itemDetails}>
-            {item.sku && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>SKU:</ThemedText>
-                <ThemedText style={styles.detailValue}>{item.sku}</ThemedText>
-              </View>
-            )}
-            {(item as any).code && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Code:</ThemedText>
-                <ThemedText style={styles.detailValue}>{(item as any).code}</ThemedText>
-              </View>
-            )}
-            {item.category && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Category:</ThemedText>
-                <ThemedText style={styles.detailValue}>{item.category}</ThemedText>
-              </View>
-            )}
-            {item.description && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Description:</ThemedText>
-                <ThemedText style={styles.detailValue} numberOfLines={2}>
-                  {item.description}
-                </ThemedText>
-              </View>
-            )}
+        {/* Meta rows */}
+        {code ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>{item.sku ? 'SKU' : 'Code'}</Text>
+            <Text style={[S.metaValue, { color: C.primary }]}>{code}</Text>
           </View>
-
-          {canDelete && (
-            <View style={styles.itemActions}>
-              <Button
-                title="Delete"
-                variant="danger"
-                onPress={() => handleDelete(itemId)}
-                disabled={deleting === itemId}
-                loading={deleting === itemId}
-                style={styles.actionButton}
-              />
-            </View>
-          )}
-        </TouchableOpacity>
-      </Card>
+        ) : null}
+        {category ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Category</Text>
+            <Text style={[S.metaValue, { color: C.textPrimary }]} numberOfLines={1}>{category}</Text>
+          </View>
+        ) : null}
+        {unit ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Unit</Text>
+            <Text style={[S.metaValue, { color: C.textSecondary }]}>{unit}</Text>
+          </View>
+        ) : null}
+        {price ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Unit Price</Text>
+            <Text style={[S.metaValue, { color: C.success, fontWeight: '600' }]}>{price}</Text>
+          </View>
+        ) : null}
+        {trackStock && stock ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Stock</Text>
+            <Text style={[S.metaValue, { color: C.textSecondary }]}>{stock}</Text>
+          </View>
+        ) : null}
+      </AppCard>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ThemedView style={styles.innerContainer}>
-        <View style={styles.header}>
-        <View>
-          <ThemedText type="title" style={styles.headerTitle}>
-            Products
-          </ThemedText>
-          <ThemedText style={styles.headerSubtitle}>Manage products and inventory</ThemedText>
-        </View>
-        <View style={styles.headerActions}>
-          {isAdmin && (
-            <View style={styles.selectModeContainer}>
-              <ThemedText style={styles.selectModeLabel}>Select:</ThemedText>
-              <Button
-                title="Page"
-                variant={selectMode === 'page' ? 'primary' : 'secondary'}
-                onPress={() => {
-                  setSelectMode('page');
-                  setSelectedItems(new Set());
-                }}
-                style={styles.selectModeButton}
-              />
-              <Button
-                title="All"
-                variant={selectMode === 'all' ? 'primary' : 'secondary'}
-                onPress={() => {
-                  setSelectMode('all');
-                  setSelectedItems(new Set());
-                }}
-                style={styles.selectModeButton}
-              />
-            </View>
-          )}
-          {isAdmin && selectedItems.size > 0 && (
-            <Button
-              title={bulkDeleting ? 'Deleting...' : `Delete ${selectedItems.size}`}
-              variant="danger"
-              onPress={handleBulkDelete}
-              disabled={bulkDeleting}
-              loading={bulkDeleting}
-              style={styles.bulkDeleteButton}
-            />
-          )}
-          {canCreate && (
-            <Button
+    <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
+      <View style={S.inner}>
+        <AppHeader
+          title="Products"
+          subtitle={data?.count != null ? `${data.count} product${data.count !== 1 ? 's' : ''}` : undefined}
+          right={canCreate ? (
+            <AppButton
               title="New Product"
               variant="primary"
+              size="sm"
               onPress={() => router.push('/products/new' as any)}
             />
-          )}
-        </View>
-      </View>
-
-      <Card style={styles.searchCard}>
-        <View style={styles.searchRow}>
-          <Input
-            placeholder="Search products..."
-            value={search}
-            onChangeText={setSearch}
-            containerStyle={styles.searchInput}
-            leftIcon={<IconSymbol name="magnifyingglass" size={20} color={Colors.light.icon} />}
-          />
-          <FilterPanel
-            fields={filterFields}
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            onReset={handleFilterReset}
-            saveKey="products"
-          />
-        </View>
-      </Card>
-
-      {Object.keys(filters).length > 0 && (
-        <FilterTags
-          filters={filters}
-          fields={filterFields}
-          onRemoveFilter={handleRemoveFilter}
-          onClearAll={handleClearAllFilters}
+          ) : undefined}
         />
-      )}
 
-      {loading && !refreshing ? (
-        <Card style={styles.loadingCard}>
-          <ActivityIndicator size="large" color={Colors.light.tint} />
-          <ThemedText style={styles.loadingText}>Loading...</ThemedText>
-        </Card>
-      ) : !data || !data.results || data.results.length === 0 ? (
-        <Card style={styles.emptyCard}>
-          <ThemedText style={styles.emptyText}>No products found</ThemedText>
-        </Card>
-      ) : (
-        <>
-          {isAdmin && (
-            <View style={styles.selectAllContainer}>
-              <Checkbox
-                checked={allPageSelected}
-                indeterminate={somePageSelected}
-                onChange={handleSelectAll}
-                title="Select All"
+        {/* Search + filter */}
+        <View style={S.searchContainer}>
+          <View style={S.searchRow}>
+            <View style={S.searchInputWrapper}>
+              <Input
+                placeholder="Search products..."
+                value={search}
+                onChangeText={setSearch}
+                containerStyle={S.searchInput}
+                leftIcon={<IconSymbol name="magnifyingglass" size={20} color={C.textMuted} />}
               />
             </View>
-          )}
+            <View style={S.filterBtnWrapper}>
+              <FilterPanel
+                fields={filterFields}
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                onReset={handleFilterReset}
+                saveKey="products"
+              />
+            </View>
+          </View>
+        </View>
+
+        {Object.keys(filters).length > 0 && (
+          <FilterTags
+            filters={filters}
+            fields={filterFields}
+            onRemoveFilter={handleRemoveFilter}
+            onClearAll={() => { setFilters({}); setPage(1); }}
+          />
+        )}
+
+        {loading && !refreshing ? (
+          <AppEmptyState variant="loading" title="Loading products..." />
+        ) : error && !data?.results?.length ? (
+          <AppEmptyState variant="error" title="Failed to load" message={error} actionLabel="Try Again" onAction={loadProducts} />
+        ) : !data?.results?.length ? (
+          <AppEmptyState variant="empty" icon="cube.box" title="No products" message="No products found matching your criteria." />
+        ) : (
           <FlatList
             data={data.results}
             renderItem={renderItem}
             keyExtractor={(item) => String(item.id || Math.random())}
-            contentContainerStyle={styles.listContent}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            contentContainerStyle={S.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primary]} />
+            }
             ListFooterComponent={
               data && data.count > 50 ? (
-                <View style={styles.pagination}>
-                  <Button
-                    title="Previous"
-                    variant="secondary"
+                <View style={[S.pagination, { backgroundColor: C.surfaceSoft, borderTopColor: C.border }]}>
+                  <AppButton title="Previous" variant="secondary" size="sm"
                     onPress={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!data.previous || page === 1}
-                    style={styles.paginationButton}
-                  />
-                  <ThemedText style={styles.paginationText}>
-                    Showing {((page - 1) * 50) + 1} to {Math.min(page * 50, data.count)} of {data.count} products
-                  </ThemedText>
-                  <Button
-                    title="Next"
-                    variant="secondary"
+                    disabled={!data.previous || page === 1} style={S.paginationBtn} />
+                  <Text style={[S.paginationText, { color: C.textMuted }]}>
+                    {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
+                  </Text>
+                  <AppButton title="Next" variant="secondary" size="sm"
                     onPress={() => setPage((p) => p + 1)}
-                    disabled={!data.next}
-                    style={styles.paginationButton}
-                  />
+                    disabled={!data.next} style={S.paginationBtn} />
                 </View>
               ) : null
             }
           />
-        </>
-      )}
-      </ThemedView>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  innerContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  header: {
-    paddingHorizontal: Layout.screenPadding,
-    paddingTop: Spacing.md, // SafeAreaView handles Status Bar
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.background,
-  },
-  headerTitle: {
-    marginBottom: Spacing.xs,
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.bold,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.normal,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    flexWrap: 'wrap',
-  },
-  selectModeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingRight: Spacing.md,
-    borderRightWidth: 1,
-    borderRightColor: Colors.light.borderLight,
-    marginRight: Spacing.md,
-  },
-  selectModeLabel: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.medium,
-  },
-  selectModeButton: {
-    minWidth: 70,
-    paddingHorizontal: Spacing.md,
-  },
-  bulkDeleteButton: {
-    minWidth: 110,
-  },
-  searchCard: {
-    marginHorizontal: Layout.screenPadding,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.sm,
-    padding: Spacing.md,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  loadingCard: {
-    padding: Spacing.xl,
-    alignItems: 'center',
-    marginHorizontal: Layout.screenPadding,
-    marginTop: Spacing.lg,
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.medium,
-  },
-  emptyCard: {
-    padding: Spacing.xl,
-    alignItems: 'center',
-    marginHorizontal: Layout.screenPadding,
-    marginTop: Spacing.lg,
-  },
-  emptyText: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.medium,
-  },
-  selectAllContainer: {
-    paddingHorizontal: Layout.screenPadding,
-    paddingVertical: Spacing.md,
-    paddingBottom: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.backgroundSecondary,
-  },
-  listContent: {
-    padding: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing['2xl'] + Spacing.lg, // Extra bottom padding for Navigation Bar
-  },
-  itemCard: {
-    marginBottom: Spacing.md,
-    padding: Layout.cardPadding,
-  },
-  checkboxContainer: {
-    marginBottom: Spacing.md,
-  },
-  itemContent: {
-    flex: 1,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.md,
-  },
-  itemInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  itemName: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.semibold,
-    flex: 1,
-    letterSpacing: 0.2,
-    color: Colors.light.text,
-  },
-  itemPrice: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.success,
-    fontWeight: Typography.weights.semibold,
-  },
-  itemDetails: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-    alignItems: 'center',
-  },
-  detailLabel: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.medium,
-    color: Colors.light.textSecondary,
-  },
-  detailValue: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.normal,
-    color: Colors.light.text,
-  },
-  itemActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  actionButton: {
-    flex: 1,
-  },
-  pagination: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing['2xl'] + Spacing.lg, // Extra bottom padding for Navigation Bar
-    gap: Spacing.md,
-    flexWrap: 'wrap',
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.backgroundSecondary,
-  },
-  paginationButton: {
-    minWidth: 90,
-  },
-  paginationText: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.light.textSecondary,
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: Typography.weights.medium,
-  },
-});
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    inner:     { flex: 1 },
+
+    searchContainer: {
+      paddingHorizontal: Layout.screenPadding,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.sm,
+    },
+    searchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    searchInputWrapper: { flex: 1 },
+    searchInput: { marginBottom: 0 },
+    filterBtnWrapper: { alignSelf: 'flex-start' },
+
+    listContent: {
+      padding: Layout.screenPadding,
+      paddingTop: Spacing.md,
+      paddingBottom: 120,
+    },
+
+    itemCard: { marginBottom: Spacing.sm },
+
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    itemName: { fontSize: 14, fontWeight: '600', flex: 1, lineHeight: 20 },
+
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingVertical: 3,
+    },
+    metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 72, flexShrink: 0 },
+    metaValue: { fontSize: 13, flex: 1 },
+
+    pagination: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
+      gap: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    paginationBtn: { minWidth: 80 },
+    paginationText: { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
+  });
+}

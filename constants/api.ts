@@ -7,7 +7,7 @@ export const API_ENDPOINTS = {
   REGISTER: '/api/auth/register/',
   LOGOUT: '/api/auth/logout/',
   REFRESH_TOKEN: '/api/auth/refresh/',
-  USER_PROFILE: '/api/auth/user/',
+  USER_PROFILE: '/api/auth/me/',
   
   // Users
   USERS: '/api/users/',
@@ -52,7 +52,7 @@ export const API_ENDPOINTS = {
   // Notifications
   NOTIFICATIONS: '/api/notifications/',
   NOTIFICATION_DETAIL: (id: string) => `/api/notifications/${id}/`,
-  MARK_NOTIFICATION_READ: (id: string) => `/api/notifications/${id}/read/`,
+  MARK_NOTIFICATION_READ: (id: string) => `/api/notifications/${id}/mark_read/`,
 
   // HR Module
   HR_EMPLOYEES: '/api/hr/employees/',

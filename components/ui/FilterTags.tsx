@@ -109,7 +109,7 @@ export default function FilterTags({ filters, fields, onRemoveFilter, onClearAll
                 }
               }}
               style={styles.tagClose}>
-              <IconSymbol name="xmark" size={12} color="#F97316" />
+              <IconSymbol name="xmark" size={12} color="#0D1B2A" />
             </TouchableOpacity>
           </View>
         ))}
@@ -139,15 +139,15 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    backgroundColor: 'rgba(13, 27, 42, 0.07)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.2)',
+    borderColor: 'rgba(13, 27, 42, 0.18)',
   },
   tagText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#F97316',
+    color: '#0D1B2A',
   },
   tagClose: {
     padding: 2,

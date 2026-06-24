@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from './icon-symbol';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface ScreenHeaderProps {
   title: string;
@@ -13,141 +13,143 @@ interface ScreenHeaderProps {
   rightElement?: React.ReactNode;
 }
 
-const C = Colors.light;
-
-export function ScreenHeader({ title, subtitle, showBack = false, rightAction, rightElement }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  subtitle,
+  showBack = false,
+  rightAction,
+  rightElement,
+}: ScreenHeaderProps) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const cs = useColorScheme() ?? 'light';
+  const colors = Colors[cs];
 
   const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)' as any);
-    }
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)' as any);
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 6 }]}>
-      <View style={styles.row}>
+    <View
+      style={[
+        s.container,
+        {
+          backgroundColor: colors.surface,
+          borderBottomColor: colors.border,
+          shadowColor: colors.shadow,
+        },
+      ]}
+    >
+      <View style={s.row}>
 
-        {/* Left: back button or spacer */}
+        {/* Left */}
         {showBack ? (
-          <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={16} activeOpacity={0.7}>
-            <View style={styles.backCircle}>
-              <IconSymbol name="chevron.left" size={18} color={C.tint} />
+          <TouchableOpacity
+            onPress={handleBack}
+            style={s.sideBtn}
+            hitSlop={12}
+            activeOpacity={0.6}
+          >
+            <View style={[s.backCircle, { backgroundColor: colors.backgroundSecondary }]}>
+              <IconSymbol name="chevron.left" size={16} color={colors.textSecondary} />
             </View>
           </TouchableOpacity>
         ) : (
-          <View style={styles.sideSlot} />
+          <View style={s.sideBtn} />
         )}
 
-        {/* Center: title + subtitle */}
-        <View style={styles.titleWrap}>
-          <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+        {/* Center */}
+        <View style={s.titleArea}>
+          <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={[s.subtitle, { color: colors.textTertiary }]} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
 
-        {/* Right: custom element, action button, or spacer */}
+        {/* Right */}
         {rightElement ? (
-          <View style={styles.sideSlot}>{rightElement}</View>
+          <View style={s.sideBtn}>{rightElement}</View>
         ) : rightAction ? (
-          <TouchableOpacity onPress={rightAction.onPress} style={styles.actionBtn} hitSlop={8} activeOpacity={0.8}>
-            <IconSymbol name={rightAction.icon as any} size={18} color="#FFFFFF" />
-            {rightAction.label ? <Text style={styles.actionLabel}>{rightAction.label}</Text> : null}
+          <TouchableOpacity
+            onPress={rightAction.onPress}
+            style={[s.actionBtn, { backgroundColor: colors.primary }]}
+            hitSlop={8}
+            activeOpacity={0.75}
+          >
+            <IconSymbol name={rightAction.icon as any} size={16} color="#FFFFFF" />
+            {rightAction.label ? (
+              <Text style={s.actionLabel}>{rightAction.label}</Text>
+            ) : null}
           </TouchableOpacity>
         ) : (
-          <View style={styles.sideSlot} />
+          <View style={s.sideBtn} />
         )}
 
       </View>
 
-      {/* Accent line */}
-      <View style={styles.accentLine} />
+      {/* 1 px border — clean, no orange strip */}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingBottom: 0,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 3,
     zIndex: 10,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 14,
+    paddingBottom: 12,
     gap: 8,
   },
-  backBtn: {
+  sideBtn: {
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sideSlot: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  titleWrap: {
+  titleArea: {
     flex: 1,
     alignItems: 'center',
   },
   title: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   subtitle: {
     fontSize: 12,
-    fontWeight: '400',
-    color: '#64748B',
-    marginTop: 2,
-    letterSpacing: 0,
+    marginTop: 1,
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F97316',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
     gap: 4,
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
   actionLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: '#FFFFFF',
-  },
-  accentLine: {
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#F97316',
-    marginHorizontal: -16,
   },
 });

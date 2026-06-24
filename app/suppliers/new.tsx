@@ -1,35 +1,27 @@
 import { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { suppliersApi } from '@/lib/api/suppliers';
 import { toast } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/Card';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
 import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
-import { Layout } from '@/constants/layout';
-import { CommonStyles } from '@/constants/common-styles';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const currencies = [
+type AppColors = typeof Colors.light | typeof Colors.dark;
+
+const CURRENCIES = [
   { value: 'AED', label: 'AED - UAE Dirham' },
   { value: 'USD', label: 'USD - US Dollar' },
   { value: 'EUR', label: 'EUR - Euro' },
   { value: 'SAR', label: 'SAR - Saudi Riyal' },
 ];
 
-const countries = [
+const COUNTRIES = [
   { value: 'United Arab Emirates', label: 'United Arab Emirates' },
   { value: 'Saudi Arabia', label: 'Saudi Arabia' },
   { value: 'Egypt', label: 'Egypt' },
@@ -40,8 +32,14 @@ const countries = [
 
 export default function NewSupplierScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const insets = useSafeAreaInsets();
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+  const S = makeStyles(C);
+
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [form, setForm] = useState({
     business_name: '',
     supplier_number: '',
     first_name: '',
@@ -66,296 +64,140 @@ export default function NewSupplierScreen() {
     is_active: true,
   });
 
-  const handleSubmit = async () => {
-    if (!formData.business_name && !formData.first_name) {
-      toast('Business name or first name is required', 'error');
-      return;
-    }
+  const set = (key: keyof typeof form) => (val: any) =>
+    setForm((f) => ({ ...f, [key]: val }));
 
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.business_name.trim() && !form.first_name.trim()) {
+      e.business_name = 'Business name or first name is required';
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
     try {
-      setLoading(true);
-      await suppliersApi.create(formData);
+      setSaving(true);
+      await suppliersApi.create(form);
       toast('Supplier created successfully', 'success');
       router.back();
-    } catch (error: any) {
-      toast(error.message || 'Failed to create supplier', 'error');
+    } catch (err: any) {
+      toast(err.message || 'Failed to create supplier', 'error');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={20} color={Colors.light.tint} />
-            <ThemedText style={styles.backButtonText}>Back to Suppliers</ThemedText>
-          </TouchableOpacity>
-          <ThemedText type="title" style={styles.mainTitle}>
-            New Supplier
-          </ThemedText>
-        </View>
+    <SafeAreaView style={S.container} edges={['top']}>
+      <AppHeader title="New Supplier" showBack />
+
+      <ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Business Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Business Information
-          </ThemedText>
-          <Input
-            label="Business Name"
-            value={formData.business_name}
-            onChangeText={(text) => setFormData({ ...formData, business_name: text })}
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Business Information</Text>
+          <Input label="Business Name" value={form.business_name} onChangeText={set('business_name')}
             placeholder="Enter business name"
-          />
-          <Input
-            label="Supplier Number"
-            value={formData.supplier_number}
-            onChangeText={(text) => setFormData({ ...formData, supplier_number: text })}
-            placeholder="Enter supplier number"
-          />
-          <Input
-            label="TRN"
-            value={formData.trn}
-            onChangeText={(text) => setFormData({ ...formData, trn: text })}
-            placeholder="Enter TRN"
-          />
-          <Input
-            label="Tax ID"
-            value={formData.tax_id}
-            onChangeText={(text) => setFormData({ ...formData, tax_id: text })}
-            placeholder="Enter tax ID"
-          />
-          <SearchableDropdown
-            label="Currency"
-            options={currencies}
-            value={formData.currency}
-            onChange={(value) => setFormData({ ...formData, currency: value as string })}
-            placeholder="Select currency"
-          />
-        </Card>
+            error={errors.business_name} />
+          <Input label="Supplier Number" value={form.supplier_number} onChangeText={set('supplier_number')}
+            placeholder="Enter supplier number" />
+          <Input label="TRN" value={form.trn} onChangeText={set('trn')} placeholder="Enter TRN" />
+          <Input label="Tax ID" value={form.tax_id} onChangeText={set('tax_id')} placeholder="Enter tax ID" />
+          <SearchableDropdown label="Currency" options={CURRENCIES} value={form.currency}
+            onChange={(v) => set('currency')(v as string)} placeholder="Select currency" />
+        </AppCard>
 
         {/* Contact Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Contact Information
-          </ThemedText>
-          <Input
-            label="First Name"
-            value={formData.first_name}
-            onChangeText={(text) => setFormData({ ...formData, first_name: text })}
-            placeholder="Enter first name"
-          />
-          <Input
-            label="Last Name"
-            value={formData.last_name}
-            onChangeText={(text) => setFormData({ ...formData, last_name: text })}
-            placeholder="Enter last name"
-          />
-          <Input
-            label="Contact Person"
-            value={formData.contact_person}
-            onChangeText={(text) => setFormData({ ...formData, contact_person: text })}
-            placeholder="Enter contact person"
-          />
-          <Input
-            label="Email"
-            value={formData.email}
-            onChangeText={(text) => setFormData({ ...formData, email: text })}
-            placeholder="Enter email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <Input
-            label="Telephone"
-            value={formData.telephone}
-            onChangeText={(text) => setFormData({ ...formData, telephone: text })}
-            placeholder="Enter telephone"
-            keyboardType="phone-pad"
-          />
-          <Input
-            label="Phone"
-            value={formData.phone}
-            onChangeText={(text) => setFormData({ ...formData, phone: text })}
-            placeholder="Enter phone"
-            keyboardType="phone-pad"
-          />
-          <Input
-            label="Mobile"
-            value={formData.mobile}
-            onChangeText={(text) => setFormData({ ...formData, mobile: text })}
-            placeholder="Enter mobile"
-            keyboardType="phone-pad"
-          />
-        </Card>
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Contact Information</Text>
+          <Input label="First Name" value={form.first_name} onChangeText={set('first_name')}
+            placeholder="Enter first name" />
+          <Input label="Last Name" value={form.last_name} onChangeText={set('last_name')}
+            placeholder="Enter last name" />
+          <Input label="Contact Person" value={form.contact_person} onChangeText={set('contact_person')}
+            placeholder="Enter contact person" />
+          <Input label="Email" value={form.email} onChangeText={set('email')}
+            placeholder="Enter email" keyboardType="email-address" autoCapitalize="none" />
+          <Input label="Telephone" value={form.telephone} onChangeText={set('telephone')}
+            placeholder="Enter telephone" keyboardType="phone-pad" />
+          <Input label="Phone" value={form.phone} onChangeText={set('phone')}
+            placeholder="Enter phone" keyboardType="phone-pad" />
+          <Input label="Mobile" value={form.mobile} onChangeText={set('mobile')}
+            placeholder="Enter mobile" keyboardType="phone-pad" />
+        </AppCard>
 
         {/* Address Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Address Information
-          </ThemedText>
-          <Input
-            label="Street Address 1"
-            value={formData.street_address_1}
-            onChangeText={(text) => setFormData({ ...formData, street_address_1: text })}
-            placeholder="Enter street address"
-          />
-          <Input
-            label="Street Address 2"
-            value={formData.street_address_2}
-            onChangeText={(text) => setFormData({ ...formData, street_address_2: text })}
-            placeholder="Enter street address 2"
-          />
-          <Input
-            label="City"
-            value={formData.city}
-            onChangeText={(text) => setFormData({ ...formData, city: text })}
-            placeholder="Enter city"
-          />
-          <Input
-            label="State"
-            value={formData.state}
-            onChangeText={(text) => setFormData({ ...formData, state: text })}
-            placeholder="Enter state"
-          />
-          <Input
-            label="Postal Code"
-            value={formData.postal_code}
-            onChangeText={(text) => setFormData({ ...formData, postal_code: text })}
-            placeholder="Enter postal code"
-            keyboardType="numeric"
-          />
-          <SearchableDropdown
-            label="Country"
-            options={countries}
-            value={formData.country}
-            onChange={(value) => setFormData({ ...formData, country: value as string })}
-            placeholder="Select country"
-          />
-        </Card>
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Address</Text>
+          <Input label="Street Address 1" value={form.street_address_1} onChangeText={set('street_address_1')}
+            placeholder="Enter street address" />
+          <Input label="Street Address 2" value={form.street_address_2} onChangeText={set('street_address_2')}
+            placeholder="Enter street address 2" />
+          <Input label="City" value={form.city} onChangeText={set('city')} placeholder="Enter city" />
+          <Input label="State" value={form.state} onChangeText={set('state')} placeholder="Enter state" />
+          <Input label="Postal Code" value={form.postal_code} onChangeText={set('postal_code')}
+            placeholder="Enter postal code" keyboardType="numeric" />
+          <SearchableDropdown label="Country" options={COUNTRIES} value={form.country}
+            onChange={(v) => set('country')(v as string)} placeholder="Select country" />
+        </AppCard>
 
         {/* Bank Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Bank Information
-          </ThemedText>
-          <Input
-            label="Bank Name"
-            value={formData.bank_name}
-            onChangeText={(text) => setFormData({ ...formData, bank_name: text })}
-            placeholder="Enter bank name"
-          />
-          <Input
-            label="Bank Account"
-            value={formData.bank_account}
-            onChangeText={(text) => setFormData({ ...formData, bank_account: text })}
-            placeholder="Enter bank account"
-          />
-        </Card>
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Bank Information</Text>
+          <Input label="Bank Name" value={form.bank_name} onChangeText={set('bank_name')}
+            placeholder="Enter bank name" />
+          <Input label="Bank Account" value={form.bank_account} onChangeText={set('bank_account')}
+            placeholder="Enter bank account" />
+        </AppCard>
 
-        {/* Additional Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Additional Information
-          </ThemedText>
-          <Input
-            label="Notes"
-            value={formData.notes}
-            onChangeText={(text) => setFormData({ ...formData, notes: text })}
-            placeholder="Enter notes"
-            multiline
-            numberOfLines={4}
-            style={styles.textArea}
-          />
-          <View style={styles.checkboxContainer}>
-            <Checkbox
-              checked={formData.is_active}
-              onChange={(checked) => setFormData({ ...formData, is_active: checked })}
-              title="Active"
-            />
+        {/* Additional */}
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Additional</Text>
+          <Input label="Notes" value={form.notes} onChangeText={set('notes')}
+            placeholder="Enter notes" multiline numberOfLines={4} />
+          <View style={S.switchRow}>
+            <Text style={[S.switchLabel, { color: C.textPrimary }]}>Active</Text>
+            <Switch value={form.is_active} onValueChange={set('is_active')}
+              trackColor={{ true: C.primary, false: C.border }}
+              thumbColor="#fff" />
           </View>
-        </Card>
+        </AppCard>
 
-        {/* Actions */}
-        <View style={styles.actionsContainer}>
-          <Button
-            title="Cancel"
-            onPress={() => router.back()}
-            variant="outline"
-            style={styles.cancelButton}
-          />
-          <Button
-            title={loading ? 'Creating...' : 'Create Supplier'}
-            onPress={handleSubmit}
-            disabled={loading}
-            loading={loading}
-            style={styles.submitButton}
-          />
-        </View>
+        <View style={{ height: 100 }} />
       </ScrollView>
-    </ThemedView>
+
+      {/* Fixed bottom bar */}
+      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
+          disabled={saving} style={S.barBtn} />
+        <AppButton title="Create Supplier" variant="primary" size="md" onPress={handleSubmit}
+          loading={saving} disabled={saving} style={S.barBtn} />
+      </View>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    ...CommonStyles.screenContainer,
-  },
-  scrollContent: {
-    ...CommonStyles.scrollContent,
-  },
-  header: {
-    marginBottom: Layout.sectionMarginBottom,
-    paddingTop: Spacing.sm,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    gap: Spacing.xs,
-    padding: Spacing.xs,
-  },
-  backButtonText: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.tint,
-    fontWeight: Typography.weights.medium,
-  },
-  mainTitle: {
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.bold,
-    letterSpacing: -0.5,
-  },
-  card: {
-    ...CommonStyles.card,
-  },
-  sectionTitle: {
-    ...CommonStyles.sectionTitle,
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-    borderWidth: 1.5,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    fontSize: Typography.sizes.base,
-    borderColor: Colors.light.border,
-    color: Colors.light.text,
-    backgroundColor: Colors.light.background,
-  },
-  checkboxContainer: {
-    marginTop: Spacing.sm,
-  },
-  actionsContainer: {
-    ...CommonStyles.submitContainer,
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  cancelButton: {
-    flex: 1,
-  },
-  submitButton: {
-    flex: 1,
-  },
-});
-
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: C.background },
+    content:   { padding: 16, paddingBottom: 8 },
+    card:      { marginBottom: 12 },
+    sectionTitle: {
+      fontSize: 15, fontWeight: '700', color: C.textPrimary,
+      marginBottom: 14, letterSpacing: -0.2,
+    },
+    switchRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingVertical: 10, marginTop: 4,
+    },
+    switchLabel: { fontSize: 14, fontWeight: '500' },
+    bottomBar: {
+      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
+    },
+    barBtn: { flex: 1 },
+  });
+}

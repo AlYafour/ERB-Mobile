@@ -1,110 +1,107 @@
 /**
- * Premium Design System - Spacing
- * Consistent and sufficient spacing on all sides
+ * Al Yafour ERP — Design System v2
+ * Spacing, radius, typography, layout constants.
  */
+
 export const Spacing = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  '2xl': 40,
-  '3xl': 48,
-  '4xl': 64,
-  '5xl': 80,
-  '6xl': 96,
+  xs:   4,
+  sm:   8,
+  md:   12,
+  lg:   16,
+  xl:   20,
+  '2xl': 24,
+  '3xl': 32,
+  '4xl': 48,
+  '5xl': 64,
+  '6xl': 80,
 } as const;
 
-/**
- * Premium Design System - Border Radius
- */
 export const BorderRadius = {
-  none: 0,
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
-  '2xl': 20,
-  '3xl': 24,
-  full: 9999,
+  none:  0,
+  sm:    10,
+  md:    14,
+  lg:    18,
+  xl:    24,
+  '2xl': 32,
+  '3xl': 40,
+  full:  9999,
+  pill:  9999,
+  card:  20,
 } as const;
 
-/**
- * Premium Design System - Typography
- */
+/** Type scale per spec */
+export const TypeScale = {
+  display:    { fontSize: 34, fontWeight: '800' as const },
+  title1:     { fontSize: 28, fontWeight: '800' as const },
+  title2:     { fontSize: 22, fontWeight: '700' as const },
+  title3:     { fontSize: 18, fontWeight: '700' as const },
+  body:       { fontSize: 16, fontWeight: '400' as const },
+  bodyMedium: { fontSize: 16, fontWeight: '600' as const },
+  caption:    { fontSize: 13, fontWeight: '500' as const },
+  small:      { fontSize: 12, fontWeight: '500' as const },
+} as const;
+
+/** Backward compat */
 export const Typography = {
   sizes: {
-    xs: 12,
-    sm: 14,
+    xs:   12,
+    sm:   13,
     base: 16,
-    lg: 18,
-    xl: 20,
-    '2xl': 24,
-    '3xl': 30,
-    '4xl': 36,
+    lg:   18,
+    xl:   20,
+    '2xl': 22,
+    '3xl': 28,
+    '4xl': 34,
     '5xl': 48,
   },
   weights: {
-    light: '300',
-    normal: '400',
-    medium: '500',
-    semibold: '600',
-    bold: '700',
+    light:     '300',
+    normal:    '400',
+    medium:    '500',
+    semibold:  '600',
+    bold:      '700',
     extrabold: '800',
-    black: '900',
+    black:     '900',
   },
   families: {
     inter: {
-      black: 'Inter-Black',
-      bold: 'Inter-Bold',
+      black:    'Inter-Black',
+      bold:     'Inter-Bold',
       semibold: 'Inter-SemiBold',
-      medium: 'Inter-Medium',
-      regular: 'Inter-Regular',
-      light: 'Inter-Light',
+      medium:   'Inter-Medium',
+      regular:  'Inter-Regular',
+      light:    'Inter-Light',
     },
   },
 } as const;
 
-/**
- * Premium Design System - Component Sizes
- */
+/** Card spec: radius 20, padding 18 */
+export const CardSpec = {
+  borderRadius: 20,
+  padding:      18,
+  borderWidth:  1,
+  shadowOpacity: 0.08,
+  shadowRadius: 12,
+  shadowOffsetY: 4,
+  elevation:    2,
+} as const;
+
 export const ComponentSizes = {
   button: {
-    small: {
-      height: 36,
-      paddingHorizontal: 16,
-    },
-    medium: {
-      height: 44,
-      paddingHorizontal: 20,
-    },
-    large: {
-      height: 52,
-      paddingHorizontal: 24,
-    },
+    small:  { height: 36, paddingHorizontal: 16 },
+    medium: { height: 44, paddingHorizontal: 20 },
+    large:  { height: 52, paddingHorizontal: 24 },
   },
   input: {
-    small: {
-      height: 40,
-    },
-    medium: {
-      height: 48,
-    },
-    large: {
-      height: 56,
-    },
+    small:  { height: 40 },
+    medium: { height: 48 },
+    large:  { height: 56 },
   },
-  card: {
-    padding: Spacing.lg,
-  },
+  card: { padding: 18 },
 } as const;
 
-/**
- * Premium Design System - Layout
- */
 export const Layout = {
-  screenPadding: Spacing.lg,
-  cardPadding: Spacing.lg,
-  sectionPadding: Spacing.xl,
+  screenPadding: 16,
+  cardPadding:   18,
+  sectionPadding: 20,
 } as const;
-

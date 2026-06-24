@@ -1,30 +1,23 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { productsApi } from '@/lib/api/products';
 import { suppliersApi } from '@/lib/api/suppliers';
 import { toast } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/Card';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
-import { Layout } from '@/constants/layout';
-import { CommonStyles } from '@/constants/common-styles';
 import { Supplier } from '@/types';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const units = [
+type AppColors = typeof Colors.light | typeof Colors.dark;
+
+const UNITS = [
   { value: 'piece', label: 'Piece' },
   { value: 'kg', label: 'Kilogram' },
   { value: 'g', label: 'Gram' },
@@ -36,25 +29,25 @@ const units = [
   { value: 'pack', label: 'Pack' },
 ];
 
-const discountTypes = [
+const DISCOUNT_TYPES = [
   { value: 'percentage', label: 'Percentage (%)' },
   { value: 'fixed', label: 'Fixed Amount' },
 ];
 
-const statusOptions = [
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
-  { value: 'archived', label: 'Archived' },
-];
-
 export default function EditProductScreen() {
-  const params = useLocalSearchParams();
+  const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
-  const id = Number(params.id);
+  const id = Number(paramId);
+  const insets = useSafeAreaInsets();
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+  const S = makeStyles(C);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [formData, setFormData] = useState({
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [form, setForm] = useState({
     name: '',
     code: '',
     sku: '',
@@ -64,79 +57,78 @@ export default function EditProductScreen() {
     category: '',
     unit: 'piece',
     supplier: undefined as number | undefined,
-    unit_price: 0,
-    buy_price: 0,
-    discount: 0,
+    unit_price: '',
+    buy_price: '',
+    discount: '',
     discount_type: 'percentage',
     track_stock: false,
-    stock_balance: 0,
-    min_stock_level: 0,
-    status: 'active',
+    stock_balance: '',
+    min_stock_level: '',
     is_active: true,
   });
 
   useEffect(() => {
-    loadData();
+    Promise.all([
+      productsApi.getById(id),
+      suppliersApi.getAll({ page_size: 100 }),
+    ]).then(([product, suppResp]) => {
+      setSuppliers(suppResp.results || []);
+      const p = product as any;
+      const supplierId =
+        typeof p.supplier === 'object' && p.supplier !== null ? Number(p.supplier.id)
+        : typeof p.supplier === 'number' ? p.supplier
+        : undefined;
+      setForm({
+        name:           p.name || '',
+        code:           p.code || '',
+        sku:            p.sku || '',
+        barcode:        p.barcode || '',
+        description:    p.description || '',
+        brand:          p.brand || '',
+        category:       p.category || '',
+        unit:           p.unit || 'piece',
+        supplier:       supplierId,
+        unit_price:     p.unit_price != null ? String(p.unit_price) : '',
+        buy_price:      p.buy_price != null ? String(p.buy_price) : '',
+        discount:       p.discount != null ? String(p.discount) : '',
+        discount_type:  p.discount_type || 'percentage',
+        track_stock:    p.track_stock ?? false,
+        stock_balance:  p.stock_balance != null ? String(p.stock_balance) : '',
+        min_stock_level:p.min_stock_level != null ? String(p.min_stock_level) : '',
+        is_active:      p.is_active ?? true,
+      });
+    }).catch((err: any) => {
+      toast(err.message || 'Failed to load product', 'error');
+      router.back();
+    }).finally(() => setLoading(false));
   }, [id]);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [product, suppliersResponse] = await Promise.all([
-        productsApi.getById(id),
-        suppliersApi.getAll({ page_size: 100 }),
-      ]);
+  const set = (key: keyof typeof form) => (val: any) =>
+    setForm((f) => ({ ...f, [key]: val }));
 
-      if (suppliersResponse.results) {
-        setSuppliers(suppliersResponse.results);
-      }
-
-      setFormData({
-        name: product.name || '',
-        code: product.code || '',
-        sku: product.sku || '',
-        barcode: product.barcode || '',
-        description: product.description || '',
-        brand: product.brand || '',
-        category: product.category || '',
-        unit: product.unit || 'piece',
-        supplier:
-          typeof product.supplier === 'object' && product.supplier !== null
-            ? Number(product.supplier.id)
-            : typeof product.supplier === 'number'
-              ? product.supplier
-              : undefined,
-        unit_price: product.unit_price || 0,
-        buy_price: product.buy_price || 0,
-        discount: product.discount || 0,
-        discount_type: product.discount_type || 'percentage',
-        track_stock: product.track_stock ?? false,
-        stock_balance: product.stock_balance || 0,
-        min_stock_level: product.min_stock_level || 0,
-        status: product.status || 'active',
-        is_active: product.is_active ?? true,
-      });
-    } catch (error: any) {
-      toast(error.message || 'Failed to load product', 'error');
-      router.back();
-    } finally {
-      setLoading(false);
-    }
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.name.trim()) e.name = 'Product name is required';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async () => {
-    if (!formData.name) {
-      toast('Product name is required', 'error');
-      return;
-    }
-
+    if (!validate()) return;
     try {
       setSaving(true);
-      await productsApi.update(id, formData);
+      await productsApi.update(id, {
+        ...form,
+        unit_price: parseFloat(form.unit_price) || 0,
+        buy_price: parseFloat(form.buy_price) || 0,
+        discount: parseFloat(form.discount) || 0,
+        stock_balance: parseInt(form.stock_balance) || 0,
+        min_stock_level: parseInt(form.min_stock_level) || 0,
+      });
       toast('Product updated successfully', 'success');
       router.back();
-    } catch (error: any) {
-      toast(error.message || 'Failed to update product', 'error');
+    } catch (err: any) {
+      toast(err.message || 'Failed to update product', 'error');
     } finally {
       setSaving(false);
     }
@@ -144,290 +136,115 @@ export default function EditProductScreen() {
 
   const supplierOptions = suppliers.map((s) => ({
     value: Number(s.id),
-    label: s.business_name || s.name || `Supplier ${s.id}`,
+    label: (s as any).business_name || s.name || `Supplier ${s.id}`,
   }));
 
-  if (loading) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.tint} />
-        <ThemedText style={styles.loadingText}>Loading product...</ThemedText>
-      </ThemedView>
-    );
-  }
+  if (loading) return (
+    <SafeAreaView style={S.container} edges={['top', 'bottom']}>
+      <AppHeader title="Edit Product" showBack />
+      <View style={S.center}><AppEmptyState variant="loading" title="Loading product..." /></View>
+    </SafeAreaView>
+  );
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={20} color={Colors.light.tint} />
-            <ThemedText style={styles.backButtonText}>Back</ThemedText>
-          </TouchableOpacity>
-          <ThemedText type="title" style={styles.mainTitle}>
-            Edit Product
-          </ThemedText>
-        </View>
+    <SafeAreaView style={S.container} edges={['top']}>
+      <AppHeader title="Edit Product" showBack />
 
-        {/* Basic Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Basic Information
-          </ThemedText>
-          <Input
-            label="Product Name *"
-            value={formData.name}
-            onChangeText={(text) => setFormData({ ...formData, name: text })}
-            placeholder="Enter product name"
-          />
-          <Input
-            label="Product Code"
-            value={formData.code}
-            onChangeText={(text) => setFormData({ ...formData, code: text })}
-            placeholder="Enter product code"
-          />
-          <Input
-            label="SKU"
-            value={formData.sku}
-            onChangeText={(text) => setFormData({ ...formData, sku: text })}
-            placeholder="Enter SKU"
-          />
-          <Input
-            label="Barcode"
-            value={formData.barcode}
-            onChangeText={(text) => setFormData({ ...formData, barcode: text })}
-            placeholder="Enter barcode"
-          />
-          <Input
-            label="Description"
-            value={formData.description}
-            onChangeText={(text) => setFormData({ ...formData, description: text })}
-            placeholder="Enter description"
-            multiline
-            numberOfLines={3}
-            style={styles.textArea}
-          />
-          <Input
-            label="Brand"
-            value={formData.brand}
-            onChangeText={(text) => setFormData({ ...formData, brand: text })}
-            placeholder="Enter brand"
-          />
-          <Input
-            label="Category"
-            value={formData.category}
-            onChangeText={(text) => setFormData({ ...formData, category: text })}
-            placeholder="Enter category"
-          />
-          <SearchableDropdown
-            label="Unit"
-            options={units}
-            value={formData.unit}
-            onChange={(value) => setFormData({ ...formData, unit: value as string })}
-            placeholder="Select unit"
-          />
-          {supplierOptions.length > 0 && (
-            <SearchableDropdown
-              label="Supplier"
-              options={supplierOptions}
-              value={formData.supplier}
-              onChange={(value) => setFormData({ ...formData, supplier: value as number | undefined })}
-              placeholder="Select supplier"
-              allowClear
-            />
-          )}
-        </Card>
+      <ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-        {/* Pricing Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Pricing Information
-          </ThemedText>
-          <Input
-            label="Unit Price"
-            value={formData.unit_price.toString()}
-            onChangeText={(text) =>
-              setFormData({ ...formData, unit_price: parseFloat(text) || 0 })
-            }
-            placeholder="0.00"
-            keyboardType="numeric"
-          />
-          <Input
-            label="Buy Price"
-            value={formData.buy_price.toString()}
-            onChangeText={(text) =>
-              setFormData({ ...formData, buy_price: parseFloat(text) || 0 })
-            }
-            placeholder="0.00"
-            keyboardType="numeric"
-          />
-          <SearchableDropdown
-            label="Discount Type"
-            options={discountTypes}
-            value={formData.discount_type}
-            onChange={(value) => setFormData({ ...formData, discount_type: value as string })}
-            placeholder="Select discount type"
-          />
-          <Input
-            label="Discount"
-            value={formData.discount.toString()}
-            onChangeText={(text) =>
-              setFormData({ ...formData, discount: parseFloat(text) || 0 })
-            }
-            placeholder="0"
-            keyboardType="numeric"
-          />
-        </Card>
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Basic Information</Text>
+          <Input label="Product Name *" value={form.name} onChangeText={set('name')}
+            placeholder="Enter product name" error={errors.name} />
+          <Input label="Product Code" value={form.code} onChangeText={set('code')}
+            placeholder="Enter product code" />
+          <Input label="SKU" value={form.sku} onChangeText={set('sku')} placeholder="Enter SKU" />
+          <Input label="Barcode" value={form.barcode} onChangeText={set('barcode')}
+            placeholder="Enter barcode" />
+          <Input label="Description" value={form.description} onChangeText={set('description')}
+            placeholder="Enter description" multiline numberOfLines={3} />
+          <Input label="Brand" value={form.brand} onChangeText={set('brand')} placeholder="Enter brand" />
+          <Input label="Category" value={form.category} onChangeText={set('category')}
+            placeholder="Enter category" />
+          <SearchableDropdown label="Unit" options={UNITS} value={form.unit}
+            onChange={(v) => set('unit')(v as string)} placeholder="Select unit" />
+          {supplierOptions.length > 0 ? (
+            <SearchableDropdown label="Supplier" options={supplierOptions} value={form.supplier}
+              onChange={(v) => set('supplier')(v as number | undefined)}
+              placeholder="Select supplier" allowClear />
+          ) : null}
+        </AppCard>
 
-        {/* Stock Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Stock Information
-          </ThemedText>
-          <View style={styles.checkboxContainer}>
-            <Checkbox
-              checked={formData.track_stock}
-              onChange={(checked) => setFormData({ ...formData, track_stock: checked })}
-              title="Track Stock"
-            />
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Pricing (AED)</Text>
+          <Input label="Unit Price" value={form.unit_price} onChangeText={set('unit_price')}
+            placeholder="0.00" keyboardType="numeric" />
+          <Input label="Buy Price" value={form.buy_price} onChangeText={set('buy_price')}
+            placeholder="0.00" keyboardType="numeric" />
+          <SearchableDropdown label="Discount Type" options={DISCOUNT_TYPES} value={form.discount_type}
+            onChange={(v) => set('discount_type')(v as string)} placeholder="Select discount type" />
+          <Input label="Discount" value={form.discount} onChangeText={set('discount')}
+            placeholder="0" keyboardType="numeric" />
+        </AppCard>
+
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Stock</Text>
+          <View style={S.switchRow}>
+            <Text style={[S.switchLabel, { color: C.textPrimary }]}>Track Stock</Text>
+            <Switch value={form.track_stock} onValueChange={set('track_stock')}
+              trackColor={{ true: C.primary, false: C.border }} thumbColor="#fff" />
           </View>
-          {formData.track_stock && (
+          {form.track_stock ? (
             <>
-              <Input
-                label="Stock Balance"
-                value={formData.stock_balance.toString()}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, stock_balance: parseInt(text) || 0 })
-                }
-                placeholder="0"
-                keyboardType="numeric"
-              />
-              <Input
-                label="Min Stock Level"
-                value={formData.min_stock_level.toString()}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, min_stock_level: parseInt(text) || 0 })
-                }
-                placeholder="0"
-                keyboardType="numeric"
-              />
+              <Input label="Stock Balance" value={form.stock_balance} onChangeText={set('stock_balance')}
+                placeholder="0" keyboardType="numeric" />
+              <Input label="Min Stock Level" value={form.min_stock_level} onChangeText={set('min_stock_level')}
+                placeholder="0" keyboardType="numeric" />
             </>
-          )}
-        </Card>
+          ) : null}
+        </AppCard>
 
-        {/* Status */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Status
-          </ThemedText>
-          <SearchableDropdown
-            label="Status"
-            options={statusOptions}
-            value={formData.status}
-            onChange={(value) => setFormData({ ...formData, status: value as string })}
-            placeholder="Select status"
-          />
-          <View style={styles.checkboxContainer}>
-            <Checkbox
-              checked={formData.is_active}
-              onChange={(checked) => setFormData({ ...formData, is_active: checked })}
-              title="Active"
-            />
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Status</Text>
+          <View style={S.switchRow}>
+            <Text style={[S.switchLabel, { color: C.textPrimary }]}>Active</Text>
+            <Switch value={form.is_active} onValueChange={set('is_active')}
+              trackColor={{ true: C.primary, false: C.border }} thumbColor="#fff" />
           </View>
-        </Card>
+        </AppCard>
 
-        {/* Actions */}
-        <View style={styles.actionsContainer}>
-          <Button
-            title="Cancel"
-            onPress={() => router.back()}
-            variant="outline"
-            style={styles.cancelButton}
-          />
-          <Button
-            title={saving ? 'Saving...' : 'Save Changes'}
-            onPress={handleSubmit}
-            disabled={saving}
-            loading={saving}
-            style={styles.submitButton}
-          />
-        </View>
+        <View style={{ height: 100 }} />
       </ScrollView>
-    </ThemedView>
+
+      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
+          disabled={saving} style={S.barBtn} />
+        <AppButton title="Save Changes" variant="primary" size="md" onPress={handleSubmit}
+          loading={saving} disabled={saving} style={S.barBtn} />
+      </View>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    ...CommonStyles.screenContainer,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.xl,
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: Typography.sizes.base,
-    color: Colors.light.text,
-    fontWeight: Typography.weights.medium,
-  },
-  scrollContent: {
-    ...CommonStyles.scrollContent,
-  },
-  header: {
-    marginBottom: Layout.sectionMarginBottom,
-    paddingTop: Spacing.sm,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    gap: Spacing.xs,
-    padding: Spacing.xs,
-  },
-  backButtonText: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.tint,
-    fontWeight: Typography.weights.medium,
-  },
-  mainTitle: {
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.bold,
-    letterSpacing: -0.5,
-  },
-  card: {
-    ...CommonStyles.card,
-  },
-  sectionTitle: {
-    ...CommonStyles.sectionTitle,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-    borderWidth: 1.5,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    fontSize: Typography.sizes.base,
-    borderColor: Colors.light.border,
-    color: Colors.light.text,
-    backgroundColor: Colors.light.background,
-  },
-  checkboxContainer: {
-    marginTop: Spacing.sm,
-  },
-  actionsContainer: {
-    ...CommonStyles.submitContainer,
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  cancelButton: {
-    flex: 1,
-  },
-  submitButton: {
-    flex: 1,
-  },
-});
-
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: C.background },
+    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    content:   { padding: 16, paddingBottom: 8 },
+    card:      { marginBottom: 12 },
+    sectionTitle: {
+      fontSize: 15, fontWeight: '700', color: C.textPrimary,
+      marginBottom: 14, letterSpacing: -0.2,
+    },
+    switchRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingVertical: 10, marginTop: 4,
+    },
+    switchLabel: { fontSize: 14, fontWeight: '500' },
+    bottomBar: {
+      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
+    },
+    barBtn: { flex: 1 },
+  });
+}

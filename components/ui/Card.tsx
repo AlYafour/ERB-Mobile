@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ViewStyle, TouchableOpacity, Platform } from 'react-native';
+import { View, ViewStyle, StyleProp, TouchableOpacity, Platform } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -7,7 +7,7 @@ const isWeb = Platform.OS === 'web' || (typeof window !== 'undefined' && window.
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   padding?: number;
 }

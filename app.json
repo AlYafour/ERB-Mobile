@@ -9,15 +9,20 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ahmed20kamel.alyafour",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "edgeToEdgeEnabled": false,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.ahmed20kamel.alyafour"
     },
     "web": {
       "output": "static",
@@ -31,9 +36,9 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#F1F5F9",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#0B1120"
           }
         }
       ]
@@ -41,6 +46,18 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c19d8873-53ef-46b0-921b-541c1d5bd3f6"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c19d8873-53ef-46b0-921b-541c1d5bd3f6"
     }
   }
 }

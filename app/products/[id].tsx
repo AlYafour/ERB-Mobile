@@ -1,336 +1,168 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { productsApi } from '@/lib/api/products';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppCard, AppCardRow } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppBadge } from '@/components/ui/AppBadge';
+import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { Product } from '@/types';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
-import { Layout } from '@/constants/layout';
-import { CommonStyles } from '@/constants/common-styles';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+type AppColors = typeof Colors.light | typeof Colors.dark;
+
+function fmtPrice(v: number | undefined | null): string | null {
+  if (v == null) return null;
+  return `AED ${Number(v).toFixed(2)}`;
+}
 
 export default function ProductDetailScreen() {
-  const params = useLocalSearchParams();
+  const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
-  const id = Number(params.id);
+  const id = Number(paramId);
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const isAdmin = user?.is_superuser || user?.is_staff;
+  const isSuperuser = user?.is_superuser ?? false;
+  const canUpdate = isSuperuser || (hasPermission('product', 'update') ?? false);
 
-  useEffect(() => {
-    loadProduct();
-  }, [id]);
-
-  const loadProduct = async () => {
+  const load = async () => {
     try {
       setLoading(true);
-      const data = await productsApi.getById(id);
-      setProduct(data);
-    } catch (error: any) {
-      console.error('Error loading product:', error);
-      toast(error.message || 'Failed to load product', 'error');
+      setProduct(await productsApi.getById(id));
+    } catch (err: any) {
+      toast(err.message || 'Failed to load product', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadProduct();
-  };
+  useEffect(() => { load(); }, [id]);
 
-  if (loading) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.tint} />
-        <ThemedText style={styles.loadingText}>Loading product...</ThemedText>
-      </ThemedView>
-    );
-  }
+  const S = makeStyles(C);
 
-  if (!product) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ThemedText style={styles.errorText}>Product not found</ThemedText>
-      </ThemedView>
-    );
-  }
+  if (loading) return (
+    <SafeAreaView style={S.container} edges={['top', 'bottom']}>
+      <AppHeader title="Product" showBack />
+      <View style={S.center}><AppEmptyState variant="loading" title="Loading product..." /></View>
+    </SafeAreaView>
+  );
 
-  const getStatusVariant = () => {
-    if (!product.is_active) return 'error';
-    if (product.status === 'active') return 'success';
-    if (product.status === 'inactive') return 'error';
+  if (!product) return (
+    <SafeAreaView style={S.container} edges={['top', 'bottom']}>
+      <AppHeader title="Product" showBack />
+      <View style={S.center}><AppEmptyState variant="empty" title="Product not found" /></View>
+    </SafeAreaView>
+  );
+
+  const p = product as any;
+  const isActive = p.is_active;
+  const status   = product.status;
+
+  const getStatusVariant = (): 'success' | 'danger' | 'info' | 'default' => {
+    if (!isActive) return 'danger';
+    if (status === 'active') return 'success';
+    if (status === 'inactive') return 'danger';
     return 'info';
   };
 
-  return (
-    <ThemedView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={20} color={Colors.light.tint} />
-            <ThemedText style={styles.backButtonText}>Back to Products</ThemedText>
-          </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <ThemedText type="title" style={styles.mainTitle}>
-              {product.name || 'Unnamed Product'}
-            </ThemedText>
-            {product.code && <ThemedText style={styles.subtitle}>{product.code}</ThemedText>}
-            <View style={styles.statusContainer}>
-              <Badge variant={getStatusVariant()}>
-                {product.is_active ? 'Active' : 'Inactive'}
-              </Badge>
-            </View>
-          </View>
-        </View>
+  const unitPrice = fmtPrice(product.unit_price);
+  const buyPrice  = fmtPrice(p.buy_price);
+  const discount  = product.discount != null && product.discount > 0
+    ? (product.discount_type === 'percentage' ? `${product.discount}%` : fmtPrice(product.discount))
+    : null;
 
+  return (
+    <SafeAreaView style={S.container} edges={['top', 'bottom']}>
+      <AppHeader
+        title={product.name || 'Product'}
+        subtitle={product.code || product.sku || undefined}
+        showBack
+        right={
+          <AppBadge variant={getStatusVariant()}>
+            {isActive ? 'Active' : 'Inactive'}
+          </AppBadge>
+        }
+      />
+
+      <ScrollView
+        contentContainerStyle={S.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }}
+            tintColor={C.primary} colors={[C.primary]} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
         {/* Basic Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Basic Information
-          </ThemedText>
-          {product.name && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Name:</ThemedText>
-              <ThemedText style={styles.value}>{product.name}</ThemedText>
-            </View>
-          )}
-          {product.code && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Code:</ThemedText>
-              <ThemedText style={styles.value}>{product.code}</ThemedText>
-            </View>
-          )}
-          {product.sku && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>SKU:</ThemedText>
-              <ThemedText style={styles.value}>{product.sku}</ThemedText>
-            </View>
-          )}
-          {product.barcode && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Barcode:</ThemedText>
-              <ThemedText style={styles.value}>{product.barcode}</ThemedText>
-            </View>
-          )}
-          {product.description && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Description:</ThemedText>
-              <ThemedText style={styles.value}>{product.description}</ThemedText>
-            </View>
-          )}
-          {product.brand && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Brand:</ThemedText>
-              <ThemedText style={styles.value}>{product.brand}</ThemedText>
-            </View>
-          )}
-          {product.category && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Category:</ThemedText>
-              <ThemedText style={styles.value}>{product.category}</ThemedText>
-            </View>
-          )}
-          {product.unit && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Unit:</ThemedText>
-              <ThemedText style={styles.value}>{product.unit}</ThemedText>
-            </View>
-          )}
-        </Card>
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Basic Information</Text>
+          <AppCardRow label="Name"        value={product.name} />
+          <AppCardRow label="Code"        value={product.code} />
+          <AppCardRow label="SKU"         value={product.sku} />
+          <AppCardRow label="Barcode"     value={p.barcode} />
+          <AppCardRow label="Brand"       value={p.brand} />
+          <AppCardRow label="Category"    value={product.category} />
+          <AppCardRow label="Unit"        value={product.unit} />
+          <AppCardRow label="Description" value={product.description} last />
+        </AppCard>
 
         {/* Pricing Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Pricing Information
-          </ThemedText>
-          {product.unit_price !== undefined && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Unit Price:</ThemedText>
-              <ThemedText style={[styles.value, styles.priceValue]}>
-                ${product.unit_price.toFixed(2)}
-              </ThemedText>
-            </View>
-          )}
-          {product.buy_price !== undefined && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Buy Price:</ThemedText>
-              <ThemedText style={[styles.value, styles.priceValue]}>
-                ${product.buy_price.toFixed(2)}
-              </ThemedText>
-            </View>
-          )}
-          {product.discount !== undefined && product.discount > 0 && (
-            <View style={styles.detailRow}>
-              <ThemedText style={styles.label}>Discount:</ThemedText>
-              <ThemedText style={styles.value}>
-                {product.discount_type === 'percentage'
-                  ? `${product.discount}%`
-                  : `$${product.discount.toFixed(2)}`}
-              </ThemedText>
-            </View>
-          )}
-        </Card>
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Pricing Information</Text>
+          <AppCardRow label="Unit Price" value={unitPrice} valueColor={unitPrice ? C.success : undefined} />
+          <AppCardRow label="Buy Price"  value={buyPrice}  valueColor={buyPrice ? C.success : undefined} />
+          <AppCardRow label="Discount"   value={discount} last />
+        </AppCard>
 
         {/* Stock Information */}
-        {product.track_stock && (
-          <Card style={styles.card}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Stock Information
-            </ThemedText>
-            {product.stock_balance !== undefined && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.label}>Stock Balance:</ThemedText>
-                <ThemedText style={styles.value}>{product.stock_balance}</ThemedText>
-              </View>
-            )}
-            {product.min_stock_level !== undefined && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.label}>Min Stock Level:</ThemedText>
-                <ThemedText style={styles.value}>{product.min_stock_level}</ThemedText>
-              </View>
-            )}
-            {product.max_stock_level !== undefined && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.label}>Max Stock Level:</ThemedText>
-                <ThemedText style={styles.value}>{product.max_stock_level}</ThemedText>
-              </View>
-            )}
-          </Card>
-        )}
+        {product.track_stock ? (
+          <AppCard style={S.card}>
+            <Text style={S.sectionTitle}>Stock Information</Text>
+            <AppCardRow label="Stock Balance" value={product.stock_balance != null ? String(product.stock_balance) : null} />
+            <AppCardRow label="Min Stock"     value={product.min_stock_level != null ? String(product.min_stock_level) : null} />
+            <AppCardRow label="Max Stock"     value={product.max_stock_level != null ? String(product.max_stock_level) : null} last />
+          </AppCard>
+        ) : null}
 
-        {/* Actions */}
-        {isAdmin && (
-          <View style={styles.actionsContainer}>
-            <Button
-              title="Edit Product"
-              onPress={() => router.push(`/products/${id}/edit` as any)}
-              variant="primary"
-              style={styles.actionButton}
-            />
-          </View>
-        )}
+        {canUpdate ? (
+          <AppButton
+            title="Edit Product"
+            variant="primary"
+            size="md"
+            onPress={() => router.push(`/products/${id}/edit` as any)}
+            style={S.editBtn}
+          />
+        ) : null}
+
+        <View style={{ height: 24 }} />
       </ScrollView>
-    </ThemedView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    ...CommonStyles.screenContainer,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.xl,
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: Typography.sizes.base,
-    color: Colors.light.text,
-    fontWeight: Typography.weights.medium,
-  },
-  errorText: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.error,
-    textAlign: 'center',
-    fontWeight: Typography.weights.medium,
-  },
-  scrollContent: {
-    ...CommonStyles.scrollContent,
-  },
-  header: {
-    marginBottom: Layout.sectionMarginBottom,
-    paddingTop: Spacing.sm,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    gap: Spacing.xs,
-    padding: Spacing.xs,
-  },
-  backButtonText: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.tint,
-    fontWeight: Typography.weights.medium,
-  },
-  titleContainer: {
-    marginBottom: Spacing.xs,
-  },
-  mainTitle: {
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.bold,
-    marginBottom: Spacing.xs,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    marginBottom: Spacing.sm,
-    fontWeight: Typography.weights.normal,
-  },
-  statusContainer: {
-    marginTop: Spacing.sm,
-  },
-  card: {
-    ...CommonStyles.card,
-  },
-  sectionTitle: {
-    ...CommonStyles.sectionTitle,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    gap: Spacing.md,
-  },
-  label: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.medium,
-    color: Colors.light.textSecondary,
-    flex: 1,
-  },
-  value: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.text,
-    flex: 1,
-    textAlign: 'right',
-    fontWeight: Typography.weights.normal,
-  },
-  priceValue: {
-    color: Colors.light.success,
-    fontWeight: Typography.weights.semibold,
-  },
-  actionsContainer: {
-    marginTop: Layout.sectionMarginTop,
-    gap: Spacing.md,
-  },
-  actionButton: {
-    marginBottom: 0,
-  },
-});
-
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: C.background },
+    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    content:   { padding: 16, paddingBottom: 24 },
+    card:      { marginBottom: 12 },
+    sectionTitle: {
+      fontSize: 15, fontWeight: '700', color: C.textPrimary,
+      marginBottom: 14, letterSpacing: -0.2,
+    },
+    editBtn: { marginTop: 8 },
+  });
+}

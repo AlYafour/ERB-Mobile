@@ -5,17 +5,17 @@ import 'react-native-reanimated';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppThemeProvider } from '@/contexts/ThemeContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ToastContainer } from '@/components/ui/Toast';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { Colors } from '@/constants/theme';
 
-// Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
-// Custom Premium Themes
 const PremiumLightTheme = {
   ...DefaultTheme,
   colors: {
@@ -46,17 +46,39 @@ export const unstable_settings = {
   initialRouteName: 'index',
 };
 
-export default function RootLayout() {
+// Inner layout — safe to call useColorScheme() here because AppThemeProvider is above
+function RootLayoutInner() {
   const colorScheme = useColorScheme();
-  
-  // Load custom fonts (using system fonts for now, can be extended with custom fonts)
-  const [fontsLoaded, fontError] = useFonts({
-    // You can add custom fonts here when available
-    // 'Inter-Regular': require('@/assets/fonts/Inter-Regular.ttf'),
-    // 'Inter-Medium': require('@/assets/fonts/Inter-Medium.ttf'),
-    // 'Inter-SemiBold': require('@/assets/fonts/Inter-SemiBold.ttf'),
-    // 'Inter-Bold': require('@/assets/fonts/Inter-Bold.ttf'),
-  });
+  const isDark = colorScheme === 'dark';
+  const activeTheme = isDark ? PremiumDarkTheme : PremiumLightTheme;
+
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ThemeProvider value={activeTheme}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: {
+                backgroundColor: activeTheme.colors.background,
+              },
+            }}
+          />
+          <StatusBar
+            style={isDark ? 'light' : 'dark'}
+            backgroundColor={isDark ? Colors.dark.background : Colors.light.background}
+            translucent={false}
+          />
+          <ToastContainer />
+          <ConfirmDialog />
+        </ThemeProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({});
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
@@ -69,20 +91,8 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <ThemeProvider value={PremiumLightTheme}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: {
-              backgroundColor: PremiumLightTheme.colors.background,
-            },
-          }}
-        />
-        <StatusBar style="dark" />
-        <ToastContainer />
-        <ConfirmDialog />
-      </ThemeProvider>
-    </AuthProvider>
+    <AppThemeProvider>
+      <RootLayoutInner />
+    </AppThemeProvider>
   );
 }

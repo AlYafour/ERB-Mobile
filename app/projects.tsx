@@ -1,601 +1,342 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  FlatList,
-  RefreshControl,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { projectsApi } from '@/lib/api/projects';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Checkbox } from '@/components/ui/Checkbox';
 import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
 import FilterTags from '@/components/ui/FilterTags';
-import { Project, PaginatedResponse } from '@/types';
+import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppBadge } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Project, PaginatedResponse } from '@/types';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Spacing, Typography } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
+
+type AppColors = typeof Colors.light | typeof Colors.dark;
+
+const statusLabels: Record<string, string> = {
+  active:    'Active',
+  completed: 'Completed',
+  on_hold:   'On Hold',
+  inactive:  'Inactive',
+};
+
+function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info' | 'default' {
+  switch (s) {
+    case 'active':    return 'success';
+    case 'completed': return 'info';
+    case 'on_hold':   return 'warning';
+    case 'inactive':  return 'danger';
+    default:          return 'default';
+  }
+}
 
 export default function ProjectsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({});
-  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
-  const [selectMode, setSelectMode] = useState<'page' | 'all'>('page');
   const [data, setData] = useState<PaginatedResponse<Project> | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [deleting, setDeleting] = useState<number | null>(null);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isSuperuser = user?.is_superuser ?? false;
-  const isAdmin = isSuperuser || user?.role === 'super_admin' || user?.is_staff;
   const canCreate = isSuperuser || (hasPermission('project', 'create') ?? false);
-  const canDelete = isSuperuser;
 
+  // Debounce search 400ms
   useEffect(() => {
-    loadProjects();
-  }, [page, search, filters]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => { loadProjects(); }, [page, debouncedSearch, filters]);
 
   const loadProjects = async () => {
     try {
+      setError(null);
       setLoading(true);
       const response = await projectsApi.getAll({
         page,
         page_size: 50,
-        search,
+        search: debouncedSearch,
         ...filters,
       });
       setData(response);
-    } catch (error: any) {
-      console.error('Error loading projects:', error);
-      toast(error.message || 'Failed to load projects', 'error');
+    } catch (err: any) {
+      setError(err.message || 'Failed to load projects');
+      toast(err.message || 'Failed to load projects', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadProjects();
-  };
+  const onRefresh = () => { setRefreshing(true); loadProjects(); };
 
   const filterFields: FilterField[] = [
-    { name: 'code', label: 'Code', type: 'text', group: 'Basic Info' },
-    { name: 'name', label: 'Name', type: 'text', group: 'Basic Info' },
-    { name: 'location', label: 'Location', type: 'text', group: 'Basic Info' },
-    { name: 'sector', label: 'Sector', type: 'text', group: 'Basic Info' },
+    { name: 'code',           label: 'Code',           type: 'text', group: 'Basic Info' },
+    { name: 'location',       label: 'Location',       type: 'text', group: 'Basic Info' },
+    { name: 'sector',         label: 'Sector',         type: 'text', group: 'Basic Info' },
+    { name: 'contact_person', label: 'Contact Person', type: 'text', group: 'Contact' },
     {
-      name: 'project_status',
-      label: 'Status',
-      type: 'select',
-      group: 'Status',
+      name: 'project_status', label: 'Status', type: 'select', group: 'Status',
       options: [
-        { value: 'active', label: 'Active' },
+        { value: 'active',    label: 'Active' },
         { value: 'completed', label: 'Completed' },
-        { value: 'on_hold', label: 'On Hold' },
+        { value: 'on_hold',   label: 'On Hold' },
       ],
     },
-    {
-      name: 'is_active',
-      label: 'Active Status',
-      type: 'boolean',
-      group: 'Status',
-    },
-    { name: 'created_at_after', label: 'Created From', type: 'date', group: 'Dates' },
-    { name: 'created_at_before', label: 'Created To', type: 'date', group: 'Dates' },
+    { name: 'created_at_after',  label: 'Created From', type: 'date', group: 'Dates' },
+    { name: 'created_at_before', label: 'Created To',   type: 'date', group: 'Dates' },
   ];
 
-  const handleFilterChange = (newFilters: Record<string, any>) => {
-    setFilters(newFilters);
-    setPage(1);
-  };
-
-  const handleFilterReset = () => {
-    setFilters({});
-    setPage(1);
-  };
-
+  const handleFilterChange = (f: Record<string, any>) => { setFilters(f); setPage(1); };
+  const handleFilterReset  = () => { setFilters({}); setPage(1); };
   const handleRemoveFilter = (key: string) => {
-    const newFilters = { ...filters };
-    delete newFilters[key];
-    setFilters(newFilters);
-    setPage(1);
+    const f = { ...filters }; delete f[key]; setFilters(f); setPage(1);
   };
 
-  const handleClearAllFilters = () => {
-    setFilters({});
-    setPage(1);
-  };
-
-  const handleDelete = async (id: number) => {
-    try {
-      setDeleting(id);
-      await projectsApi.delete(id);
-      toast('Project deleted successfully', 'success');
-      loadProjects();
-    } catch (error: any) {
-      toast(error.message || 'Failed to delete project', 'error');
-    } finally {
-      setDeleting(null);
-    }
-  };
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked && data?.results) {
-      setSelectedItems(new Set(data.results.map((p) => Number(p.id))));
-    } else {
-      setSelectedItems(new Set());
-    }
-  };
-
-  const handleSelectItem = (id: number, checked: boolean) => {
-    const newSelected = new Set(selectedItems);
-    if (checked) {
-      newSelected.add(id);
-    } else {
-      newSelected.delete(id);
-    }
-    setSelectedItems(newSelected);
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedItems.size === 0) return;
-    try {
-      setBulkDeleting(true);
-      await Promise.all(Array.from(selectedItems).map((id) => projectsApi.delete(id)));
-      toast(`${selectedItems.size} project(s) deleted successfully`, 'success');
-      setSelectedItems(new Set());
-      loadProjects();
-    } catch (error: any) {
-      toast(error.message || 'Failed to delete some projects', 'error');
-    } finally {
-      setBulkDeleting(false);
-    }
-  };
-
-  const currentPageIds = data?.results?.map((p) => Number(p.id)) || [];
-  const allPageSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedItems.has(id));
-  const somePageSelected = currentPageIds.some((id) => selectedItems.has(id)) && !allPageSelected;
-
-  const getStatusVariant = (status?: string): 'success' | 'error' | 'warning' | 'info' => {
-    switch (status) {
-      case 'active':
-        return 'success';
-      case 'completed':
-        return 'info';
-      case 'on_hold':
-        return 'warning';
-      default:
-        return 'info';
-    }
-  };
+  const S = makeStyles(C);
 
   const renderItem = ({ item }: { item: Project }) => {
     const itemId = Number(item.id);
-    const isSelected = selectedItems.has(itemId);
+    const r      = item as any;
+
+    const code           = r.code || null;
+    const status         = r.project_status || r.status || null;
+    const location       = r.location || null;
+    const contactPerson  = r.contact_person || null;
+    const mobileNumber   = r.mobile_number || null;
+    const sector         = r.sector || null;
+    const officeLocation = r.office_location_detail?.name || null;
+
+    const startDate = item.start_date
+      ? new Date(item.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : null;
+    const endDate = item.end_date
+      ? new Date(item.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : null;
 
     return (
-      <Card style={styles.itemCard}>
-        {isAdmin && (
-          <View style={styles.checkboxContainer}>
-            <Checkbox
-              checked={isSelected}
-              onChange={(checked) => handleSelectItem(itemId, checked)}
-            />
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.itemContent}
-          onPress={() => router.push(`/projects/${itemId}` as any)}
-          activeOpacity={0.7}>
-          <View style={styles.itemHeader}>
-            <View style={styles.itemInfo}>
-              <ThemedText type="defaultSemiBold" style={styles.itemName}>
-                {item.name || 'Unnamed Project'}
-              </ThemedText>
-              {((item as any).project_status || (item as any).status) && (
-                <Badge variant={getStatusVariant((item as any).project_status || (item as any).status)}>
-                  {(item as any).project_status || (item as any).status || 'Unknown'}
-                </Badge>
-              )}
-            </View>
-          </View>
+      <AppCard style={S.itemCard} onPress={() => router.push(`/projects/${itemId}` as any)}>
+        {/* Name + status badge */}
+        <View style={S.topRow}>
+          <Text style={[S.itemName, { color: C.textPrimary }]} numberOfLines={2}>
+            {item.name || 'Unnamed Project'}
+          </Text>
+          {status ? (
+            <AppBadge variant={getStatusVariant(status)}>
+              {statusLabels[status] || status}
+            </AppBadge>
+          ) : null}
+        </View>
 
-          <View style={styles.itemDetails}>
-            {(item as any).code && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Code:</ThemedText>
-                <ThemedText style={styles.detailValue}>{(item as any).code}</ThemedText>
-              </View>
-            )}
-            {item.description && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Description:</ThemedText>
-                <ThemedText style={styles.detailValue} numberOfLines={2}>
-                  {item.description}
-                </ThemedText>
-              </View>
-            )}
-            {(item as any).location && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Location:</ThemedText>
-                <ThemedText style={styles.detailValue}>{(item as any).location}</ThemedText>
-              </View>
-            )}
-            {item.start_date && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Start Date:</ThemedText>
-                <ThemedText style={styles.detailValue}>
-                  {new Date(item.start_date).toLocaleDateString('en-US')}
-                </ThemedText>
-              </View>
-            )}
-            {item.end_date && (
-              <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>End Date:</ThemedText>
-                <ThemedText style={styles.detailValue}>
-                  {new Date(item.end_date).toLocaleDateString('en-US')}
-                </ThemedText>
-              </View>
-            )}
+        {/* Code — prominent */}
+        {code ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Code</Text>
+            <Text style={[S.metaValue, { color: C.primary, fontWeight: '600' }]}>{code}</Text>
           </View>
+        ) : null}
 
-          {canDelete && (
-            <View style={styles.itemActions}>
-              <Button
-                title="Delete"
-                variant="danger"
-                onPress={() => handleDelete(itemId)}
-                disabled={deleting === itemId}
-                loading={deleting === itemId}
-                style={styles.actionButton}
-              />
-            </View>
-          )}
-        </TouchableOpacity>
-      </Card>
+        {/* Office/site location from new FK */}
+        {officeLocation ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Site</Text>
+            <Text style={[S.metaValue, { color: C.textPrimary }]} numberOfLines={1}>{officeLocation}</Text>
+          </View>
+        ) : location ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Location</Text>
+            <Text style={[S.metaValue, { color: C.textPrimary }]} numberOfLines={1}>{location}</Text>
+          </View>
+        ) : null}
+
+        {sector ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Sector</Text>
+            <Text style={[S.metaValue, { color: C.textSecondary }]} numberOfLines={1}>{sector}</Text>
+          </View>
+        ) : null}
+        {contactPerson ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Contact</Text>
+            <Text style={[S.metaValue, { color: C.textPrimary }]} numberOfLines={1}>{contactPerson}</Text>
+          </View>
+        ) : null}
+        {mobileNumber ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Mobile</Text>
+            <Text style={[S.metaValue, { color: C.textSecondary }]}>{mobileNumber}</Text>
+          </View>
+        ) : null}
+        {startDate ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>Start</Text>
+            <Text style={[S.metaValue, { color: C.textSecondary }]}>{startDate}</Text>
+          </View>
+        ) : null}
+        {endDate ? (
+          <View style={S.metaRow}>
+            <Text style={[S.metaLabel, { color: C.textMuted }]}>End</Text>
+            <Text style={[S.metaValue, { color: C.textSecondary }]}>{endDate}</Text>
+          </View>
+        ) : null}
+      </AppCard>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ThemedView style={styles.innerContainer}>
-        <View style={styles.header}>
-        <View>
-          <ThemedText type="title" style={styles.headerTitle}>
-            Projects
-          </ThemedText>
-          <ThemedText style={styles.headerSubtitle}>Manage projects and sites</ThemedText>
-        </View>
-        <View style={styles.headerActions}>
-          {isAdmin && (
-            <View style={styles.selectModeContainer}>
-              <ThemedText style={styles.selectModeLabel}>Select:</ThemedText>
-              <Button
-                title="Page"
-                variant={selectMode === 'page' ? 'primary' : 'secondary'}
-                onPress={() => {
-                  setSelectMode('page');
-                  setSelectedItems(new Set());
-                }}
-                style={styles.selectModeButton}
-              />
-              <Button
-                title="All"
-                variant={selectMode === 'all' ? 'primary' : 'secondary'}
-                onPress={() => {
-                  setSelectMode('all');
-                  setSelectedItems(new Set());
-                }}
-                style={styles.selectModeButton}
-              />
-            </View>
-          )}
-          {isAdmin && selectedItems.size > 0 && (
-            <Button
-              title={bulkDeleting ? 'Deleting...' : `Delete ${selectedItems.size}`}
-              variant="danger"
-              onPress={handleBulkDelete}
-              disabled={bulkDeleting}
-              loading={bulkDeleting}
-              style={styles.bulkDeleteButton}
-            />
-          )}
-          {canCreate && (
-            <Button
+    <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
+      <View style={S.inner}>
+        <AppHeader
+          title="Projects"
+          subtitle={data?.count != null ? `${data.count} project${data.count !== 1 ? 's' : ''}` : undefined}
+          right={canCreate ? (
+            <AppButton
               title="New Project"
               variant="primary"
+              size="sm"
               onPress={() => router.push('/projects/new' as any)}
             />
-          )}
-        </View>
-      </View>
-
-      <Card style={styles.searchCard}>
-        <View style={styles.searchRow}>
-          <Input
-            placeholder="Search projects..."
-            value={search}
-            onChangeText={setSearch}
-            containerStyle={styles.searchInput}
-            leftIcon={<IconSymbol name="magnifyingglass" size={20} color={Colors.light.icon} />}
-          />
-          <FilterPanel
-            fields={filterFields}
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            onReset={handleFilterReset}
-            saveKey="projects"
-          />
-        </View>
-      </Card>
-
-      {Object.keys(filters).length > 0 && (
-        <FilterTags
-          filters={filters}
-          fields={filterFields}
-          onRemoveFilter={handleRemoveFilter}
-          onClearAll={handleClearAllFilters}
+          ) : undefined}
         />
-      )}
 
-      {loading && !refreshing ? (
-        <Card style={styles.loadingCard}>
-          <ActivityIndicator size="large" color={Colors.light.tint} />
-          <ThemedText style={styles.loadingText}>Loading...</ThemedText>
-        </Card>
-      ) : !data || !data.results || data.results.length === 0 ? (
-        <Card style={styles.emptyCard}>
-          <ThemedText style={styles.emptyText}>No projects found</ThemedText>
-        </Card>
-      ) : (
-        <>
-          {isAdmin && (
-            <View style={styles.selectAllContainer}>
-              <Checkbox
-                checked={allPageSelected}
-                indeterminate={somePageSelected}
-                onChange={handleSelectAll}
-                title="Select All"
+        {/* Search + filter */}
+        <View style={S.searchContainer}>
+          <View style={S.searchRow}>
+            <View style={S.searchInputWrapper}>
+              <Input
+                placeholder="Search projects..."
+                value={search}
+                onChangeText={setSearch}
+                containerStyle={S.searchInput}
+                leftIcon={<IconSymbol name="magnifyingglass" size={20} color={C.textMuted} />}
               />
             </View>
-          )}
+            <View style={S.filterBtnWrapper}>
+              <FilterPanel
+                fields={filterFields}
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                onReset={handleFilterReset}
+                saveKey="projects"
+              />
+            </View>
+          </View>
+        </View>
+
+        {Object.keys(filters).length > 0 && (
+          <FilterTags
+            filters={filters}
+            fields={filterFields}
+            onRemoveFilter={handleRemoveFilter}
+            onClearAll={() => { setFilters({}); setPage(1); }}
+          />
+        )}
+
+        {loading && !refreshing ? (
+          <AppEmptyState variant="loading" title="Loading projects..." />
+        ) : error && !data?.results?.length ? (
+          <AppEmptyState variant="error" title="Failed to load" message={error} actionLabel="Try Again" onAction={loadProjects} />
+        ) : !data?.results?.length ? (
+          <AppEmptyState variant="empty" icon="folder" title="No projects" message="No projects found matching your criteria." />
+        ) : (
           <FlatList
             data={data.results}
             renderItem={renderItem}
             keyExtractor={(item) => String(item.id || Math.random())}
-            contentContainerStyle={styles.listContent}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            contentContainerStyle={S.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primary]} />
+            }
             ListFooterComponent={
               data && data.count > 50 ? (
-                <View style={styles.pagination}>
-                  <Button
-                    title="Previous"
-                    variant="secondary"
+                <View style={[S.pagination, { backgroundColor: C.surfaceSoft, borderTopColor: C.border }]}>
+                  <AppButton title="Previous" variant="secondary" size="sm"
                     onPress={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!data.previous || page === 1}
-                    style={styles.paginationButton}
-                  />
-                  <ThemedText style={styles.paginationText}>
-                    Showing {((page - 1) * 50) + 1} to {Math.min(page * 50, data.count)} of {data.count} projects
-                  </ThemedText>
-                  <Button
-                    title="Next"
-                    variant="secondary"
+                    disabled={!data.previous || page === 1} style={S.paginationBtn} />
+                  <Text style={[S.paginationText, { color: C.textMuted }]}>
+                    {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
+                  </Text>
+                  <AppButton title="Next" variant="secondary" size="sm"
                     onPress={() => setPage((p) => p + 1)}
-                    disabled={!data.next}
-                    style={styles.paginationButton}
-                  />
+                    disabled={!data.next} style={S.paginationBtn} />
                 </View>
               ) : null
             }
           />
-        </>
-      )}
-      </ThemedView>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  innerContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  header: {
-    paddingHorizontal: Layout.screenPadding,
-    paddingTop: Spacing.md, // SafeAreaView handles Status Bar
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.background,
-  },
-  headerTitle: {
-    marginBottom: Spacing.xs,
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.bold,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.normal,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    flexWrap: 'wrap',
-  },
-  selectModeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingRight: Spacing.md,
-    borderRightWidth: 1,
-    borderRightColor: Colors.light.borderLight,
-    marginRight: Spacing.md,
-  },
-  selectModeLabel: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.medium,
-  },
-  selectModeButton: {
-    minWidth: 70,
-    paddingHorizontal: Spacing.md,
-  },
-  bulkDeleteButton: {
-    minWidth: 110,
-  },
-  searchCard: {
-    marginHorizontal: Layout.screenPadding,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.sm,
-    padding: Spacing.md,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  loadingCard: {
-    padding: Spacing.xl,
-    alignItems: 'center',
-    marginHorizontal: Layout.screenPadding,
-    marginTop: Spacing.lg,
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.medium,
-  },
-  emptyCard: {
-    padding: Spacing.xl,
-    alignItems: 'center',
-    marginHorizontal: Layout.screenPadding,
-    marginTop: Spacing.lg,
-  },
-  emptyText: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.medium,
-  },
-  selectAllContainer: {
-    paddingHorizontal: Layout.screenPadding,
-    paddingVertical: Spacing.md,
-    paddingBottom: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.backgroundSecondary,
-  },
-  listContent: {
-    padding: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing['2xl'] + Spacing.lg, // Extra bottom padding for Navigation Bar
-  },
-  itemCard: {
-    marginBottom: Spacing.md,
-    padding: Layout.cardPadding,
-  },
-  checkboxContainer: {
-    marginBottom: Spacing.md,
-  },
-  itemContent: {
-    flex: 1,
-  },
-  itemHeader: {
-    marginBottom: Spacing.md,
-  },
-  itemInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  itemName: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.semibold,
-    flex: 1,
-    letterSpacing: 0.2,
-    color: Colors.light.text,
-  },
-  itemDetails: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-    alignItems: 'center',
-  },
-  detailLabel: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.medium,
-    color: Colors.light.textSecondary,
-  },
-  detailValue: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.normal,
-    color: Colors.light.text,
-  },
-  itemActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  actionButton: {
-    flex: 1,
-  },
-  pagination: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing['2xl'] + Spacing.lg, // Extra bottom padding for Navigation Bar
-    gap: Spacing.md,
-    flexWrap: 'wrap',
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.backgroundSecondary,
-  },
-  paginationButton: {
-    minWidth: 90,
-  },
-  paginationText: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.light.textSecondary,
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: Typography.weights.medium,
-  },
-});
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    inner:     { flex: 1 },
+
+    searchContainer: {
+      paddingHorizontal: Layout.screenPadding,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.sm,
+    },
+    searchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    searchInputWrapper: { flex: 1 },
+    searchInput: { marginBottom: 0 },
+    filterBtnWrapper: { alignSelf: 'flex-start' },
+
+    listContent: {
+      padding: Layout.screenPadding,
+      paddingTop: Spacing.md,
+      paddingBottom: 120,
+    },
+
+    itemCard: { marginBottom: Spacing.sm },
+
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    itemName: { fontSize: 14, fontWeight: '600', flex: 1, lineHeight: 20 },
+
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingVertical: 3,
+    },
+    metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 72, flexShrink: 0 },
+    metaValue: { fontSize: 13, flex: 1 },
+
+    pagination: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
+      gap: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    paginationBtn: { minWidth: 80 },
+    paginationText: { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
+  });
+}

@@ -6,13 +6,29 @@ import {
   KeyboardAvoidingView,
   Platform,
   Text,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { Input } from '@/components/ui/Input';
 import { Logo } from '@/components/ui/Logo';
+
+const NAVY = '#0B1629';
+const NAVY_CARD = '#1A2740';
+const NAVY_INPUT = '#0D1B2A';
+const BORDER = '#2A3A52';
+const TEXT_PRIMARY = '#F0F4F8';
+const TEXT_MUTED = '#64748B';
+const TEXT_SECONDARY = '#94A3B8';
+const BTN_BG = '#F0F4F8';   // near-white button — premium feel
+const BTN_TEXT = '#0B1629'; // dark text on light button
+const LINK = '#93C5FD';     // light blue link — no orange
+const ERROR_BG = 'rgba(239,68,68,0.10)';
+const ERROR_BORDER = 'rgba(239,68,68,0.30)';
+const ERROR_TEXT = '#FCA5A5';
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -21,18 +37,17 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const handleLogin = async () => {
-    if (!username || !password) {
+    if (!username.trim() || !password) {
       setError('Please fill in all fields');
       return;
     }
-
     setError('');
     setLoading(true);
-
     try {
-      const result = await login(username, password);
+      const result = await login(username.trim(), password);
       if (result.success) {
         router.replace('/(tabs)');
       } else {
@@ -48,245 +63,196 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}>
+      style={s.root}
+    >
+      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          s.scroll,
+          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 },
+        ]}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-
-        {/* Logo Section */}
-        <View style={styles.header}>
-          <View style={styles.logoWrapper}>
-            <Logo size={100} />
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Brand header */}
+        <View style={s.header}>
+          <View style={s.logoRing}>
+            <Logo size={72} />
           </View>
-          <Text style={styles.appName}>AL Yafour</Text>
-          <Text style={styles.appTagline}>Procurement System</Text>
-          <Text style={styles.appTaglineAr}>نظام المشتريات</Text>
+          <Text style={s.appName}>Al Yafour ERP</Text>
+          <Text style={s.tagline}>Enterprise Resource Planning</Text>
         </View>
 
-        {/* Form Card */}
-        <View style={styles.card}>
-          <Text style={styles.signInTitle}>Sign In</Text>
-          <Text style={styles.signInSubtitle}>Enter your credentials to continue</Text>
+        {/* Sign-in card */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Sign In</Text>
+          <Text style={s.cardSubtitle}>Enter your credentials to continue</Text>
 
           {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
+            <View style={s.errorBox}>
+              <Text style={s.errorText}>{error}</Text>
             </View>
           ) : null}
 
-          {/* Username */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Username</Text>
-            <TextInput
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              placeholder="Enter your username"
-              placeholderTextColor="#9CA3AF"
-              autoCapitalize="none"
-              autoComplete="username"
-              returnKeyType="next"
-            />
-          </View>
+          <Input
+            label="Username"
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Enter your username"
+            autoCapitalize="none"
+            autoComplete="username"
+            returnKeyType="next"
+            containerStyle={s.field}
+          />
 
-          {/* Password */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="password"
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-            />
-          </View>
+          <Input
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Enter your password"
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password"
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+            containerStyle={s.field}
+          />
 
-          {/* Sign In Button */}
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[s.btn, loading && s.btnDisabled]}
             onPress={handleLogin}
             disabled={loading}
-            activeOpacity={0.85}>
+            activeOpacity={0.82}
+          >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={BTN_TEXT} size="small" />
             ) : (
-              <Text style={styles.buttonText}>Sign In</Text>
+              <Text style={s.btnText}>Sign In</Text>
             )}
           </TouchableOpacity>
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
+          <View style={s.footer}>
+            <Text style={s.footerText}>Don't have an account?</Text>
             <TouchableOpacity onPress={() => router.push('/register')}>
-              <Text style={styles.footerLink}>Sign Up</Text>
+              <Text style={s.footerLink}> Sign Up</Text>
             </TouchableOpacity>
           </View>
         </View>
-
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const ORANGE = '#F97316';
-const NAVY = '#0F172A';
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: NAVY,
-  },
-  scrollContent: {
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: NAVY },
+  scroll: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 48,
   },
 
-  /* ── Header ── */
-  header: {
-    alignItems: 'center',
-    marginBottom: 36,
-  },
-  logoWrapper: {
-    width: 110,
-    height: 110,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  // Brand
+  header: { alignItems: 'center', marginBottom: 36 },
+  logoRing: {
+    width: 100,
+    height: 100,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
   },
   appName: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
+    color: TEXT_PRIMARY,
+    letterSpacing: -0.4,
   },
-  appTagline: {
-    fontSize: 14,
-    color: '#94A3B8',
-    fontWeight: '400',
-    marginTop: 2,
-    letterSpacing: 0.3,
-  },
-  appTaglineAr: {
+  tagline: {
     fontSize: 13,
-    color: ORANGE,
-    fontWeight: '500',
+    color: TEXT_SECONDARY,
     marginTop: 4,
     letterSpacing: 0.2,
   },
 
-  /* ── Card ── */
+  // Card
   card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 24,
+    backgroundColor: NAVY_CARD,
+    borderRadius: 20,
     padding: 28,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: BORDER,
   },
-  signInTitle: {
-    fontSize: 22,
+  cardTitle: {
+    fontSize: 20,
     fontWeight: '700',
-    color: '#F1F5F9',
+    color: TEXT_PRIMARY,
     marginBottom: 4,
   },
-  signInSubtitle: {
+  cardSubtitle: {
     fontSize: 14,
-    color: '#64748B',
+    color: TEXT_MUTED,
     marginBottom: 24,
-    fontWeight: '400',
   },
 
-  /* ── Error ── */
+  // Error
   errorBox: {
-    backgroundColor: 'rgba(239,68,68,0.12)',
+    backgroundColor: ERROR_BG,
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.3)',
+    borderColor: ERROR_BORDER,
   },
   errorText: {
-    color: '#FCA5A5',
-    fontSize: 14,
+    color: ERROR_TEXT,
+    fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
   },
 
-  /* ── Form Fields ── */
-  fieldGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginBottom: 8,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  input: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#F1F5F9',
-    minHeight: 52,
-  },
+  // Field override — Input uses light-mode token colors internally;
+  // override border/bg via containerStyle is not possible — the Input
+  // component self-resolves via useColorScheme. Since useColorScheme always
+  // returns 'light' in this app, inputs here will use light tokens.
+  // We compensate via backgroundColor & padding adjustments on the card.
+  field: { marginBottom: 14 },
 
-  /* ── Button ── */
-  button: {
-    backgroundColor: ORANGE,
+  // Button
+  btn: {
+    backgroundColor: BTN_BG,
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: ORANGE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
+    marginTop: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  buttonDisabled: {
-    backgroundColor: '#6B7280',
+  btnDisabled: {
+    backgroundColor: '#2A3A52',
     shadowOpacity: 0,
     elevation: 0,
   },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
+  btnText: {
+    color: BTN_TEXT,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 
-  /* ── Footer ── */
+  // Footer
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
   },
-  footerText: {
-    color: '#64748B',
-    fontSize: 14,
-  },
-  footerLink: {
-    color: ORANGE,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  footerText: { color: TEXT_MUTED, fontSize: 14 },
+  footerLink: { color: LINK, fontSize: 14, fontWeight: '600' },
 });

@@ -28,7 +28,7 @@ export default function UsersScreen() {
         setUsers(response.data.results || []);
       }
     } catch (error) {
-      console.error('Error loading users:', error);
+      if (__DEV__) console.error('Error loading users:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -107,7 +107,7 @@ export default function UsersScreen() {
       <FlatList
         data={filteredUsers}
         renderItem={renderItem}
-        keyExtractor={(item) => String(item.id || Math.random())}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={

@@ -55,11 +55,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiClient.login(username, password);
 
       if (response.data && response.status >= 200 && response.status < 300) {
+        let userData: any = null;
         try {
-          const userData = await apiClient.getCurrentUser();
-          if (userData) setUser(userData);
-        } catch {
-          // Profile fetch failed — tokens are stored, user will load on next request
+          userData = await apiClient.getCurrentUser();
+        } catch {}
+
+        if (userData) {
+          setUser(userData);
+        } else {
+          // Profile fetch failed (Railway cold start / network blip).
+          // Kick off background retries — when one succeeds, setUser triggers
+          // useEffect([user]) in all mounted screens so data loads automatically.
+          (async () => {
+            for (const delay of [2000, 4000, 8000]) {
+              await new Promise<void>(r => setTimeout(r, delay));
+              const stillLoggedIn = await apiClient.isAuthenticated().catch(() => false);
+              if (!stillLoggedIn) return;
+              try {
+                const u = await apiClient.getCurrentUser();
+                if (u) { setUser(u); return; }
+              } catch {}
+            }
+          })();
         }
         return { success: true };
       }

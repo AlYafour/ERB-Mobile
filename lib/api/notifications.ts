@@ -10,7 +10,7 @@ export const notificationsApi = {
     const queryParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
+        if (value !== undefined && value !== null) {
           queryParams.append(key, String(value));
         }
       });

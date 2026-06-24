@@ -1,41 +1,20 @@
-/**
- * Design System - Layout Constants
- * Premium layout system for consistent spacing and alignment
- */
-
 import { Spacing } from './spacing';
 
 export const Layout = {
-  // Screen Padding
-  screenPadding: Spacing.md, // 16px
-  
-  // Card Spacing
-  cardPadding: 20,
-  cardMarginBottom: Spacing.md, // 16px
-  cardGap: Spacing.md, // 16px
-  
-  // Section Spacing
-  sectionMarginTop: Spacing.lg, // 24px
-  sectionMarginBottom: Spacing.lg, // 24px
-  
-  // Header Spacing
-  headerPadding: Spacing.md, // 16px
-  headerHeight: 56,
-  
-  // Form Spacing
-  formGroupMarginBottom: 20,
-  formRowGap: Spacing.md, // 16px
-  
-  // List Spacing
-  listItemPadding: Spacing.md, // 16px
-  listItemGap: Spacing.sm, // 8px
-  
-  // Button Spacing
-  buttonGap: Spacing.sm, // 8px
-  buttonGroupGap: Spacing.sm, // 8px
-  
-  // Grid Spacing
-  gridGap: Spacing.md, // 16px
-  gridItemGap: Spacing.sm, // 8px
+  screenPadding:     Spacing.lg,    // 16
+  cardPadding:       18,
+  cardMarginBottom:  Spacing.md,    // 12
+  cardGap:           Spacing.md,    // 12
+  sectionMarginTop:  Spacing.xl,    // 20
+  sectionMarginBottom: Spacing.xl,  // 20
+  headerPadding:     Spacing.lg,    // 16
+  headerHeight:      64,
+  formGroupMarginBottom: 18,
+  formRowGap:        Spacing.md,    // 12
+  listItemPadding:   Spacing.lg,    // 16
+  listItemGap:       Spacing.sm,    // 8
+  buttonGap:         Spacing.sm,    // 8
+  buttonGroupGap:    Spacing.sm,    // 8
+  gridGap:           Spacing.md,    // 12
+  gridItemGap:       Spacing.sm,    // 8
 } as const;
-

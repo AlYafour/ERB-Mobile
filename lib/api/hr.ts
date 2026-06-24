@@ -80,9 +80,10 @@ export interface HRPayroll {
 
 export const hrMeApi = {
   getMyProfile: async (): Promise<HREmployee | null> => {
-    const res = await apiClient.get(API_ENDPOINTS.HR_EMPLOYEES + '?page_size=1');
+    const res = await apiClient.get<HREmployee[]>(API_ENDPOINTS.HR_EMPLOYEES);
     if (res.error || !res.data) return null;
-    return res.data.results?.[0] ?? null;
+    const arr = Array.isArray(res.data) ? res.data : ((res.data as any).results ?? []);
+    return arr[0] ?? null;
   },
 };
 
@@ -94,19 +95,19 @@ export const hrAttendanceApi = {
     if (params?.employee) q.append('employee', String(params.employee));
     if (params?.page) q.append('page', String(params.page));
     const url = API_ENDPOINTS.HR_ATTENDANCE + (q.toString() ? `?${q}` : '');
-    const res = await apiClient.get(url);
+    const res = await apiClient.get<PaginatedResponse<HRAttendance>>(url);
     if (res.error || !res.data) throw new Error(res.error || 'Failed');
     return res.data;
   },
 
   checkIn: async (data: { employee: number; latitude?: number; longitude?: number; address?: string }): Promise<HRAttendance> => {
-    const res = await apiClient.post(API_ENDPOINTS.HR_ATTENDANCE_CHECK_IN, data);
+    const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_CHECK_IN, data);
     if (res.error || !res.data) throw new Error(res.error || 'Check-in failed');
     return res.data;
   },
 
   checkOut: async (data: { employee: number; latitude?: number; longitude?: number }): Promise<HRAttendance> => {
-    const res = await apiClient.post(API_ENDPOINTS.HR_ATTENDANCE_CHECK_OUT, data);
+    const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_CHECK_OUT, data);
     if (res.error || !res.data) throw new Error(res.error || 'Check-out failed');
     return res.data;
   },
@@ -121,7 +122,7 @@ export const hrRequestsApi = {
     if (params?.status) q.append('status', params.status);
     if (params?.page) q.append('page', String(params.page));
     const url = API_ENDPOINTS.HR_REQUESTS + (q.toString() ? `?${q}` : '');
-    const res = await apiClient.get(url);
+    const res = await apiClient.get<PaginatedResponse<HRRequest>>(url);
     if (res.error || !res.data) throw new Error(res.error || 'Failed');
     return res.data;
   },
@@ -134,26 +135,26 @@ export const hrRequestsApi = {
     days?: number;
     reason?: string;
   }): Promise<HRRequest> => {
-    const res = await apiClient.post(API_ENDPOINTS.HR_REQUESTS, data);
+    const res = await apiClient.post<HRRequest>(API_ENDPOINTS.HR_REQUESTS, data);
     if (res.error || !res.data) throw new Error(res.error || 'Failed to submit request');
     return res.data;
   },
 
   approve: async (id: number): Promise<HRRequest> => {
-    const res = await apiClient.post(API_ENDPOINTS.HR_REQUEST_APPROVE(String(id)), {});
+    const res = await apiClient.post<HRRequest>(API_ENDPOINTS.HR_REQUEST_APPROVE(String(id)), {});
     if (res.error || !res.data) throw new Error(res.error || 'Failed');
     return res.data;
   },
 
   reject: async (id: number, reject_reason: string): Promise<HRRequest> => {
-    const res = await apiClient.post(API_ENDPOINTS.HR_REQUEST_REJECT(String(id)), { reject_reason });
+    const res = await apiClient.post<HRRequest>(API_ENDPOINTS.HR_REQUEST_REJECT(String(id)), { reject_reason });
     if (res.error || !res.data) throw new Error(res.error || 'Failed');
     return res.data;
   },
 
   getLeaveBalances: async (employee: number, year: number): Promise<HRLeaveBalance[]> => {
     const q = new URLSearchParams({ employee: String(employee), year: String(year) });
-    const res = await apiClient.get(API_ENDPOINTS.HR_LEAVE_BALANCES + `?${q}`);
+    const res = await apiClient.get<PaginatedResponse<HRLeaveBalance>>(API_ENDPOINTS.HR_LEAVE_BALANCES + `?${q}`);
     if (res.error || !res.data) return [];
     return res.data.results ?? [];
   },
@@ -168,7 +169,7 @@ export const hrPayrollApi = {
     if (params?.year) q.append('year', String(params.year));
     if (params?.page) q.append('page', String(params.page));
     const url = API_ENDPOINTS.HR_PAYROLL + (q.toString() ? `?${q}` : '');
-    const res = await apiClient.get(url);
+    const res = await apiClient.get<PaginatedResponse<HRPayroll>>(url);
     if (res.error || !res.data) throw new Error(res.error || 'Failed');
     return res.data;
   },

@@ -34,9 +34,10 @@ export default function PayslipScreen() {
   const [employeeId, setEmployeeId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
+    if (!user) { setLoading(false); setRefreshing(false); return; }
     try {
-      const empRes = await apiClient.get(`${API_ENDPOINTS.HR_EMPLOYEES}?page_size=100`);
-      const employees = empRes.data?.results ?? [];
+      const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
+      const employees: any[] = Array.isArray(empRes.data) ? empRes.data : (empRes.data?.results ?? []);
       const me = employees.find(
         (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
       );

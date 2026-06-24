@@ -130,7 +130,7 @@ export const purchaseRequestsApi = {
     current_stage: string;
     total_duration: string | null;
   }> => {
-    const response = await apiClient.get(`${API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id))}tracking_timeline/`);
+    const response = await apiClient.get<any>(`${API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id))}tracking_timeline/`);
     if (response.error || !response.data) {
       throw new Error(response.error || 'Failed to fetch tracking timeline');
     }

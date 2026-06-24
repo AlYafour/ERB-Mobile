@@ -548,8 +548,8 @@ export const dashboardApi = {
             page_size: 1000,
             project: Number(project.id) 
           }));
-          const projectPRIds = (projectPRs.results || []).map(pr => Number(pr.id));
-          const projectPOs = (allPOs.results || []).filter((po: any) => 
+          const projectPRIds = (projectPRs.results || []).map((pr: any) => Number(pr.id));
+          const projectPOs = (allPOs.results || []).filter((po: any): po is typeof po =>
             projectPRIds.includes(Number(po.purchase_request))
           );
           let totalSpending = 0;

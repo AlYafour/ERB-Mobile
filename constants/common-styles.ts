@@ -78,12 +78,12 @@ export const CommonStyles = StyleSheet.create({
   scrollContent: {
     padding: Layout.screenPadding,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.xxl + Spacing.lg, // Extra bottom padding for Navigation Bar
+    paddingBottom: Spacing['2xl'] + Spacing.lg, // Extra bottom padding for Navigation Bar
   },
   listContent: {
     padding: Layout.screenPadding,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.xxl + Spacing.lg, // Extra bottom padding for Navigation Bar
+    paddingBottom: Spacing['2xl'] + Spacing.lg, // Extra bottom padding for Navigation Bar
   },
 
   // Cards
@@ -142,7 +142,7 @@ export const CommonStyles = StyleSheet.create({
     flex: 1,
   },
   itemName: {
-    fontSize: Typography.sizes.md,
+    fontSize: Typography.sizes.base,
     fontWeight: Typography.weights.semibold,
     flex: 1,
     letterSpacing: 0.2,
@@ -184,7 +184,7 @@ export const CommonStyles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.xxl + Spacing.lg, // Extra bottom padding for Navigation Bar
+    paddingBottom: Spacing['2xl'] + Spacing.lg, // Extra bottom padding for Navigation Bar
     gap: Spacing.md,
     flexWrap: 'wrap',
     borderTopWidth: 1,

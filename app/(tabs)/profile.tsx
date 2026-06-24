@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -9,14 +8,10 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ProfileScreen() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-
-  useEffect(() => {
-    refreshUser();
-  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -74,16 +69,13 @@ export default function ProfileScreen() {
 
         {/* Avatar Card */}
         <View style={[styles.avatarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.tint }]}>
+          <View style={[styles.avatar, { backgroundColor: colorScheme === 'dark' ? '#1E2D45' : '#0F172A' }]}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
           <Text style={[styles.name, { color: colors.text }]}>{displayName}</Text>
-          {user?.email && (
-            <Text style={[styles.email, { color: colors.textSecondary }]}>{user.email}</Text>
-          )}
           {user?.role && (
-            <View style={[styles.rolePill, { backgroundColor: colors.tintSubtle }]}>
-              <Text style={[styles.roleText, { color: colors.tint }]}>
+            <View style={[styles.rolePill, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}>
+              <Text style={[styles.roleText, { color: colors.textSecondary }]}>
                 {roleLabel[user.role] ?? user.role}
               </Text>
             </View>
@@ -102,7 +94,7 @@ export default function ProfileScreen() {
                 i < menuItems.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
               ]}>
               <View style={[styles.menuIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
-                <IconSymbol name={item.icon as any} size={18} color={colors.tint} />
+                <IconSymbol name={item.icon as any} size={18} color={colors.textSecondary} />
               </View>
               <Text style={[styles.menuLabel, { color: colors.text }]}>{item.label}</Text>
               <IconSymbol name="chevron.right" size={16} color={colors.textTertiary} />
@@ -172,10 +164,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.3,
     marginBottom: 4,
-  },
-  email: {
-    fontSize: 13,
-    marginBottom: 10,
   },
   rolePill: {
     paddingHorizontal: 12,

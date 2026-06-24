@@ -1,4 +1,6 @@
-// Business app: always use light mode regardless of system setting
-export function useColorScheme() {
-  return 'light' as const;
+import { useAppTheme } from '@/contexts/ThemeContext';
+
+export function useColorScheme(): 'light' | 'dark' {
+  const { colorScheme } = useAppTheme();
+  return colorScheme;
 }

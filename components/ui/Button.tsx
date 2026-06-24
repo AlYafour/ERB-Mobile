@@ -5,22 +5,21 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
-  Platform,
+  StyleProp,
 } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const isWeb = Platform.OS === 'web' || (typeof window !== 'undefined' && window.document);
-
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'success';
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'success' | 'ghost';
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   textStyle?: TextStyle;
   fullWidth?: boolean;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 export function Button({
@@ -32,43 +31,49 @@ export function Button({
   style,
   textStyle,
   fullWidth = false,
+  size = 'md',
 }: ButtonProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isDisabled = disabled || loading;
 
+  const padV = size === 'sm' ? 9 : size === 'lg' ? 16 : 13;
+  const padH = size === 'sm' ? 14 : size === 'lg' ? 28 : 20;
+  const fontSize = size === 'sm' ? 13 : size === 'lg' ? 17 : 15;
+  const minH = size === 'sm' ? 36 : size === 'lg' ? 52 : 44;
+
   const base: ViewStyle = {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    paddingVertical: padV,
+    paddingHorizontal: padH,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: minH,
     flexDirection: 'row',
     gap: 8,
     ...(fullWidth && { width: '100%' }),
   };
 
   const getButtonStyle = (): ViewStyle => {
+    if (isDisabled) {
+      return { ...base, backgroundColor: colors.backgroundTertiary };
+    }
     switch (variant) {
       case 'primary':
         return {
           ...base,
-          backgroundColor: isDisabled ? colors.borderDark : colors.tint,
-          ...(isWeb
-            ? { boxShadow: isDisabled ? 'none' : '0px 1px 3px rgba(249,115,22,0.25)' }
-            : {
-                shadowColor: colors.tint,
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: isDisabled ? 0 : 0.2,
-                shadowRadius: 4,
-                elevation: isDisabled ? 0 : 2,
-              }),
+          // navy primary — NOT orange
+          backgroundColor: colorScheme === 'dark' ? colors.surface : '#0D1B2A',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.12,
+          shadowRadius: 6,
+          elevation: 3,
         };
       case 'secondary':
         return {
           ...base,
-          backgroundColor: colors.backgroundSecondary,
+          backgroundColor: colors.surfaceMuted,
           borderWidth: 1,
           borderColor: colors.border,
         };
@@ -77,32 +82,29 @@ export function Button({
           ...base,
           backgroundColor: 'transparent',
           borderWidth: 1.5,
-          borderColor: isDisabled ? colors.border : colors.tint,
+          borderColor: colors.border,
         };
+      case 'ghost':
+        return { ...base, backgroundColor: 'transparent' };
       case 'danger':
-        return {
-          ...base,
-          backgroundColor: isDisabled ? colors.borderDark : colors.error,
-        };
+        return { ...base, backgroundColor: colors.error };
       case 'success':
-        return {
-          ...base,
-          backgroundColor: isDisabled ? colors.borderDark : colors.success,
-        };
+        return { ...base, backgroundColor: colors.success };
       default:
         return base;
     }
   };
 
-  const getTextStyle = (): TextStyle => {
-    const base: TextStyle = { fontSize: 15, fontWeight: '600', letterSpacing: 0.1 };
+  const getTextColor = (): string => {
+    if (isDisabled) return colors.textMuted;
     switch (variant) {
+      case 'primary': return '#FFFFFF';
+      case 'danger':
+      case 'success': return '#FFFFFF';
+      case 'secondary': return colors.textPrimary;
       case 'outline':
-        return { ...base, color: isDisabled ? colors.textTertiary : colors.tint };
-      case 'secondary':
-        return { ...base, color: isDisabled ? colors.textTertiary : colors.text };
-      default:
-        return { ...base, color: '#FFFFFF' };
+      case 'ghost': return colors.textPrimary;
+      default: return '#FFFFFF';
     }
   };
 
@@ -111,11 +113,14 @@ export function Button({
       style={[getButtonStyle(), style]}
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.75}>
+      activeOpacity={0.72}
+    >
       {loading ? (
-        <ActivityIndicator size="small" color={variant === 'outline' ? colors.tint : '#FFF'} />
+        <ActivityIndicator size="small" color={variant === 'primary' ? '#FFFFFF' : colors.textSecondary} />
       ) : (
-        <Text style={[getTextStyle(), textStyle]}>{title}</Text>
+        <Text style={[{ fontSize, fontWeight: '600', letterSpacing: 0.1, color: getTextColor() }, textStyle]}>
+          {title}
+        </Text>
       )}
     </TouchableOpacity>
   );

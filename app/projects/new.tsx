@@ -1,38 +1,36 @@
 import { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { projectsApi } from '@/lib/api/projects';
 import { toast } from '@/lib/hooks/use-toast';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/Card';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
 import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography, ComponentSizes } from '@/constants/spacing';
-import { Layout } from '@/constants/layout';
-import { CommonStyles } from '@/constants/common-styles';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const projectStatusOptions = [
-  { value: 'on_going', label: 'On Going' },
+type AppColors = typeof Colors.light | typeof Colors.dark;
+
+const STATUS_OPTIONS = [
+  { value: 'active',    label: 'Active' },
+  { value: 'on_hold',   label: 'On Hold' },
   { value: 'completed', label: 'Completed' },
-  { value: 'on_hold', label: 'On Hold' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'inactive',  label: 'Inactive' },
 ];
 
 export default function NewProjectScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const insets = useSafeAreaInsets();
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+  const S = makeStyles(C);
+
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [form, setForm] = useState({
     code: '',
     name: '',
     description: '',
@@ -44,233 +42,122 @@ export default function NewProjectScreen() {
     mobile_number: '',
     start_date: '',
     end_date: '',
-    project_status: 'on_going',
+    project_status: 'active',
     is_active: true,
   });
 
-  const handleSubmit = async () => {
-    if (!formData.code || !formData.name) {
-      toast('Project code and name are required', 'error');
-      return;
-    }
+  const set = (key: keyof typeof form) => (val: any) =>
+    setForm((f) => ({ ...f, [key]: val }));
 
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.code.trim()) e.code = 'Project code is required';
+    if (!form.name.trim()) e.name = 'Project name is required';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
     try {
-      setLoading(true);
-      await projectsApi.create(formData);
+      setSaving(true);
+      await projectsApi.create(form);
       toast('Project created successfully', 'success');
       router.back();
-    } catch (error: any) {
-      toast(error.message || 'Failed to create project', 'error');
+    } catch (err: any) {
+      toast(err.message || 'Failed to create project', 'error');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={20} color={Colors.light.tint} />
-            <ThemedText style={styles.backButtonText}>Back to Projects</ThemedText>
-          </TouchableOpacity>
-          <ThemedText type="title" style={styles.mainTitle}>
-            New Project
-          </ThemedText>
-        </View>
+    <SafeAreaView style={S.container} edges={['top']}>
+      <AppHeader title="New Project" showBack />
+
+      <ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Basic Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Basic Information
-          </ThemedText>
-          <Input
-            label="Project Code *"
-            value={formData.code}
-            onChangeText={(text) => setFormData({ ...formData, code: text })}
-            placeholder="Enter project code"
-          />
-          <Input
-            label="Project Name *"
-            value={formData.name}
-            onChangeText={(text) => setFormData({ ...formData, name: text })}
-            placeholder="Enter project name"
-          />
-          <Input
-            label="Description"
-            value={formData.description}
-            onChangeText={(text) => setFormData({ ...formData, description: text })}
-            placeholder="Enter description"
-            multiline
-            numberOfLines={3}
-            style={styles.textArea}
-          />
-          <Input
-            label="Location"
-            value={formData.location}
-            onChangeText={(text) => setFormData({ ...formData, location: text })}
-            placeholder="Enter location"
-          />
-          <Input
-            label="Sector"
-            value={formData.sector}
-            onChangeText={(text) => setFormData({ ...formData, sector: text })}
-            placeholder="Enter sector"
-          />
-          <Input
-            label="Plot"
-            value={formData.plot}
-            onChangeText={(text) => setFormData({ ...formData, plot: text })}
-            placeholder="Enter plot"
-          />
-          <Input
-            label="Consultant"
-            value={formData.consultant}
-            onChangeText={(text) => setFormData({ ...formData, consultant: text })}
-            placeholder="Enter consultant"
-          />
-        </Card>
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Basic Information</Text>
+          <Input label="Project Code *" value={form.code} onChangeText={set('code')}
+            placeholder="Enter project code" error={errors.code} />
+          <Input label="Project Name *" value={form.name} onChangeText={set('name')}
+            placeholder="Enter project name" error={errors.name} />
+          <Input label="Description" value={form.description} onChangeText={set('description')}
+            placeholder="Enter description" multiline numberOfLines={3} />
+          <Input label="Location" value={form.location} onChangeText={set('location')}
+            placeholder="Enter location" />
+          <Input label="Sector" value={form.sector} onChangeText={set('sector')}
+            placeholder="Enter sector" />
+          <Input label="Plot" value={form.plot} onChangeText={set('plot')} placeholder="Enter plot" />
+          <Input label="Consultant" value={form.consultant} onChangeText={set('consultant')}
+            placeholder="Enter consultant" />
+        </AppCard>
 
-        {/* Contact Information */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Contact Information
-          </ThemedText>
-          <Input
-            label="Contact Person"
-            value={formData.contact_person}
-            onChangeText={(text) => setFormData({ ...formData, contact_person: text })}
-            placeholder="Enter contact person"
-          />
-          <Input
-            label="Mobile Number"
-            value={formData.mobile_number}
-            onChangeText={(text) => setFormData({ ...formData, mobile_number: text })}
-            placeholder="Enter mobile number"
-            keyboardType="phone-pad"
-          />
-        </Card>
+        {/* Contact */}
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Contact Information</Text>
+          <Input label="Contact Person" value={form.contact_person} onChangeText={set('contact_person')}
+            placeholder="Enter contact person" />
+          <Input label="Mobile Number" value={form.mobile_number} onChangeText={set('mobile_number')}
+            placeholder="Enter mobile number" keyboardType="phone-pad" />
+        </AppCard>
 
         {/* Dates */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Project Dates
-          </ThemedText>
-          <Input
-            label="Start Date"
-            value={formData.start_date}
-            onChangeText={(text) => setFormData({ ...formData, start_date: text })}
-            placeholder="YYYY-MM-DD"
-          />
-          <Input
-            label="End Date"
-            value={formData.end_date}
-            onChangeText={(text) => setFormData({ ...formData, end_date: text })}
-            placeholder="YYYY-MM-DD"
-          />
-        </Card>
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Project Dates</Text>
+          <Input label="Start Date" value={form.start_date} onChangeText={set('start_date')}
+            placeholder="YYYY-MM-DD" />
+          <Input label="End Date" value={form.end_date} onChangeText={set('end_date')}
+            placeholder="YYYY-MM-DD" />
+        </AppCard>
 
         {/* Status */}
-        <Card style={styles.card}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Status
-          </ThemedText>
-          <SearchableDropdown
-            label="Project Status"
-            options={projectStatusOptions}
-            value={formData.project_status}
-            onChange={(value) => setFormData({ ...formData, project_status: value as string })}
-            placeholder="Select project status"
-          />
-          <View style={styles.checkboxContainer}>
-            <Checkbox
-              checked={formData.is_active}
-              onChange={(checked) => setFormData({ ...formData, is_active: checked })}
-              title="Active"
-            />
+        <AppCard style={S.card}>
+          <Text style={S.sectionTitle}>Status</Text>
+          <SearchableDropdown label="Project Status" options={STATUS_OPTIONS}
+            value={form.project_status}
+            onChange={(v) => set('project_status')(v as string)}
+            placeholder="Select status" />
+          <View style={S.switchRow}>
+            <Text style={[S.switchLabel, { color: C.textPrimary }]}>Active</Text>
+            <Switch value={form.is_active} onValueChange={set('is_active')}
+              trackColor={{ true: C.primary, false: C.border }} thumbColor="#fff" />
           </View>
-        </Card>
+        </AppCard>
 
-        {/* Actions */}
-        <View style={styles.actionsContainer}>
-          <Button
-            title="Cancel"
-            onPress={() => router.back()}
-            variant="outline"
-            style={styles.cancelButton}
-          />
-          <Button
-            title={loading ? 'Creating...' : 'Create Project'}
-            onPress={handleSubmit}
-            disabled={loading}
-            loading={loading}
-            style={styles.submitButton}
-          />
-        </View>
+        <View style={{ height: 100 }} />
       </ScrollView>
-    </ThemedView>
+
+      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
+          disabled={saving} style={S.barBtn} />
+        <AppButton title="Create Project" variant="primary" size="md" onPress={handleSubmit}
+          loading={saving} disabled={saving} style={S.barBtn} />
+      </View>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    ...CommonStyles.screenContainer,
-  },
-  scrollContent: {
-    ...CommonStyles.scrollContent,
-  },
-  header: {
-    marginBottom: Layout.sectionMarginBottom,
-    paddingTop: Spacing.sm,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    gap: Spacing.xs,
-    padding: Spacing.xs,
-  },
-  backButtonText: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.tint,
-    fontWeight: Typography.weights.medium,
-  },
-  mainTitle: {
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.bold,
-    letterSpacing: -0.5,
-  },
-  card: {
-    ...CommonStyles.card,
-  },
-  sectionTitle: {
-    ...CommonStyles.sectionTitle,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-    borderWidth: 1.5,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    fontSize: Typography.sizes.base,
-    borderColor: Colors.light.border,
-    color: Colors.light.text,
-    backgroundColor: Colors.light.background,
-  },
-  checkboxContainer: {
-    marginTop: Spacing.sm,
-  },
-  actionsContainer: {
-    ...CommonStyles.submitContainer,
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  cancelButton: {
-    flex: 1,
-  },
-  submitButton: {
-    flex: 1,
-  },
-});
-
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: C.background },
+    content:   { padding: 16, paddingBottom: 8 },
+    card:      { marginBottom: 12 },
+    sectionTitle: {
+      fontSize: 15, fontWeight: '700', color: C.textPrimary,
+      marginBottom: 14, letterSpacing: -0.2,
+    },
+    switchRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingVertical: 10, marginTop: 4,
+    },
+    switchLabel: { fontSize: 14, fontWeight: '500' },
+    bottomBar: {
+      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
+    },
+    barBtn: { flex: 1 },
+  });
+}
