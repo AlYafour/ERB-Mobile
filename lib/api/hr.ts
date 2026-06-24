@@ -25,6 +25,8 @@ export interface HRAttendance {
   check_in: string | null;
   check_out: string | null;
   check_in_address: string;
+  break_start: string | null;
+  break_end: string | null;
   status: 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'on_leave';
   work_hours: number | null;
   overtime_hours: number | null;
@@ -100,15 +102,27 @@ export const hrAttendanceApi = {
     return res.data;
   },
 
-  checkIn: async (data: { employee: number; latitude?: number; longitude?: number; address?: string }): Promise<HRAttendance> => {
-    const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_CHECK_IN, data);
+  checkIn: async (data?: { latitude?: number; longitude?: number; address?: string }): Promise<HRAttendance> => {
+    const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_CHECK_IN, data ?? {});
     if (res.error || !res.data) throw new Error(res.error || 'Check-in failed');
     return res.data;
   },
 
-  checkOut: async (data: { employee: number; latitude?: number; longitude?: number }): Promise<HRAttendance> => {
-    const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_CHECK_OUT, data);
+  checkOut: async (data?: { latitude?: number; longitude?: number }): Promise<HRAttendance> => {
+    const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_CHECK_OUT, data ?? {});
     if (res.error || !res.data) throw new Error(res.error || 'Check-out failed');
+    return res.data;
+  },
+
+  breakOut: async (): Promise<HRAttendance> => {
+    const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_BREAK_OUT, {});
+    if (res.error || !res.data) throw new Error(res.error || 'Break start failed');
+    return res.data;
+  },
+
+  breakIn: async (): Promise<HRAttendance> => {
+    const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_BREAK_IN, {});
+    if (res.error || !res.data) throw new Error(res.error || 'Break end failed');
     return res.data;
   },
 };

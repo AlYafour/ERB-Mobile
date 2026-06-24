@@ -120,10 +120,9 @@ export default function HRScreen() {
   const handleRefresh = () => { setRefreshing(true); loadData(); };
 
   const handleCheckIn = async () => {
-    if (!employeeProfile) return;
     setChecking(true);
     try {
-      const record = await hrAttendanceApi.checkIn({ employee: employeeProfile.id });
+      const record = await hrAttendanceApi.checkIn();
       setTodayAttendance(record);
       toast(`Checked in at ${new Date(record.check_in!).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`, 'success');
     } catch (e: any) {
@@ -132,10 +131,9 @@ export default function HRScreen() {
   };
 
   const handleCheckOut = async () => {
-    if (!employeeProfile) return;
     setChecking(true);
     try {
-      const record = await hrAttendanceApi.checkOut({ employee: employeeProfile.id });
+      const record = await hrAttendanceApi.checkOut();
       setTodayAttendance(record);
       toast(`Checked out · ${record.work_hours?.toFixed(1) ?? '—'} hrs`, 'success');
     } catch (e: any) {
@@ -143,8 +141,31 @@ export default function HRScreen() {
     } finally { setChecking(false); }
   };
 
+  const handleBreakOut = async () => {
+    setChecking(true);
+    try {
+      const record = await hrAttendanceApi.breakOut();
+      setTodayAttendance(record);
+      toast('Break started', 'success');
+    } catch (e: any) {
+      toast(e.message || 'Failed to start break', 'error');
+    } finally { setChecking(false); }
+  };
+
+  const handleBreakIn = async () => {
+    setChecking(true);
+    try {
+      const record = await hrAttendanceApi.breakIn();
+      setTodayAttendance(record);
+      toast('Break ended — welcome back', 'success');
+    } catch (e: any) {
+      toast(e.message || 'Failed to end break', 'error');
+    } finally { setChecking(false); }
+  };
+
   const isCheckedIn  = !!todayAttendance?.check_in;
   const isCheckedOut = !!todayAttendance?.check_out;
+  const isOnBreak    = !!todayAttendance?.break_start && !todayAttendance?.break_end;
   const fmtTime = (dt: string | null) =>
     dt ? new Date(dt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
   const fmtMoney = (v: string | number) =>
@@ -268,18 +289,25 @@ export default function HRScreen() {
 
           <View style={s.timeRow}>
             {[
-              { label: 'Check In',  value: fmtTime(todayAttendance?.check_in ?? null),  active: isCheckedIn },
+              { label: 'Check In',  value: fmtTime(todayAttendance?.check_in  ?? null), active: isCheckedIn },
+              { label: 'Break',     value: todayAttendance?.break_start ? (todayAttendance.break_end ? `${fmtTime(todayAttendance.break_start)}–${fmtTime(todayAttendance.break_end)}` : `${fmtTime(todayAttendance.break_start)}…`) : '—', active: !!todayAttendance?.break_start },
               { label: 'Check Out', value: fmtTime(todayAttendance?.check_out ?? null), active: isCheckedOut },
               { label: 'Hours',     value: todayAttendance?.work_hours ? `${todayAttendance.work_hours.toFixed(1)}h` : '—', active: !!todayAttendance?.work_hours },
             ].map((col, i, arr) => (
               <View key={col.label} style={[s.timeCol, i < arr.length - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: c.border }]}>
                 <Text style={[s.timeLabel, { color: c.textMuted }]}>{col.label}</Text>
-                <Text style={[s.timeValue, { color: col.active ? '#10b981' : c.textPrimary }]}>{col.value}</Text>
+                <Text style={[s.timeValue, { color: col.active ? '#10b981' : c.textPrimary, fontSize: col.label === 'Break' ? 10 : 15 }]}>{col.value}</Text>
               </View>
             ))}
           </View>
 
-          {todayAttendance?.status && (
+          {isOnBreak && (
+            <View style={[s.statusPill, { backgroundColor: '#fef3c718' }]}>
+              <View style={[s.statusDot, { backgroundColor: '#f59e0b' }]} />
+              <Text style={[s.statusText, { color: '#d97706' }]}>On Break · since {fmtTime(todayAttendance!.break_start)}</Text>
+            </View>
+          )}
+          {!isOnBreak && todayAttendance?.status && (
             <View style={[s.statusPill, { backgroundColor: (STATUS_COLORS[todayAttendance.status] || '#6b7280') + '18' }]}>
               <View style={[s.statusDot, { backgroundColor: STATUS_COLORS[todayAttendance.status] || '#6b7280' }]} />
               <Text style={[s.statusText, { color: STATUS_COLORS[todayAttendance.status] || c.textSecondary }]}>
@@ -295,29 +323,65 @@ export default function HRScreen() {
                 Attendance complete for today
               </Text>
             </View>
-          ) : (
-            <Animated.View style={{ transform: [{ scale: isCheckedIn ? pulseAnim : 1 }] }}>
+          ) : isOnBreak ? (
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
               <TouchableOpacity
-                style={[s.checkBtn, { backgroundColor: isCheckedIn ? '#dc2626' : '#10b981' }]}
-                onPress={isCheckedIn ? handleCheckOut : handleCheckIn}
+                style={[s.checkBtn, { backgroundColor: '#f59e0b' }]}
+                onPress={handleBreakIn}
                 disabled={checking}
                 activeOpacity={0.85}
               >
-                {checking ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
+                {checking ? <ActivityIndicator size="small" color="#fff" /> : (
                   <>
-                    <IconSymbol
-                      name={isCheckedIn ? 'stop.circle.fill' : 'play.circle.fill'}
-                      size={20} color="#fff"
-                    />
-                    <Text style={s.checkBtnText}>
-                      {isCheckedIn ? 'Check Out' : 'Check In'}
-                    </Text>
+                    <IconSymbol name="arrow.uturn.left.circle.fill" size={20} color="#fff" />
+                    <Text style={s.checkBtnText}>End Break</Text>
                   </>
                 )}
               </TouchableOpacity>
             </Animated.View>
+          ) : isCheckedIn ? (
+            <View style={{ gap: 10 }}>
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <TouchableOpacity
+                  style={[s.checkBtn, { backgroundColor: '#dc2626' }]}
+                  onPress={handleCheckOut}
+                  disabled={checking}
+                  activeOpacity={0.85}
+                >
+                  {checking ? <ActivityIndicator size="small" color="#fff" /> : (
+                    <>
+                      <IconSymbol name="stop.circle.fill" size={20} color="#fff" />
+                      <Text style={s.checkBtnText}>Check Out</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
+              {!todayAttendance?.break_start && (
+                <TouchableOpacity
+                  style={[s.checkBtn, { backgroundColor: '#f59e0b' }]}
+                  onPress={handleBreakOut}
+                  disabled={checking}
+                  activeOpacity={0.85}
+                >
+                  <IconSymbol name="pause.circle.fill" size={20} color="#fff" />
+                  <Text style={s.checkBtnText}>Start Break</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[s.checkBtn, { backgroundColor: '#10b981' }]}
+              onPress={handleCheckIn}
+              disabled={checking}
+              activeOpacity={0.85}
+            >
+              {checking ? <ActivityIndicator size="small" color="#fff" /> : (
+                <>
+                  <IconSymbol name="play.circle.fill" size={20} color="#fff" />
+                  <Text style={s.checkBtnText}>Check In</Text>
+                </>
+              )}
+            </TouchableOpacity>
           )}
         </View>
 
