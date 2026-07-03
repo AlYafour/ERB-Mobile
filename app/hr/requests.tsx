@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, ActivityIndicator, Alert, Modal,
@@ -37,6 +38,7 @@ export default function HRRequestsScreen() {
   const { user } = useAuth();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const { type: typeParam } = useLocalSearchParams<{ type?: string }>();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,6 +56,18 @@ export default function HRRequestsScreen() {
     days: '',
     reason: '',
   });
+
+  const handledTypeParam = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (typeParam && typeParam !== handledTypeParam.current) {
+      handledTypeParam.current = typeParam;
+      const valid = REQUEST_TYPES.find(t => t.value === typeParam);
+      if (valid) {
+        setForm(f => ({ ...f, request_type: typeParam }));
+        setShowForm(true);
+      }
+    }
+  }, [typeParam]);
 
   const loadData = useCallback(async () => {
     if (!user) { setLoading(false); setRefreshing(false); return; }

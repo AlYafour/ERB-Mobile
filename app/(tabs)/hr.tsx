@@ -35,7 +35,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const HR_ACTIONS = [
   { id: 'annual_leave',     icon: 'calendar',              label: 'Time Off',             sub: 'Annual, sick, emergency leave' },
-  { id: 'work_from_home',   icon: 'house.fill',             label: 'Work From Home',       sub: 'WFH request' },
+  { id: 'work_from_home',   icon: 'laptopcomputer',         label: 'Work From Home',       sub: 'WFH request' },
   { id: 'overtime',         icon: 'clock.fill',             label: 'Overtime',             sub: 'Submit overtime hours' },
   { id: 'advance_salary',   icon: 'dollarsign.circle.fill', label: 'Loan / Advance',       sub: 'Salary advance or loan' },
   { id: 'document_request', icon: 'doc.text.fill',          label: 'HR Letter',            sub: 'Experience letter, NOC, etc.' },
@@ -389,7 +389,7 @@ export default function HRScreen() {
         <Text style={[s.sectionLabel, { color: c.textMuted }]}>QUICK ACTIONS</Text>
         <View style={s.quickGrid}>
           {[
-            { icon: 'calendar',             label: 'My Requests',   route: '/hr/requests',          color: '#1D4ED8' },
+            { icon: 'list.bullet.clipboard', label: 'My Requests',   route: '/hr/requests',          color: '#1D4ED8' },
             { icon: 'clock',                label: 'History',       route: '/hr/attendance-history', color: '#15803D' },
             { icon: 'dollarsign.circle',    label: 'Payslip',       route: '/hr/payslip',            color: '#D97706' },
             { icon: 'plus.circle.fill',     label: 'New Request',   route: null,                     color: '#7C3AED' },
