@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, StyleSheet, FlatList, RefreshControl,
-  TouchableOpacity, Text,
+  TouchableOpacity, Text, AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,6 +14,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Notification } from '@/types';
 import { toast } from '@/lib/hooks/use-toast';
 import { useAppTheme } from '@/contexts/ThemeContext';
+import {
+  setupNotificationChannel,
+  requestNotificationPermission,
+  sendLocalNotification,
+} from '@/lib/notification-service';
 
 const POLL_INTERVAL_MS = 60_000; // 60 seconds
 
@@ -40,13 +45,40 @@ export default function NotificationsScreen() {
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mounted = useRef(true);
+  const seenIds = useRef<Set<string>>(new Set());
+  const initialLoad = useRef(true);
+
+  const fireNotificationSound = useCallback(async (newItems: Notification[]) => {
+    if (initialLoad.current || newItems.length === 0) return;
+    const unread = newItems.filter(n => !n.is_read);
+    if (unread.length === 0) return;
+    // Show OS notification with sound for each new unread item (cap at 3)
+    const toNotify = unread.slice(0, 3);
+    for (const n of toNotify) {
+      await sendLocalNotification(n.title ?? 'New Notification', n.message ?? '', {
+        type: n.type,
+        related_id: n.related_id ?? n.object_id,
+      });
+    }
+  }, []);
 
   const loadNotifications = useCallback(async (silent = false) => {
     try {
       if (!silent) setError(null);
       const data = await notificationsApi.getAll({ page: 1 });
       if (!mounted.current) return;
-      setNotifications(data.results ?? []);
+      const results = data.results ?? [];
+
+      // Detect new notifications not seen before
+      const newItems = results.filter(n => {
+        const key = String(n.id ?? n.created_at);
+        return !seenIds.current.has(key);
+      });
+      newItems.forEach(n => seenIds.current.add(String(n.id ?? n.created_at)));
+
+      await fireNotificationSound(newItems);
+
+      setNotifications(results);
     } catch (err: any) {
       if (!mounted.current) return;
       if (!silent) setError(err.message || 'Failed to load notifications');
@@ -54,21 +86,44 @@ export default function NotificationsScreen() {
       if (!mounted.current) return;
       setLoading(false);
       setRefreshing(false);
+      initialLoad.current = false;
     }
+  }, [fireNotificationSound]);
+
+  // Setup notification channel + permissions once
+  useEffect(() => {
+    setupNotificationChannel();
+    requestNotificationPermission();
   }, []);
 
   useEffect(() => {
     mounted.current = true;
     loadNotifications(false);
 
-    // Poll only when notifications are enabled
-    if (notificationsEnabled) {
-      pollRef.current = setInterval(() => loadNotifications(true), POLL_INTERVAL_MS);
-    }
+    // Poll when notifications are enabled and app is active
+    const startPoll = () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (notificationsEnabled) {
+        pollRef.current = setInterval(() => loadNotifications(true), POLL_INTERVAL_MS);
+      }
+    };
+
+    startPoll();
+
+    // Resume polling when app comes back to foreground
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        loadNotifications(true);
+        startPoll();
+      } else {
+        if (pollRef.current) clearInterval(pollRef.current);
+      }
+    });
 
     return () => {
       mounted.current = false;
       if (pollRef.current) clearInterval(pollRef.current);
+      sub.remove();
     };
   }, [loadNotifications, notificationsEnabled]);
 

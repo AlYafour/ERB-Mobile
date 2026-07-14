@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Dimensions, ScrollView, StatusBar, ActivityIndicator,
+  ScrollView, StatusBar, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,8 +15,7 @@ import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
 import { Logo } from '@/components/ui/Logo';
 
-const { width: SW } = Dimensions.get('window');
-const H_PAD = 16;
+const H_PAD = 20;
 
 interface ModuleDef {
   id: string;
@@ -25,14 +24,14 @@ interface ModuleDef {
   icon: string;
   iconColor: string;
   iconBg: string;
-  route: string | null;
+  route: string;
 }
 
 const ALL_MODULES: ModuleDef[] = [
   {
     id: 'procurement',
     label: 'Procurement',
-    subtitle: 'PRs · LPOs · GRNs · Invoices',
+    subtitle: 'Purchase Requests · Orders · GRNs · Invoices',
     icon: 'cart.fill',
     iconColor: '#1D4ED8',
     iconBg: '#EFF6FF',
@@ -46,24 +45,6 @@ const ALL_MODULES: ModuleDef[] = [
     iconColor: '#15803D',
     iconBg: '#F0FDF4',
     route: '/(tabs)/hr',
-  },
-  {
-    id: 'sales',
-    label: 'Sales',
-    subtitle: 'Pipeline · Clients · Revenue',
-    icon: 'chart.bar.fill',
-    iconColor: '#7C3AED',
-    iconBg: '#F5F3FF',
-    route: null,
-  },
-  {
-    id: 'accounts',
-    label: 'Accounts',
-    subtitle: 'Ledger · Payables · Reports',
-    icon: 'dollarsign.circle.fill',
-    iconColor: '#0369A1',
-    iconBg: '#F0F9FF',
-    route: null,
   },
 ];
 
@@ -87,24 +68,16 @@ function getDateLabel() {
   });
 }
 
-interface QuickStat {
-  label: string;
-  value: number | string;
-  iconName: string;
-  iconColor: string;
-  route: string;
-}
-
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, branding } = useAuth();
   const { permissions, hasPermission } = usePermissions();
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
   const c = Colors[cs];
   const isDark = cs === 'dark';
 
-  const [stats, setStats] = useState<QuickStat[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [pendingPRs, setPendingPRs] = useState<number | string>('—');
   const [unreadCount, setUnreadCount] = useState(0);
 
   const hasProcurement = useMemo(
@@ -116,11 +89,7 @@ export default function HomeScreen() {
   );
 
   const modules = useMemo(
-    () =>
-      ALL_MODULES.map(m => ({
-        ...m,
-        available: m.id === 'procurement' ? hasProcurement : m.id === 'hr',
-      })),
+    () => ALL_MODULES.filter(m => m.id === 'procurement' ? hasProcurement : true),
     [hasProcurement],
   );
 
@@ -129,7 +98,8 @@ export default function HomeScreen() {
     ?.replace(/_/g, ' ')
     ?.replace(/\b\w/g, (ch: string) => ch.toUpperCase()) ?? '';
 
-  // Load quick stats (pending PRs, unread notifications)
+  const brandPrimary = branding?.primary_color || '#0B1F33';
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -141,39 +111,13 @@ export default function HomeScreen() {
             : Promise.resolve({ data: null }),
           apiClient.get<{ results: any[] }>(API_ENDPOINTS.NOTIFICATIONS + '?page_size=50'),
         ]);
-
         if (cancelled) return;
-
         const prData = prRes.status === 'fulfilled' ? (prRes.value.data as any) : null;
-        const prCount = prData?.count != null ? prData.count : '—';
-
+        setPendingPRs(prData?.count != null ? prData.count : '—');
         const notifs =
           notifRes.status === 'fulfilled' && notifRes.value.data?.results
-            ? notifRes.value.data.results
-            : [];
-
-        const unread = notifs.filter((n: any) => !n.is_read).length;
-        setUnreadCount(unread);
-
-        const newStats: QuickStat[] = [];
-        if (hasProcurement) {
-          newStats.push({
-            label: 'Pending PRs',
-            value: prCount,
-            iconName: 'doc.badge.clock',
-            iconColor: '#D97706',
-            route: '/purchase-requests?status=pending',
-          });
-        }
-        newStats.push({
-          label: 'Unread Alerts',
-          value: unread,
-          iconName: 'bell.badge',
-          iconColor: '#1D4ED8',
-          route: '/(tabs)/notifications',
-        });
-
-        setStats(newStats);
+            ? notifRes.value.data.results : [];
+        setUnreadCount(notifs.filter((n: any) => !n.is_read).length);
       } catch {
         // non-fatal
       } finally {
@@ -184,17 +128,18 @@ export default function HomeScreen() {
     return () => { cancelled = true; };
   }, [hasProcurement]);
 
-  const cardW = (SW - H_PAD * 2 - 10) / 2;
-
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.background }]} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={c.background} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={c.background}
+      />
 
       {/* ── App bar ── */}
       <View style={[s.appBar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
         <View style={s.appBarLeft}>
           <View style={[s.logoWrap, { backgroundColor: c.surfaceMuted }]}>
-            <Logo size={22} />
+            <Logo size={22} logoUrl={branding?.logo_url} />
           </View>
           <View>
             <Text style={[s.appBarTitle, { color: c.textPrimary }]}>Al Yafour ERP</Text>
@@ -202,7 +147,7 @@ export default function HomeScreen() {
           </View>
         </View>
         <TouchableOpacity
-          style={[s.bellWrap, { backgroundColor: c.surfaceMuted }]}
+          style={[s.bellBtn, { backgroundColor: c.surfaceMuted }]}
           onPress={() => router.push('/(tabs)/notifications' as any)}
           hitSlop={10}
         >
@@ -216,18 +161,16 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[s.scroll, { paddingBottom: 32 }]}
+        contentContainerStyle={[s.scroll, { paddingBottom: 48 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Welcome card ── */}
-        <Animated.View entering={FadeIn.duration(320)}>
-          <View style={[s.welcomeCard, { backgroundColor: '#0D1B2A' }]}>
-            {/* Subtle decorative circles */}
+        <Animated.View entering={FadeIn.duration(320)} style={s.welcomeOuter}>
+          <View style={[s.welcomeCard, { backgroundColor: brandPrimary }]}>
             <View style={s.decCircle1} />
             <View style={s.decCircle2} />
-
-            <Text style={s.welcomeGreeting}>{getGreeting()},</Text>
-            <Text style={s.welcomeName} numberOfLines={1}>{firstName}</Text>
+            <Text style={s.welcomeGreeting}>{getGreeting()}</Text>
+            <Text style={s.welcomeName} numberOfLines={1}>{firstName.toUpperCase()}</Text>
             {!!roleLabel && (
               <View style={s.rolePill}>
                 <Text style={s.roleText}>{roleLabel}</Text>
@@ -236,92 +179,91 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* ── Quick stats ── */}
-        {statsLoading ? (
-          <View style={s.statsLoadRow}>
-            <ActivityIndicator size="small" color={c.textMuted} />
-          </View>
-        ) : stats.length > 0 ? (
-          <Animated.View entering={FadeInDown.delay(80).duration(280)} style={s.statsRow}>
-            {stats.map((st, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[s.statCard, { backgroundColor: c.surface, borderColor: c.border, flex: 1 }]}
-                onPress={() => router.push(st.route as any)}
-                activeOpacity={0.72}
-              >
-                <View style={[s.statIconWrap, { backgroundColor: st.iconColor + '18' }]}>
-                  <IconSymbol name={st.iconName as any} size={16} color={st.iconColor} />
-                </View>
-                <Text style={[s.statValue, { color: c.textPrimary }]}>{st.value}</Text>
-                <Text style={[s.statLabel, { color: c.textMuted }]}>{st.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </Animated.View>
-        ) : null}
+        {/* ── Stats row ── */}
+        <Animated.View entering={FadeInDown.delay(80).duration(280)} style={s.statsRow}>
+          <TouchableOpacity
+            style={[s.statCard, { backgroundColor: c.surface, borderColor: c.border }]}
+            onPress={() => hasProcurement && router.push('/purchase-requests?status=pending' as any)}
+            activeOpacity={0.72}
+          >
+            <View style={[s.statIcon, { backgroundColor: '#D9770618' }]}>
+              <IconSymbol name="doc.badge.clock" size={16} color="#D97706" />
+            </View>
+            {statsLoading
+              ? <ActivityIndicator size="small" color={c.textMuted} style={{ marginVertical: 5 }} />
+              : <Text style={[s.statValue, { color: c.textPrimary }]}>{pendingPRs}</Text>
+            }
+            <Text style={[s.statLabel, { color: c.textMuted }]}>Pending PRs</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.statCard, { backgroundColor: c.surface, borderColor: c.border }]}
+            onPress={() => router.push('/(tabs)/notifications' as any)}
+            activeOpacity={0.72}
+          >
+            <View style={[s.statIcon, { backgroundColor: '#1D4ED818' }]}>
+              <IconSymbol name="bell.badge" size={16} color="#1D4ED8" />
+            </View>
+            {statsLoading
+              ? <ActivityIndicator size="small" color={c.textMuted} style={{ marginVertical: 5 }} />
+              : <Text style={[s.statValue, { color: c.textPrimary }]}>{unreadCount}</Text>
+            }
+            <Text style={[s.statLabel, { color: c.textMuted }]}>Unread Alerts</Text>
+          </TouchableOpacity>
+        </Animated.View>
 
         {/* ── Modules ── */}
-        <View style={[s.sectionHeader]}>
-          <Text style={[s.sectionLabel, { color: c.textMuted }]}>MODULES</Text>
-        </View>
+        {modules.length > 0 && (
+          <>
+            <View style={s.sectionHeader}>
+              <Text style={[s.sectionLabel, { color: c.textMuted }]}>MODULES</Text>
+            </View>
 
-        <View style={[s.grid, { gap: 10 }]}>
-          {modules.map((mod, idx) => (
-            <Animated.View
-              key={mod.id}
-              entering={FadeInDown.delay(100 + idx * 55).duration(280).springify()}
-              style={{ width: cardW }}
-            >
-              <TouchableOpacity
-                style={[
-                  s.moduleCard,
-                  {
-                    backgroundColor: mod.available ? c.surface : c.surfaceMuted,
-                    borderColor: c.border,
-                    opacity: mod.available ? 1 : 0.6,
-                  },
-                ]}
-                onPress={() => {
-                  if (mod.available && mod.route) router.push(mod.route as any);
-                }}
-                activeOpacity={mod.available ? 0.7 : 1}
-              >
-                <View style={[s.moduleIconWrap, { backgroundColor: mod.available ? mod.iconBg : c.surfaceMuted }]}>
-                  <IconSymbol name={mod.icon as any} size={22} color={mod.available ? mod.iconColor : c.textMuted} />
-                </View>
-                <Text style={[s.moduleLabel, { color: c.textPrimary }]} numberOfLines={1}>
-                  {mod.label}
-                </Text>
-                <Text style={[s.moduleSub, { color: c.textSecondary }]} numberOfLines={2}>
-                  {mod.subtitle}
-                </Text>
-                <View style={s.moduleFooter}>
-                  {mod.available ? (
-                    <View style={[s.openChip, { backgroundColor: c.primary }]}>
-                      <Text style={s.openChipText}>Open</Text>
+            <View style={s.moduleList}>
+              {modules.map((mod, idx) => (
+                <Animated.View
+                  key={mod.id}
+                  entering={FadeInDown.delay(140 + idx * 70).duration(280)}
+                >
+                  <TouchableOpacity
+                    style={[s.moduleCard, { backgroundColor: c.surface, borderColor: c.border }]}
+                    onPress={() => router.push(mod.route as any)}
+                    activeOpacity={0.72}
+                  >
+                    <View style={[s.moduleIcon, { backgroundColor: mod.iconBg }]}>
+                      <IconSymbol name={mod.icon as any} size={26} color={mod.iconColor} />
                     </View>
-                  ) : (
-                    <View style={[s.soonChip, { backgroundColor: c.surfaceMuted, borderColor: c.border }]}>
-                      <Text style={[s.soonChipText, { color: c.textMuted }]}>Soon</Text>
+                    <View style={s.moduleBody}>
+                      <Text style={[s.moduleLabel, { color: c.textPrimary }]}>{mod.label}</Text>
+                      <Text style={[s.moduleSub, { color: c.textMuted }]} numberOfLines={2}>
+                        {mod.subtitle}
+                      </Text>
                     </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            </Animated.View>
-          ))}
-        </View>
+                    <View style={[s.openBtn, { backgroundColor: brandPrimary }]}>
+                      <Text style={s.openBtnText}>Open</Text>
+                      <IconSymbol name="chevron.right" size={10} color="#FFFFFF" />
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </View>
+          </>
+        )}
 
-        {/* ── Quick links ── */}
+        {/* ── Quick Access ── */}
         {hasProcurement && (
           <>
             <View style={s.sectionHeader}>
               <Text style={[s.sectionLabel, { color: c.textMuted }]}>QUICK ACCESS</Text>
             </View>
-            <Animated.View entering={FadeInDown.delay(340).duration(280)} style={[s.quickList, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <Animated.View
+              entering={FadeInDown.delay(320).duration(280)}
+              style={[s.quickList, { backgroundColor: c.surface, borderColor: c.border }]}
+            >
               {[
-                { icon: 'doc.text.fill', label: 'Purchase Requests', sub: 'Create & track PRs', color: '#1D4ED8', route: '/purchase-requests' },
-                { icon: 'cart.fill', label: 'Purchase Orders', sub: 'LPOs & approvals', color: '#15803D', route: '/purchase-orders' },
-                { icon: 'shippingbox.fill', label: 'Goods Receiving', sub: 'GRN management', color: '#7C3AED', route: '/goods-receiving' },
+                { icon: 'doc.text.fill',    label: 'Purchase Requests', sub: 'Create & track PRs',  color: '#1D4ED8', route: '/purchase-requests' },
+                { icon: 'cart.fill',        label: 'Purchase Orders',   sub: 'LPOs & approvals',    color: '#15803D', route: '/purchase-orders' },
+                { icon: 'shippingbox.fill', label: 'Goods Receiving',   sub: 'GRN management',      color: '#7C3AED', route: '/goods-receiving' },
               ].map((item, i, arr) => (
                 <TouchableOpacity
                   key={item.route}
@@ -340,39 +282,43 @@ export default function HomeScreen() {
                     <Text style={[s.quickLabel, { color: c.textPrimary }]}>{item.label}</Text>
                     <Text style={[s.quickSub, { color: c.textMuted }]}>{item.sub}</Text>
                   </View>
-                  <IconSymbol name="chevron.right" size={14} color={c.textMuted} />
+                  <IconSymbol name="chevron.right" size={13} color={c.textMuted} />
                 </TouchableOpacity>
               ))}
             </Animated.View>
           </>
         )}
 
-        {/* ── Analytics link ── */}
+        {/* ── Analytics ── */}
         {hasProcurement && (
-          <Animated.View entering={FadeIn.delay(520).duration(320)} style={{ paddingHorizontal: H_PAD, marginTop: 4 }}>
+          <Animated.View
+            entering={FadeIn.delay(460).duration(280)}
+            style={{ paddingHorizontal: H_PAD, marginTop: 10 }}
+          >
             <TouchableOpacity
               style={[s.analyticsBtn, { backgroundColor: c.surface, borderColor: c.border }]}
               onPress={() => router.push('/dashboard' as any)}
               activeOpacity={0.7}
             >
-              <View style={[s.analyticsIcon, { backgroundColor: '#1D4ED8' + '15' }]}>
-                <IconSymbol name="chart.bar.fill" size={16} color="#1D4ED8" />
+              <View style={[s.analyticsIcon, { backgroundColor: '#1D4ED815' }]}>
+                <IconSymbol name="chart.bar.fill" size={18} color="#1D4ED8" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[s.analyticsLabel, { color: c.textPrimary }]}>View Analytics</Text>
-                <Text style={[s.analyticsSub, { color: c.textMuted }]}>KPIs · cycle metrics · activity</Text>
+                <Text style={[s.analyticsLabel, { color: c.textPrimary }]}>Analytics & KPIs</Text>
+                <Text style={[s.analyticsSub, { color: c.textMuted }]}>
+                  Cycle metrics · activity dashboard
+                </Text>
               </View>
-              <IconSymbol name="chevron.right" size={14} color={c.textMuted} />
+              <IconSymbol name="chevron.right" size={13} color={c.textMuted} />
             </TouchableOpacity>
           </Animated.View>
         )}
 
-        {/* ── Footer ── */}
         <Animated.Text
           entering={FadeIn.delay(500).duration(400)}
           style={[s.footer, { color: c.textMuted, borderTopColor: c.border }]}
         >
-          Al Yafour General Contracting & Transport LLC{'\n'}Abu Dhabi, UAE
+          Al Yafour General Contracting & Transport LLC · Abu Dhabi, UAE
         </Animated.Text>
       </ScrollView>
     </SafeAreaView>
@@ -382,27 +328,28 @@ export default function HomeScreen() {
 const s = StyleSheet.create({
   root: { flex: 1 },
 
+  // App bar
   appBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: H_PAD,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   appBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   logoWrap: {
-    width: 36, height: 36, borderRadius: 10,
+    width: 38, height: 38, borderRadius: 11,
     alignItems: 'center', justifyContent: 'center',
   },
   appBarTitle: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
   appBarSub: { fontSize: 11, marginTop: 1 },
-  bellWrap: {
-    width: 36, height: 36, borderRadius: 10,
+  bellBtn: {
+    width: 38, height: 38, borderRadius: 11,
     alignItems: 'center', justifyContent: 'center',
   },
   bellBadge: {
-    position: 'absolute', top: 4, right: 4,
+    position: 'absolute', top: 5, right: 5,
     minWidth: 14, height: 14, borderRadius: 7,
     backgroundColor: '#DC2626',
     alignItems: 'center', justifyContent: 'center',
@@ -413,124 +360,120 @@ const s = StyleSheet.create({
   scroll: { paddingTop: 0 },
 
   // Welcome card
+  welcomeOuter: { paddingHorizontal: H_PAD, paddingTop: H_PAD },
   welcomeCard: {
-    margin: H_PAD,
-    borderRadius: 20,
-    padding: 22,
-    paddingBottom: 24,
+    borderRadius: 22,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
     overflow: 'hidden',
   },
   decCircle1: {
-    position: 'absolute', right: -30, top: -30,
+    position: 'absolute', right: -28, top: -28,
     width: 120, height: 120, borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
   decCircle2: {
-    position: 'absolute', right: 40, bottom: -40,
-    width: 90, height: 90, borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    position: 'absolute', right: 50, bottom: -40,
+    width: 85, height: 85, borderRadius: 42,
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  welcomeGreeting: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 2 },
-  welcomeName: { fontSize: 28, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
+  welcomeGreeting: { fontSize: 13, color: 'rgba(255,255,255,0.60)', marginBottom: 4 },
+  welcomeName: { fontSize: 32, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
   rolePill: {
     alignSelf: 'flex-start',
-    marginTop: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.15)',
   },
-  roleText: { fontSize: 11, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+  roleText: { fontSize: 11, color: 'rgba(255,255,255,0.88)', fontWeight: '600', letterSpacing: 0.3 },
 
   // Stats
-  statsLoadRow: { height: 80, alignItems: 'center', justifyContent: 'center' },
   statsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     paddingHorizontal: H_PAD,
-    marginBottom: 4,
+    paddingTop: 14,
+    paddingBottom: 4,
   },
   statCard: {
-    borderRadius: 14,
+    flex: 1,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
-  statIconWrap: {
-    width: 32, height: 32, borderRadius: 8,
+  statIcon: {
+    width: 34, height: 34, borderRadius: 9,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  statValue: { fontSize: 26, fontWeight: '700', letterSpacing: -0.5, lineHeight: 30 },
-  statLabel: { fontSize: 12, marginTop: 2 },
+  statValue: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, lineHeight: 32 },
+  statLabel: { fontSize: 12, marginTop: 3, fontWeight: '500' },
 
   // Section header
   sectionHeader: {
     paddingHorizontal: H_PAD,
-    paddingTop: 22,
-    paddingBottom: 10,
+    paddingTop: 26,
+    paddingBottom: 12,
   },
   sectionLabel: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 1.5,
+    letterSpacing: 1.6,
   },
 
-  // Module grid
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // Modules — full-width horizontal cards
+  moduleList: {
     paddingHorizontal: H_PAD,
-    marginBottom: 6,
+    gap: 12,
   },
   moduleCard: {
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    marginBottom: 10,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    gap: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 2,
   },
-  moduleIconWrap: {
-    width: 48, height: 48, borderRadius: 14,
+  moduleIcon: {
+    width: 56, height: 56, borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
+    flexShrink: 0,
   },
-  moduleLabel: { fontSize: 14, fontWeight: '700', marginBottom: 4, letterSpacing: -0.2 },
-  moduleSub: { fontSize: 11, lineHeight: 16, marginBottom: 14 },
-  moduleFooter: { marginTop: 'auto' as any },
-  openChip: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+  moduleBody: { flex: 1 },
+  moduleLabel: { fontSize: 15, fontWeight: '700', marginBottom: 4, letterSpacing: -0.2 },
+  moduleSub: { fontSize: 12, lineHeight: 17 },
+  openBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: 20,
+    flexShrink: 0,
   },
-  openChipText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
-  soonChip: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  soonChipText: { fontSize: 11, fontWeight: '500' },
+  openBtnText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
 
-  // Quick list
+  // Quick access list
   quickList: {
     marginHorizontal: H_PAD,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    marginBottom: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -540,25 +483,26 @@ const s = StyleSheet.create({
   quickRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 14,
   },
   quickIcon: {
-    width: 40, height: 40, borderRadius: 11,
+    width: 42, height: 42, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
   },
   quickBody: { flex: 1 },
-  quickLabel: { fontSize: 14, fontWeight: '500' },
-  quickSub: { fontSize: 12, marginTop: 1 },
+  quickLabel: { fontSize: 14, fontWeight: '600' },
+  quickSub: { fontSize: 12, marginTop: 2 },
 
+  // Analytics button
   analyticsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    borderRadius: 14,
+    gap: 14,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    marginBottom: 10,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -566,20 +510,18 @@ const s = StyleSheet.create({
     elevation: 1,
   },
   analyticsIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 42, height: 42, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
   },
-  analyticsLabel: { fontSize: 14, fontWeight: '600' },
-  analyticsSub: { fontSize: 11, marginTop: 1 },
+  analyticsLabel: { fontSize: 14, fontWeight: '700' },
+  analyticsSub: { fontSize: 12, marginTop: 2 },
+
   footer: {
     textAlign: 'center',
     fontSize: 11,
     lineHeight: 17,
     marginHorizontal: H_PAD,
-    marginTop: 28,
+    marginTop: 36,
     paddingTop: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
   },

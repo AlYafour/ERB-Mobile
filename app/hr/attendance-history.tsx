@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  RefreshControl, ActivityIndicator,
+  View, Text, StyleSheet, FlatList, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppBadge } from '@/components/ui/AppBadge';
+import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -13,40 +14,40 @@ import { hrAttendanceApi, HRAttendance } from '@/lib/api/hr';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
 
-const STATUS_COLORS: Record<string, string> = {
-  present: '#10b981',
-  absent: '#ef4444',
-  late: '#f59e0b',
-  half_day: '#3b82f6',
-  holiday: '#8b5cf6',
-  on_leave: '#6b7280',
-};
+type BadgeVariant = 'success' | 'danger' | 'warning' | 'info' | 'default';
+type AppColors = typeof Colors.light | typeof Colors.dark;
+
+function getStatusVariant(status: string): BadgeVariant {
+  switch (status) {
+    case 'present':   return 'success';
+    case 'absent':    return 'danger';
+    case 'late':      return 'warning';
+    case 'half_day':
+    case 'holiday':   return 'info';
+    default:          return 'default';
+  }
+}
 
 const STATUS_LABELS: Record<string, string> = {
-  present: 'Present',
-  absent: 'Absent',
-  late: 'Late',
+  present:  'Present',
+  absent:   'Absent',
+  late:     'Late',
   half_day: 'Half Day',
-  holiday: 'Holiday',
+  holiday:  'Holiday',
   on_leave: 'On Leave',
 };
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
 export default function AttendanceHistoryScreen() {
   const { user } = useAuth();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [records, setRecords] = useState<HRAttendance[]>([]);
-  const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-
-  // Summary stats
   const [stats, setStats] = useState({ present: 0, absent: 0, late: 0, total: 0 });
 
   const loadData = useCallback(async (pg = 1, append = false) => {
@@ -61,7 +62,6 @@ export default function AttendanceHistoryScreen() {
         (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
       );
       if (!me) { setLoading(false); setRefreshing(false); return; }
-      setEmployeeId(me.id);
 
       const res = await hrAttendanceApi.getAll({ employee: me.id, page: pg });
       const newRecords = res.results ?? [];
@@ -70,16 +70,15 @@ export default function AttendanceHistoryScreen() {
       setPage(pg);
 
       if (!append) {
-        const allRecords = newRecords;
         setStats({
-          present: allRecords.filter((r: HRAttendance) => r.status === 'present' || r.status === 'late').length,
-          absent: allRecords.filter((r: HRAttendance) => r.status === 'absent').length,
-          late: allRecords.filter((r: HRAttendance) => r.status === 'late').length,
-          total: allRecords.length,
+          present: newRecords.filter((r: HRAttendance) => r.status === 'present' || r.status === 'late').length,
+          absent:  newRecords.filter((r: HRAttendance) => r.status === 'absent').length,
+          late:    newRecords.filter((r: HRAttendance) => r.status === 'late').length,
+          total:   newRecords.length,
         });
       }
-    } catch (e) {
-      console.error('Attendance history load error:', e);
+    } catch {
+      // silent
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,60 +87,82 @@ export default function AttendanceHistoryScreen() {
   }, [user]);
 
   useEffect(() => { loadData(1); }, [loadData]);
-
   const handleRefresh = () => { setRefreshing(true); loadData(1); };
   const handleLoadMore = () => { if (hasMore && !loadingMore) loadData(page + 1, true); };
 
   const fmtTime = (dt: string | null) =>
     dt ? new Date(dt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
 
-  const fmtDate = (d: string) => {
-    const date = new Date(d);
-    return {
-      day: date.getDate(),
-      weekday: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()],
-      month: MONTHS[date.getMonth()],
-    };
-  };
+  const S = makeStyles(C);
 
   const renderItem = ({ item }: { item: HRAttendance }) => {
-    const color = STATUS_COLORS[item.status] || '#6b7280';
-    const { day, weekday, month } = fmtDate(item.date);
+    const d = new Date(item.date);
+    const dayNum  = d.getDate();
+    const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    const monName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+    const isWeekend = d.getDay() === 5 || d.getDay() === 6;
 
     return (
-      <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={S.card}>
         {/* Date column */}
-        <View style={[s.dateCol, { borderRightColor: colors.border }]}>
-          <Text style={[s.dateDay, { color: colors.text }]}>{day}</Text>
-          <Text style={[s.dateWeek, { color: colors.textSecondary }]}>{weekday}</Text>
-          <Text style={[s.dateMon, { color: colors.textSecondary }]}>{month}</Text>
+        <View style={[S.dateCol, {
+          backgroundColor: isWeekend ? C.backgroundSecondary : C.primarySoft,
+          borderRightColor: C.border,
+        }]}>
+          <Text style={[S.dateDay, { color: isWeekend ? C.textMuted : C.primary }]}>{dayNum}</Text>
+          <Text style={[S.dateName, { color: isWeekend ? C.textMuted : C.textSecondary }]}>{dayName}</Text>
+          <Text style={[S.dateMon,  { color: C.textMuted }]}>{monName}</Text>
         </View>
 
-        {/* Info */}
-        <View style={{ flex: 1, paddingLeft: 14, gap: 4 }}>
-          <View style={[s.badge, { backgroundColor: color + '22', alignSelf: 'flex-start' }]}>
-            <Text style={[s.badgeText, { color }]}>{STATUS_LABELS[item.status] || item.status}</Text>
-          </View>
-          <View style={s.timesRow}>
-            <View style={s.timeItem}>
-              <IconSymbol name="arrow.right.circle" size={13} color="#10b981" />
-              <Text style={[s.timeText, { color: colors.text }]}>{fmtTime(item.check_in)}</Text>
-            </View>
-            <View style={s.timeItem}>
-              <IconSymbol name="arrow.left.circle" size={13} color="#ef4444" />
-              <Text style={[s.timeText, { color: colors.text }]}>{fmtTime(item.check_out)}</Text>
-            </View>
-            {item.work_hours != null && (
-              <View style={s.timeItem}>
-                <IconSymbol name="clock" size={13} color={colors.textSecondary} />
-                <Text style={[s.timeText, { color: colors.textSecondary }]}>{item.work_hours.toFixed(1)}h</Text>
+        {/* Body */}
+        <View style={S.cardBody}>
+          <View style={S.topRow}>
+            <AppBadge variant={getStatusVariant(item.status)}>
+              {STATUS_LABELS[item.status] || item.status}
+            </AppBadge>
+            {item.work_hours != null && item.work_hours > 0 ? (
+              <View style={[S.hoursChip, { backgroundColor: C.primarySoft }]}>
+                <IconSymbol name="clock" size={11} color={C.primary} />
+                <Text style={[S.hoursText, { color: C.primary }]}>
+                  {item.work_hours.toFixed(1)}h
+                </Text>
               </View>
-            )}
+            ) : null}
           </View>
+
+          <View style={S.timesRow}>
+            {/* Check in */}
+            <View style={S.timeItem}>
+              <View style={[S.timeDot, { backgroundColor: C.successBg }]}>
+                <IconSymbol name="arrow.right" size={9} color={C.success} />
+              </View>
+              <View>
+                <Text style={[S.timeLabel, { color: C.textMuted }]}>IN</Text>
+                <Text style={[S.timeValue, { color: C.textPrimary }]}>{fmtTime(item.check_in)}</Text>
+              </View>
+            </View>
+
+            <View style={[S.timeDivider, { backgroundColor: C.divider }]} />
+
+            {/* Check out */}
+            <View style={S.timeItem}>
+              <View style={[S.timeDot, { backgroundColor: C.dangerBg }]}>
+                <IconSymbol name="arrow.left" size={9} color={C.danger} />
+              </View>
+              <View>
+                <Text style={[S.timeLabel, { color: C.textMuted }]}>OUT</Text>
+                <Text style={[S.timeValue, { color: C.textPrimary }]}>{fmtTime(item.check_out)}</Text>
+              </View>
+            </View>
+          </View>
+
           {item.check_in_address ? (
-            <Text style={[s.address, { color: colors.textSecondary }]} numberOfLines={1}>
-              {item.check_in_address}
-            </Text>
+            <View style={S.addressRow}>
+              <IconSymbol name="location.fill" size={10} color={C.textMuted} />
+              <Text style={[S.address, { color: C.textMuted }]} numberOfLines={1}>
+                {item.check_in_address}
+              </Text>
+            </View>
           ) : null}
         </View>
       </View>
@@ -149,48 +170,55 @@ export default function AttendanceHistoryScreen() {
   };
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScreenHeader title="Attendance History" showBack />
+    <SafeAreaView style={[S.root, { backgroundColor: C.background }]} edges={['top']}>
+      <AppHeader title="Attendance History" showBack />
 
-      {/* Summary chips */}
+      {/* Summary bar */}
       {!loading && records.length > 0 && (
-        <View style={[s.summaryRow, { borderBottomColor: colors.border }]}>
+        <View style={[S.summaryBar, { borderBottomColor: C.border }]}>
           {[
-            { label: 'Days', value: stats.total, color: colors.text },
-            { label: 'Present', value: stats.present, color: '#10b981' },
-            { label: 'Absent', value: stats.absent, color: '#ef4444' },
-            { label: 'Late', value: stats.late, color: '#f59e0b' },
+            { label: 'Days',    value: stats.total,   color: C.textPrimary, bg: C.surfaceSoft },
+            { label: 'Present', value: stats.present, color: C.success,     bg: C.successBg   },
+            { label: 'Absent',  value: stats.absent,  color: C.danger,      bg: C.dangerBg    },
+            { label: 'Late',    value: stats.late,    color: C.warning,     bg: C.warningBg   },
           ].map(item => (
-            <View key={item.label} style={s.summaryBox}>
-              <Text style={[s.summaryValue, { color: item.color }]}>{item.value}</Text>
-              <Text style={[s.summaryLabel, { color: colors.textSecondary }]}>{item.label}</Text>
+            <View key={item.label} style={[S.summaryBox, { backgroundColor: item.bg }]}>
+              <Text style={[S.summaryValue, { color: item.color }]}>{item.value}</Text>
+              <Text style={[S.summaryLabel, { color: item.color }]}>{item.label}</Text>
             </View>
           ))}
         </View>
       )}
 
       {loading ? (
-        <View style={s.center}><ActivityIndicator size="large" color={colors.tint} /></View>
+        <AppEmptyState variant="loading" title="Loading attendance…" />
       ) : records.length === 0 ? (
-        <View style={s.center}>
-          <IconSymbol name="clock" size={40} color={colors.textSecondary} />
-          <Text style={[s.emptyText, { color: colors.textSecondary }]}>No attendance records</Text>
-        </View>
+        <AppEmptyState
+          variant="empty"
+          icon="clock.badge.questionmark"
+          title="No attendance records"
+          message="No records found for your employee profile."
+        />
       ) : (
         <FlatList
           data={records}
           renderItem={renderItem}
           keyExtractor={item => String(item.id)}
-          contentContainerStyle={s.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.tint} />}
+          contentContainerStyle={S.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={C.primary}
+              colors={[C.primary]}
+            />
+          }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.4}
           ListFooterComponent={
-            loadingMore ? (
-              <View style={s.loadMoreRow}>
-                <ActivityIndicator size="small" color={colors.tint} />
-              </View>
-            ) : null
+            loadingMore
+              ? <View style={{ paddingVertical: 20 }}><AppEmptyState variant="loading" title="" /></View>
+              : null
           }
         />
       )}
@@ -198,25 +226,65 @@ export default function AttendanceHistoryScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  emptyText: { fontSize: 14 },
-  summaryRow: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1 },
-  summaryBox: { flex: 1, alignItems: 'center' },
-  summaryValue: { fontSize: 18, fontWeight: '700' },
-  summaryLabel: { fontSize: 11, marginTop: 2 },
-  list: { padding: 16, gap: 10 },
-  card: { borderRadius: 14, borderWidth: 1, flexDirection: 'row', overflow: 'hidden' },
-  dateCol: { width: 60, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRightWidth: 1, gap: 2 },
-  dateDay: { fontSize: 20, fontWeight: '700' },
-  dateWeek: { fontSize: 11 },
-  dateMon: { fontSize: 11 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  badgeText: { fontSize: 11, fontWeight: '700' },
-  timesRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
-  timeItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  timeText: { fontSize: 12, fontWeight: '500' },
-  address: { fontSize: 11 },
-  loadMoreRow: { paddingVertical: 16, alignItems: 'center' },
-});
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    root: { flex: 1 },
+    list: { padding: 16, gap: 10, paddingBottom: 32 },
+
+    summaryBar: {
+      flexDirection: 'row', gap: 8,
+      paddingHorizontal: 16, paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    summaryBox: {
+      flex: 1, alignItems: 'center',
+      paddingVertical: 10, borderRadius: 12,
+    },
+    summaryValue: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+    summaryLabel: {
+      fontSize: 10, fontWeight: '700', marginTop: 2,
+      textTransform: 'uppercase', letterSpacing: 0.4,
+    },
+
+    card: {
+      backgroundColor: C.surface,
+      borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      flexDirection: 'row', overflow: 'hidden',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    },
+    dateCol: {
+      width: 64, alignItems: 'center', justifyContent: 'center',
+      paddingVertical: 16, gap: 1,
+      borderRightWidth: StyleSheet.hairlineWidth,
+    },
+    dateDay:  { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+    dateName: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
+    dateMon:  { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.3 },
+
+    cardBody: { flex: 1, padding: 12, gap: 8 },
+    topRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    hoursChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 3,
+      paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20,
+    },
+    hoursText: { fontSize: 11, fontWeight: '600' },
+
+    timesRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    timeItem: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    timeDot: {
+      width: 20, height: 20, borderRadius: 10,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    timeDivider: { width: StyleSheet.hairlineWidth, height: 24 },
+    timeLabel: {
+      fontSize: 9, fontWeight: '700',
+      textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1,
+    },
+    timeValue: { fontSize: 13, fontWeight: '600' },
+
+    addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    address:    { fontSize: 11, flex: 1 },
+  });
+}

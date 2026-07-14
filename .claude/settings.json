@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"c:\\\\Users\\\\Al_Yafour\\\\Desktop\\\\Github Al YAFOUR\\\\ERB-project\\\\\")",
+      "Read(//c/Users/Al_Yafour/Desktop/Github Al YAFOUR/**)",
+      "Bash(eas update *)",
+      "Bash(npx eas-cli *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"try{require\\('sharp'\\);console.log\\('sharp OK'\\)}catch\\(e\\){console.log\\('no sharp'\\)}\")",
+      "Bash(node -e \"try{require\\('canvas'\\);console.log\\('canvas OK'\\)}catch\\(e\\){console.log\\('no canvas'\\)}\")",
+      "Bash(python -c \"from PIL import Image, ImageDraw, ImageFont; print\\('PIL OK'\\)\")",
+      "Bash(python scripts/generate-icon.py)",
+      "Bash(powershell -Command 'Get-ChildItem -Path '\\\\''app'\\\\'' -Recurse -Include '\\\\''*.tsx'\\\\'' | ForEach-Object { $c = Get-Content $_.FullName -Raw; if \\($c -match \"edges=\\\\{\\\\['\\\\''bottom'\\\\''\\\\]\\\\}\"\\) { $c = $c -replace \"edges=\\\\{\\\\['\\\\''bottom'\\\\''\\\\]\\\\}\", \"edges={['\\\\''top'\\\\'', '\\\\''bottom'\\\\'']}\"; Set-Content $_.FullName $c -NoNewline -Encoding UTF8; Write-Output $_.Name } }')",
+      "Bash(xargs grep -l \"edges={\\\\['bottom'\\\\]}\")",
+      "Bash(xargs sed -i \"s/edges={\\\\['bottom'\\\\]}/edges={['top', 'bottom']}/g\")",
+      "Bash(cd \"/c/Users/Al_Yafour/Desktop/Github Al YAFOUR/ERB-project/erb-mobile\" && sed -n '396,412p' app/purchase-requests.tsx | cat -A | head -30)",
+      "Read(//c/c/Users/Al_Yafour/Desktop/Github Al YAFOUR/ERB-project/erb-mobile/app/**)",
+      "Bash(npx eas *)",
+      "Bash(eas build *)",
+      "PowerShell(cd \"c:\\\\Users\\\\Al_Yafour\\\\Desktop\\\\Github Al YAFOUR\\\\ERB-project\\\\erb-mobile\"; \\(Get-Command eas -ErrorAction SilentlyContinue\\).Source; node_modules\\\\.bin\\\\eas --version 2>&1)",
+      "Bash(npm list *)",
+      "Bash(ls /c/Users/Al_Yafour/AppData/Roaming/npm/ 2>/dev/null | head -20; ls /c/Users/Al_Yafour/AppData/Local/npm/ 2>/dev/null | head -5)",
+      "Read(//c/Users/Al_Yafour/AppData/Roaming/npm//**)",
+      "Read(//c/Users/Al_Yafour/AppData/Local/**)",
+      "Bash(npm install *)",
+      "Bash(/c/Users/Al_Yafour/AppData/Roaming/npm/eas --version)",
+      "Bash(/c/Users/Al_Yafour/AppData/Roaming/npm/eas update *)",
+      "Bash(/c/Users/Al_Yafour/AppData/Roaming/npm/eas build *)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(\"C:\\\\Users\\\\Al_Yafour\\\\AppData\\\\Roaming\\\\npm\\\\eas.cmd\" update *)",
+      "Bash(.venv\\\\Scripts\\\\python.exe manage.py update_office_location_radii --dry-run)",
+      "Bash(python manage.py update_office_location_radii --dry-run)",
+      "Bash(python manage.py shell -c \"from hr_settings.models import OfficeLocation; rows = list\\(OfficeLocation.objects.values\\('id','name','radius_m'\\)\\); [print\\(r\\) for r in rows]; print\\(f'Total: {len\\(rows\\)}'\\)\")",
+      "Bash(python manage.py migrate)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Al_Yafour\\\\Desktop\\\\Github Al YAFOUR\\\\ERB-project\\\\erb-mobile\\\\app\" -Directory)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Al_Yafour\\.claude\\projects\\c--Users-Al-Yafour-Desktop-Github-Al-YAFOUR-ERB-project-erb-mobile\\memory",
+      "c:\\Users\\Al_Yafour\\Desktop\\Github Al YAFOUR\\ERB-project\\ERB-core-Backend\\hr_settings\\management"
+    ]
+  }
+}

@@ -55,6 +55,10 @@ export default function GoodsReceivingDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [markingDelivered, setMarkingDelivered] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const su = user?.is_superuser ?? false;
+  const isProcurement = user?.role === 'procurement_officer' || user?.role === 'super_admin' || su;
 
   const load = async () => {
     try {
@@ -84,9 +88,25 @@ export default function GoodsReceivingDetailScreen() {
     }
   };
 
+  const handleCancel = async () => {
+    if (!await confirm('Cancel this GRN?\n\nThis action cannot be undone.')) return;
+    try {
+      setCancelling(true);
+      await goodsReceivingApi.cancel(id);
+      toast('GRN cancelled', 'info');
+      load();
+    } catch (e: any) {
+      toast(e.message || 'Failed to cancel', 'error');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const S = makeStyles(C);
 
-  const showBottomBar = !loading && !!grn && grn.invoice_delivery_status === 'not_delivered';
+  const showMarkDeliveredBtn = !loading && !!grn && grn.invoice_delivery_status === 'not_delivered' && grn.status !== 'cancelled';
+  const showCancelBtn = !loading && !!grn && grn.status !== 'cancelled' && isProcurement;
+  const showBottomBar = showMarkDeliveredBtn || showCancelBtn;
 
   if (loading && !grn) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
@@ -256,18 +276,31 @@ export default function GoodsReceivingDetailScreen() {
         <View style={{ height: 8 }} />
       </ScrollView>
 
-      {/* Fixed bottom bar — mark invoice delivered */}
+      {/* Fixed bottom bar */}
       {showBottomBar && (
         <View style={[S.bottomBar, { paddingBottom: Math.max(insets.bottom, 16), borderTopColor: C.border, backgroundColor: C.surface }]}>
-          <AppButton
-            title="Mark Invoice as Delivered"
-            variant="primary"
-            size="md"
-            onPress={handleMarkDelivered}
-            disabled={markingDelivered}
-            loading={markingDelivered}
-            style={{ flex: 1 }}
-          />
+          {showMarkDeliveredBtn && (
+            <AppButton
+              title="Mark Invoice Delivered"
+              variant="primary"
+              size="md"
+              onPress={handleMarkDelivered}
+              disabled={markingDelivered || cancelling}
+              loading={markingDelivered}
+              style={{ flex: 1 }}
+            />
+          )}
+          {showCancelBtn && (
+            <AppButton
+              title="Cancel GRN"
+              variant="dangerOutline"
+              size="md"
+              onPress={handleCancel}
+              disabled={cancelling || markingDelivered}
+              loading={cancelling}
+              style={{ flex: showMarkDeliveredBtn ? undefined : 1 }}
+            />
+          )}
         </View>
       )}
     </SafeAreaView>

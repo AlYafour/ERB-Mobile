@@ -52,11 +52,15 @@ export default function PurchaseOrderDetailScreen() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [reopening, setReopening] = useState(false);
 
   const su = user?.is_superuser ?? false;
+  const isProcurement  = user?.role === 'procurement_officer' || user?.role === 'super_admin' || su;
   const canApprove     = su || (hasPermission('purchase_order', 'approve') ?? false);
   const canReject      = su || (hasPermission('purchase_order', 'reject') ?? false);
-  const isProcurement  = user?.role === 'procurement_officer' || user?.role === 'super_admin' || su;
+  const canCancel      = isProcurement || (hasPermission('purchase_order', 'cancel') ?? false);
+  const canReopen      = isProcurement || (hasPermission('purchase_order', 'reopen') ?? false);
 
   const load = async () => {
     try {
@@ -101,8 +105,39 @@ export default function PurchaseOrderDetailScreen() {
     }
   };
 
+  const handleCancel = async () => {
+    if (!await confirm('Cancel this purchase order?\n\nThis action cannot be undone.')) return;
+    try {
+      setCancelling(true);
+      await purchaseOrdersApi.cancel(id);
+      toast('Order cancelled', 'info');
+      load();
+    } catch (e: any) {
+      toast(e.message || 'Failed to cancel', 'error');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!await confirm('Reopen this cancelled order?')) return;
+    try {
+      setReopening(true);
+      await purchaseOrdersApi.reopen(id);
+      toast('Order reopened', 'success');
+      load();
+    } catch (e: any) {
+      toast(e.message || 'Failed to reopen', 'error');
+    } finally {
+      setReopening(false);
+    }
+  };
+
   const S = makeStyles(C);
-  const showBottomBar = !loading && !!order && order.status === 'pending' && (canApprove || canReject);
+  const showApproveRejectBar = !loading && !!order && order.status === 'pending' && (canApprove || canReject);
+  const showCancelBar = !loading && !!order && (order.status === 'pending' || order.status === 'approved') && canCancel;
+  const showReopenBar = !loading && !!order && order.status === 'cancelled' && canReopen;
+  const showBottomBar = showApproveRejectBar || showCancelBar || showReopenBar;
 
   if (loading && !order) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
@@ -287,24 +322,46 @@ export default function PurchaseOrderDetailScreen() {
       {/* Fixed bottom action bar */}
       {showBottomBar && (
         <View style={[S.bottomBar, { paddingBottom: Math.max(insets.bottom, 16), borderTopColor: C.border, backgroundColor: C.surface }]}>
-          {canApprove && (
+          {showApproveRejectBar && canApprove && (
             <AppButton
               title="Approve"
               variant="successOutline"
               size="md"
               onPress={handleApprove}
-              disabled={approving}
+              disabled={approving || rejecting}
               loading={approving}
               style={{ flex: 1 }}
             />
           )}
-          {canReject && (
+          {showApproveRejectBar && canReject && (
             <AppButton
               title="Reject"
               variant="dangerOutline"
               size="md"
               onPress={() => setRejectOpen(true)}
-              disabled={rejecting}
+              disabled={approving || rejecting}
+              style={{ flex: 1 }}
+            />
+          )}
+          {showCancelBar && (
+            <AppButton
+              title="Cancel Order"
+              variant="dangerOutline"
+              size="md"
+              onPress={handleCancel}
+              disabled={cancelling}
+              loading={cancelling}
+              style={{ flex: 1 }}
+            />
+          )}
+          {showReopenBar && (
+            <AppButton
+              title="Reopen Order"
+              variant="primary"
+              size="md"
+              onPress={handleReopen}
+              disabled={reopening}
+              loading={reopening}
               style={{ flex: 1 }}
             />
           )}

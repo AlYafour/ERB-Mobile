@@ -324,21 +324,45 @@ class ApiClient {
     return !!token;
   }
 
+  /** Returns true if the stored access token has > 1 hour of validity left. */
+  async isAccessTokenFresh(): Promise<boolean> {
+    try {
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+      if (!token) return false;
+      const parts = token.split('.');
+      if (parts.length !== 3) return false;
+      const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const json = decodeURIComponent(
+        Array.from(atob(padded))
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const { exp } = JSON.parse(json);
+      return !!exp && exp * 1000 > Date.now() + 3_600_000;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Call this on app startup BEFORE the home screen loads.
-   * Silently refreshes the access token so the first wave of API calls
-   * gets a fresh token instead of hitting 401 bursts.
-   * Never throws — network errors are swallowed so startup is never blocked.
+   * If the access token is still valid (>1h left), skip the Railway round-trip entirely.
+   * If expiring, refresh silently. Never throws.
    */
   async proactiveRefresh(): Promise<void> {
     try {
       const hasToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
       if (!hasToken) return;
+
+      // Skip the network call when the access token is still fresh.
+      // This avoids hitting a cold Railway server on every app open.
+      const fresh = await this.isAccessTokenFresh();
+      if (fresh) return;
+
       const result = await this.refreshToken();
       if (result === 'invalid') {
         await this.clearAuth();
       }
-      // 'ok' — fresh token stored; 'network' — proceed, first API call will retry
     } catch {
       // Never block startup
     }

@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  RefreshControl, ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppBadge } from '@/components/ui/AppBadge';
+import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -13,25 +15,29 @@ import { hrPayrollApi, HRPayroll } from '@/lib/api/hr';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: '#6b7280',
-  processed: '#3b82f6',
-  paid: '#10b981',
-};
+type AppColors = typeof Colors.light | typeof Colors.dark;
+type BadgeVariant = 'success' | 'info' | 'default';
+
+function getPayStatusVariant(status: string): BadgeVariant {
+  switch (status) {
+    case 'paid':      return 'success';
+    case 'processed': return 'info';
+    default:          return 'default';
+  }
+}
 
 const fmt = (v: string | number) =>
-  `AED ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+  `AED ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function PayslipScreen() {
   const { user } = useAuth();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [payrolls, setPayrolls] = useState<HRPayroll[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [employeeId, setEmployeeId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     if (!user) { setLoading(false); setRefreshing(false); return; }
@@ -42,12 +48,10 @@ export default function PayslipScreen() {
         (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
       );
       if (!me) { setLoading(false); setRefreshing(false); return; }
-      setEmployeeId(me.id);
-
       const res = await hrPayrollApi.getAll({ employee: me.id });
       setPayrolls(res.results ?? []);
-    } catch (e) {
-      console.error('Payslip load error:', e);
+    } catch {
+      // silent
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -55,81 +59,113 @@ export default function PayslipScreen() {
   }, [user]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
   const handleRefresh = () => { setRefreshing(true); loadData(); };
+
+  const S = makeStyles(C);
 
   const renderItem = ({ item }: { item: HRPayroll }) => {
     const isExpanded = expanded === item.id;
-    const statusColor = STATUS_COLORS[item.status] || '#6b7280';
+    const isPaid     = item.status === 'paid';
 
     return (
       <TouchableOpacity
-        style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[S.card, {
+          borderColor: isPaid ? C.success : C.border,
+        }]}
         onPress={() => setExpanded(isExpanded ? null : item.id)}
-        activeOpacity={0.8}
+        activeOpacity={0.82}
       >
-        <View style={s.cardTop}>
+        {/* Paid top accent bar */}
+        {isPaid && <View style={[S.paidBar, { backgroundColor: C.success }]} />}
+
+        {/* Card header */}
+        <View style={S.cardTop}>
           <View style={{ flex: 1 }}>
-            <Text style={[s.month, { color: colors.text }]}>{item.month_name} {item.year}</Text>
-            <Text style={[s.net, { color: colors.tint }]}>{fmt(item.net_salary)}</Text>
+            <Text style={[S.cardMonth, { color: C.textMuted }]}>
+              {item.month_name} {item.year}
+            </Text>
+            <Text style={[S.cardNet, { color: isPaid ? C.success : C.primary }]}>
+              {fmt(item.net_salary)}
+            </Text>
           </View>
-          <View style={{ alignItems: 'flex-end', gap: 6 }}>
-            <View style={[s.badge, { backgroundColor: statusColor + '22' }]}>
-              <Text style={[s.badgeText, { color: statusColor }]}>{item.status.toUpperCase()}</Text>
-            </View>
+          <View style={{ alignItems: 'flex-end', gap: 8 }}>
+            <AppBadge variant={getPayStatusVariant(item.status)}>
+              {item.status.toUpperCase()}
+            </AppBadge>
             <IconSymbol
               name={isExpanded ? 'chevron.up' : 'chevron.down'}
               size={14}
-              color={colors.textSecondary}
+              color={C.textMuted}
             />
           </View>
         </View>
 
+        {/* Expanded detail */}
         {isExpanded && (
-          <View style={[s.detail, { borderTopColor: colors.border }]}>
+          <View style={[S.detail, { borderTopColor: C.divider }]}>
+
             {/* Earnings */}
-            <Text style={[s.sectionLabel, { color: colors.text }]}>Earnings</Text>
-            {[
+            <View style={[S.sectionHead, { backgroundColor: C.primarySoft }]}>
+              <IconSymbol name="arrow.up.circle.fill" size={14} color={C.primary} />
+              <Text style={[S.sectionHeadText, { color: C.primary }]}>Earnings</Text>
+            </View>
+            {([
               ['Basic Salary', item.basic_salary],
               ['Gross Salary', item.gross_salary],
-            ].map(([label, value]) => (
-              <View key={label} style={s.row}>
-                <Text style={[s.rowLabel, { color: colors.textSecondary }]}>{label}</Text>
-                <Text style={[s.rowValue, { color: colors.text }]}>{fmt(value)}</Text>
+            ] as [string, string][]).map(([label, value]) => (
+              <View key={label} style={[S.row, { borderBottomColor: C.divider }]}>
+                <Text style={[S.rowLabel, { color: C.textSecondary }]}>{label}</Text>
+                <Text style={[S.rowValue, { color: C.textPrimary }]}>{fmt(value)}</Text>
               </View>
             ))}
 
             {/* Deductions */}
-            <Text style={[s.sectionLabel, { color: colors.text, marginTop: 10 }]}>Deductions</Text>
-            <View style={s.row}>
-              <Text style={[s.rowLabel, { color: colors.textSecondary }]}>Total Deductions</Text>
-              <Text style={[s.rowValue, { color: '#ef4444' }]}>-{fmt(item.deductions)}</Text>
+            <View style={[S.sectionHead, { backgroundColor: C.dangerBg, marginTop: 12 }]}>
+              <IconSymbol name="arrow.down.circle.fill" size={14} color={C.danger} />
+              <Text style={[S.sectionHeadText, { color: C.danger }]}>Deductions</Text>
+            </View>
+            <View style={[S.row, { borderBottomColor: C.divider }]}>
+              <Text style={[S.rowLabel, { color: C.textSecondary }]}>Total Deductions</Text>
+              <Text style={[S.rowValue, { color: C.danger }]}>− {fmt(item.deductions)}</Text>
             </View>
 
-            {/* Net */}
-            <View style={[s.netRow, { backgroundColor: colors.tint + '15', borderRadius: 10, marginTop: 10 }]}>
-              <Text style={[s.rowLabel, { color: colors.tint, fontWeight: '700' }]}>Net Salary</Text>
-              <Text style={[s.rowValue, { color: colors.tint, fontWeight: '800', fontSize: 16 }]}>{fmt(item.net_salary)}</Text>
+            {/* Net salary */}
+            <View style={[S.netRow, { backgroundColor: isPaid ? C.successBg : C.primarySoft }]}>
+              <Text style={[S.netLabel, { color: isPaid ? C.success : C.primary }]}>Net Salary</Text>
+              <Text style={[S.netValue, { color: isPaid ? C.success : C.primary }]}>
+                {fmt(item.net_salary)}
+              </Text>
             </View>
 
-            {/* Attendance */}
-            <View style={s.attRow}>
-              {[
-                ['Working', item.working_days],
-                ['Present', item.present_days],
-                ['Absent', item.absent_days],
-              ].map(([label, value]) => (
-                <View key={label} style={s.attBox}>
-                  <Text style={[s.attValue, { color: colors.text }]}>{value}</Text>
-                  <Text style={[s.attLabel, { color: colors.textSecondary }]}>{label}</Text>
+            {/* Attendance summary */}
+            <View style={[S.attRow, { backgroundColor: C.surfaceSoft }]}>
+              {([
+                { label: 'Working', value: item.working_days, color: C.textPrimary },
+                { label: 'Present', value: item.present_days, color: C.success },
+                {
+                  label: 'Absent',
+                  value: item.absent_days,
+                  color: item.absent_days > 0 ? C.danger : C.textMuted,
+                },
+              ] as { label: string; value: number; color: string }[]).map(col => (
+                <View key={col.label} style={S.attBox}>
+                  <Text style={[S.attValue, { color: col.color }]}>{col.value}</Text>
+                  <Text style={[S.attLabel, { color: C.textMuted }]}>{col.label}</Text>
                 </View>
               ))}
             </View>
 
+            {/* Paid date */}
             {item.paid_at && (
-              <Text style={[s.paidAt, { color: '#10b981' }]}>
-                Paid on {new Date(item.paid_at).toLocaleDateString()}
-              </Text>
+              <View style={[S.paidDateRow, { backgroundColor: C.successBg }]}>
+                <IconSymbol name="checkmark.seal.fill" size={14} color={C.success} />
+                <Text style={[S.paidDateText, { color: C.success }]}>
+                  Paid on{' '}
+                  {new Date(item.paid_at).toLocaleDateString('en-AE', {
+                    month: 'long', day: 'numeric', year: 'numeric',
+                  })}
+                </Text>
+              </View>
             )}
           </View>
         )}
@@ -138,49 +174,103 @@ export default function PayslipScreen() {
   };
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScreenHeader title="Payslips" showBack />
+    <SafeAreaView style={[S.root, { backgroundColor: C.background }]} edges={['top']}>
+      <AppHeader title="Payslips" showBack />
 
       {loading ? (
-        <View style={s.center}><ActivityIndicator size="large" color={colors.tint} /></View>
+        <AppEmptyState variant="loading" title="Loading payslips…" />
       ) : payrolls.length === 0 ? (
-        <View style={s.center}>
-          <IconSymbol name="doc.text" size={40} color={colors.textSecondary} />
-          <Text style={[s.emptyText, { color: colors.textSecondary }]}>No payslips yet</Text>
-        </View>
+        <AppEmptyState
+          variant="empty"
+          icon="doc.text"
+          title="No payslips yet"
+          message="Your monthly payslips will appear here once processed."
+        />
       ) : (
         <FlatList
           data={payrolls}
           renderItem={renderItem}
           keyExtractor={item => String(item.id)}
-          contentContainerStyle={s.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.tint} />}
+          contentContainerStyle={S.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={C.primary}
+              colors={[C.primary]}
+            />
+          }
         />
       )}
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  emptyText: { fontSize: 14 },
-  list: { padding: 16, gap: 10 },
-  card: { borderRadius: 16, padding: 16, borderWidth: 1 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start' },
-  month: { fontSize: 14, fontWeight: '600' },
-  net: { fontSize: 20, fontWeight: '800', marginTop: 2 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  badgeText: { fontSize: 11, fontWeight: '700' },
-  detail: { borderTopWidth: 1, marginTop: 14, paddingTop: 14, gap: 6 },
-  sectionLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  row: { flexDirection: 'row', justifyContent: 'space-between' },
-  rowLabel: { fontSize: 13 },
-  rowValue: { fontSize: 13, fontWeight: '500' },
-  netRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 12 },
-  attRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12 },
-  attBox: { alignItems: 'center', gap: 2 },
-  attValue: { fontSize: 18, fontWeight: '700' },
-  attLabel: { fontSize: 11 },
-  paidAt: { fontSize: 12, textAlign: 'center', marginTop: 8 },
-});
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    root: { flex: 1 },
+    list: { padding: 16, gap: 12, paddingBottom: 32 },
+
+    card: {
+      backgroundColor: C.surface,
+      borderRadius: 18, borderWidth: 1,
+      overflow: 'hidden',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    },
+    paidBar: { height: 3 },
+    cardTop: {
+      flexDirection: 'row', alignItems: 'flex-start',
+      padding: 16,
+    },
+    cardMonth: { fontSize: 12, fontWeight: '500', marginBottom: 3 },
+    cardNet:   { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+
+    detail: { borderTopWidth: StyleSheet.hairlineWidth, paddingBottom: 16 },
+
+    sectionHead: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      paddingHorizontal: 16, paddingVertical: 8,
+    },
+    sectionHeadText: {
+      fontSize: 11, fontWeight: '700',
+      textTransform: 'uppercase', letterSpacing: 0.8,
+    },
+
+    row: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: 16, paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    rowLabel: { fontSize: 13 },
+    rowValue: { fontSize: 13, fontWeight: '600' },
+
+    netRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginHorizontal: 16, marginTop: 12,
+      paddingHorizontal: 16, paddingVertical: 14,
+      borderRadius: 12,
+    },
+    netLabel: { fontSize: 14, fontWeight: '700' },
+    netValue: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+
+    attRow: {
+      flexDirection: 'row', justifyContent: 'space-around',
+      marginHorizontal: 16, marginTop: 12,
+      paddingVertical: 16, borderRadius: 12,
+    },
+    attBox:   { alignItems: 'center', gap: 3 },
+    attValue: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+    attLabel: {
+      fontSize: 10, fontWeight: '600',
+      textTransform: 'uppercase', letterSpacing: 0.4,
+    },
+
+    paidDateRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 7,
+      marginHorizontal: 16, marginTop: 12,
+      padding: 10, borderRadius: 10,
+    },
+    paidDateText: { fontSize: 12, fontWeight: '600' },
+  });
+}

@@ -13,6 +13,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ToastContainer } from '@/components/ui/Toast';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { Colors } from '@/constants/theme';
+import { setupNotificationChannel, requestNotificationPermission } from '@/lib/notification-service';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,6 +29,7 @@ const PremiumLightTheme = {
     notification: Colors.light.danger,
   },
 };
+
 
 const PremiumDarkTheme = {
   ...DarkTheme,
@@ -51,6 +53,11 @@ function RootLayoutInner() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const activeTheme = isDark ? PremiumDarkTheme : PremiumLightTheme;
+
+  useEffect(() => {
+    setupNotificationChannel();
+    requestNotificationPermission();
+  }, []);
 
   return (
     <SafeAreaProvider>

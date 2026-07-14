@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/ui/AppHeader';
+import { AppBadge } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppBottomSheet, SheetAction } from '@/components/ui/AppBottomSheet';
@@ -27,11 +28,39 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
   other: 'Miscellaneous',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  present: '#10b981', absent: '#ef4444', late: '#f59e0b',
-  half_day: '#3b82f6', holiday: '#8b5cf6', on_leave: '#6b7280',
-  pending: '#D97706', approved: '#10b981', rejected: '#ef4444', cancelled: '#6b7280',
-};
+type AppColors = typeof Colors.light | typeof Colors.dark;
+
+function attColor(status: string, C: AppColors): string {
+  switch (status) {
+    case 'present':            return C.success;
+    case 'absent':             return C.danger;
+    case 'late':               return C.warning;
+    case 'half_day':
+    case 'holiday':            return C.info;
+    default:                   return C.textMuted;
+  }
+}
+
+function attBg(status: string, C: AppColors): string {
+  switch (status) {
+    case 'present':            return C.successBg;
+    case 'absent':             return C.dangerBg;
+    case 'late':               return C.warningBg;
+    case 'half_day':
+    case 'holiday':            return C.infoBg;
+    default:                   return C.surfaceSoft;
+  }
+}
+
+type ReqBadgeVariant = 'success' | 'danger' | 'warning' | 'default';
+function reqStatusVariant(status: string): ReqBadgeVariant {
+  switch (status) {
+    case 'approved': return 'success';
+    case 'rejected': return 'danger';
+    case 'pending':  return 'warning';
+    default:         return 'default';
+  }
+}
 
 const HR_ACTIONS = [
   { id: 'annual_leave',     icon: 'calendar',              label: 'Time Off',             sub: 'Annual, sick, emergency leave' },
@@ -192,8 +221,8 @@ export default function HRScreen() {
         >
           {/* Explanation card */}
           <View style={[s.infoCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <View style={[s.infoIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <IconSymbol name="person.crop.circle.badge.exclamationmark" size={32} color="#1D4ED8" />
+            <View style={[s.infoIconWrap, { backgroundColor: c.infoBg }]}>
+              <IconSymbol name="person.crop.circle.badge.exclamationmark" size={32} color={c.info} />
             </View>
             <Text style={[s.infoTitle, { color: c.textPrimary }]}>No Employee Profile Linked</Text>
             <Text style={[s.infoMsg, { color: c.textSecondary }]}>
@@ -269,10 +298,10 @@ export default function HRScreen() {
             <Text style={s.profileId}>ID: {employeeProfile.employee_id}</Text>
           </View>
           <View style={[s.activeBadge, {
-            backgroundColor: employeeProfile.is_active ? '#dcfce7' : '#fee2e2',
+            backgroundColor: employeeProfile.is_active ? c.successBg : c.dangerBg,
           }]}>
-            <View style={[s.activeDot, { backgroundColor: employeeProfile.is_active ? '#16a34a' : '#dc2626' }]} />
-            <Text style={{ fontSize: 11, fontWeight: '600', color: employeeProfile.is_active ? '#166534' : '#991b1b' }}>
+            <View style={[s.activeDot, { backgroundColor: employeeProfile.is_active ? c.success : c.danger }]} />
+            <Text style={{ fontSize: 11, fontWeight: '600', color: employeeProfile.is_active ? c.successText : c.errorText }}>
               {employeeProfile.is_active ? 'Active' : 'Inactive'}
             </Text>
           </View>
@@ -296,37 +325,37 @@ export default function HRScreen() {
             ].map((col, i, arr) => (
               <View key={col.label} style={[s.timeCol, i < arr.length - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: c.border }]}>
                 <Text style={[s.timeLabel, { color: c.textMuted }]}>{col.label}</Text>
-                <Text style={[s.timeValue, { color: col.active ? '#10b981' : c.textPrimary, fontSize: col.label === 'Break' ? 10 : 15 }]}>{col.value}</Text>
+                <Text style={[s.timeValue, { color: col.active ? c.success : c.textPrimary, fontSize: col.label === 'Break' ? 10 : 15 }]}>{col.value}</Text>
               </View>
             ))}
           </View>
 
           {isOnBreak && (
-            <View style={[s.statusPill, { backgroundColor: '#fef3c718' }]}>
-              <View style={[s.statusDot, { backgroundColor: '#f59e0b' }]} />
-              <Text style={[s.statusText, { color: '#d97706' }]}>On Break · since {fmtTime(todayAttendance!.break_start)}</Text>
+            <View style={[s.statusPill, { backgroundColor: c.warningBg }]}>
+              <View style={[s.statusDot, { backgroundColor: c.warning }]} />
+              <Text style={[s.statusText, { color: c.warningText }]}>On Break · since {fmtTime(todayAttendance!.break_start)}</Text>
             </View>
           )}
           {!isOnBreak && todayAttendance?.status && (
-            <View style={[s.statusPill, { backgroundColor: (STATUS_COLORS[todayAttendance.status] || '#6b7280') + '18' }]}>
-              <View style={[s.statusDot, { backgroundColor: STATUS_COLORS[todayAttendance.status] || '#6b7280' }]} />
-              <Text style={[s.statusText, { color: STATUS_COLORS[todayAttendance.status] || c.textSecondary }]}>
+            <View style={[s.statusPill, { backgroundColor: attBg(todayAttendance.status, c) }]}>
+              <View style={[s.statusDot, { backgroundColor: attColor(todayAttendance.status, c) }]} />
+              <Text style={[s.statusText, { color: attColor(todayAttendance.status, c) }]}>
                 {todayAttendance.status.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase())}
               </Text>
             </View>
           )}
 
           {isCheckedOut ? (
-            <View style={[s.doneRow, { backgroundColor: '#f0fdf4' }]}>
-              <IconSymbol name="checkmark.circle.fill" size={16} color="#10b981" />
-              <Text style={{ fontSize: 13, color: '#166534', marginLeft: 6, fontWeight: '500' }}>
+            <View style={[s.doneRow, { backgroundColor: c.successBg }]}>
+              <IconSymbol name="checkmark.circle.fill" size={16} color={c.success} />
+              <Text style={{ fontSize: 13, color: c.successText, marginLeft: 6, fontWeight: '500' }}>
                 Attendance complete for today
               </Text>
             </View>
           ) : isOnBreak ? (
             <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
               <TouchableOpacity
-                style={[s.checkBtn, { backgroundColor: '#f59e0b' }]}
+                style={[s.checkBtn, { backgroundColor: c.warning }]}
                 onPress={handleBreakIn}
                 disabled={checking}
                 activeOpacity={0.85}
@@ -343,7 +372,7 @@ export default function HRScreen() {
             <View style={{ gap: 10 }}>
               <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                 <TouchableOpacity
-                  style={[s.checkBtn, { backgroundColor: '#dc2626' }]}
+                  style={[s.checkBtn, { backgroundColor: c.danger }]}
                   onPress={handleCheckOut}
                   disabled={checking}
                   activeOpacity={0.85}
@@ -358,7 +387,7 @@ export default function HRScreen() {
               </Animated.View>
               {!todayAttendance?.break_start && (
                 <TouchableOpacity
-                  style={[s.checkBtn, { backgroundColor: '#f59e0b' }]}
+                  style={[s.checkBtn, { backgroundColor: c.warning }]}
                   onPress={handleBreakOut}
                   disabled={checking}
                   activeOpacity={0.85}
@@ -370,7 +399,7 @@ export default function HRScreen() {
             </View>
           ) : (
             <TouchableOpacity
-              style={[s.checkBtn, { backgroundColor: '#10b981' }]}
+              style={[s.checkBtn, { backgroundColor: c.success }]}
               onPress={handleCheckIn}
               disabled={checking}
               activeOpacity={0.85}
@@ -432,7 +461,7 @@ export default function HRScreen() {
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[s.leaveRemaining, {
-                      color: Number(lb.remaining_days) > 0 ? '#15803D' : '#B42318',
+                      color: Number(lb.remaining_days) > 0 ? c.success : c.danger,
                     }]}>
                       {lb.remaining_days}
                     </Text>
@@ -449,7 +478,7 @@ export default function HRScreen() {
           <>
             <Text style={[s.sectionLabel, { color: c.textMuted }]}>LATEST PAYSLIP</Text>
             <TouchableOpacity
-              style={[s.payCard, { backgroundColor: '#0D1B2A' }]}
+              style={[s.payCard, { backgroundColor: c.primary }]}
               onPress={() => router.push('/hr/payslip' as any)}
               activeOpacity={0.85}
             >
@@ -459,14 +488,10 @@ export default function HRScreen() {
                 <Text style={s.payAmount}>{fmtMoney(latestPayroll.net_salary)}</Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                <View style={[s.payStatus, {
-                  backgroundColor: latestPayroll.status === 'paid' ? '#dcfce7' : '#fff7ed',
-                }]}>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: latestPayroll.status === 'paid' ? '#166534' : '#9a3412' }}>
-                    {latestPayroll.status.toUpperCase()}
-                  </Text>
-                </View>
-                <IconSymbol name="chevron.right" size={16} color="rgba(255,255,255,0.5)" />
+                <AppBadge variant={latestPayroll.status === 'paid' ? 'success' : 'info'}>
+                  {latestPayroll.status.toUpperCase()}
+                </AppBadge>
+                <IconSymbol name="chevron.right" size={16} color={c.primaryText + '80'} />
               </View>
             </TouchableOpacity>
           </>
@@ -494,15 +519,13 @@ export default function HRScreen() {
                     </Text>
                     <Text style={[s.reqDate, { color: c.textMuted }]}>
                       {req.start_date
-                        ? new Date(req.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                        : new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        ? new Date(req.start_date).toLocaleDateString('en-AE', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : new Date(req.created_at).toLocaleDateString('en-AE', { month: 'short', day: 'numeric' })}
                     </Text>
                   </View>
-                  <View style={[s.reqBadge, { backgroundColor: (STATUS_COLORS[req.status] || '#6b7280') + '18' }]}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: STATUS_COLORS[req.status] || '#6b7280' }}>
-                      {req.status.toUpperCase()}
-                    </Text>
-                  </View>
+                  <AppBadge variant={reqStatusVariant(req.status)}>
+                    {req.status.toUpperCase()}
+                  </AppBadge>
                 </View>
               ))}
             </View>
@@ -664,8 +687,6 @@ const s = StyleSheet.create({
   payMonth: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 2 },
   payNetLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 4 },
   payAmount: { fontSize: 24, fontWeight: '800', color: '#fff', marginTop: 2, letterSpacing: -0.5 },
-  payStatus: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-
   // ── Leave balance ──
   leaveRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
   leaveType: { fontSize: 13, fontWeight: '600' },
@@ -682,5 +703,4 @@ const s = StyleSheet.create({
   reqRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
   reqType: { fontSize: 13, fontWeight: '500' },
   reqDate: { fontSize: 11, marginTop: 2 },
-  reqBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
 });

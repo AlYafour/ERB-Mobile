@@ -38,7 +38,8 @@ export default function RegisterScreen() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  const [registered, setRegistered] = useState(false);
+  const { register, branding } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -70,7 +71,7 @@ export default function RegisterScreen() {
         username: formData.username || formData.email,
       });
       if (result.success) {
-        router.replace('/(tabs)');
+        setRegistered(true);
       } else {
         setError(result.error || 'Registration failed');
       }
@@ -80,6 +81,28 @@ export default function RegisterScreen() {
       setLoading(false);
     }
   };
+
+  if (registered) {
+    return (
+      <View style={[s.root, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}>
+        <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+        <View style={s.logoRing}>
+          <Logo size={60} logoUrl={branding?.logo_url || undefined} />
+        </View>
+        <Text style={[s.appName, { marginTop: 20, marginBottom: 8 }]}>Registration Submitted</Text>
+        <View style={[s.card, { width: '100%', alignItems: 'center' }]}>
+          <Text style={{ fontSize: 40, marginBottom: 16 }}>✅</Text>
+          <Text style={[s.cardTitle, { textAlign: 'center', marginBottom: 8 }]}>Account Pending Approval</Text>
+          <Text style={[s.cardSubtitle, { textAlign: 'center', lineHeight: 20 }]}>
+            Your account has been created successfully and is awaiting administrator approval. You will be notified once your account is activated.
+          </Text>
+          <TouchableOpacity onPress={() => router.replace('/login')} style={{ marginTop: 24 }}>
+            <Text style={{ color: LINK, fontSize: 15, fontWeight: '600' }}>Back to Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -98,7 +121,7 @@ export default function RegisterScreen() {
         {/* Brand header */}
         <View style={s.header}>
           <View style={s.logoRing}>
-            <Logo size={60} />
+            <Logo size={60} logoUrl={branding?.logo_url || undefined} />
           </View>
           <Text style={s.appName}>Al Yafour ERP</Text>
           <Text style={s.tagline}>Create your account</Text>
@@ -215,12 +238,15 @@ const s = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
   },
   appName: {
     fontSize: 22,

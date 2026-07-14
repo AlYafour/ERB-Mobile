@@ -103,5 +103,24 @@ export const purchaseOrdersApi = {
     }
     return response.data;
   },
+
+  cancel: async (id: number | string, reason?: string): Promise<PurchaseOrder> => {
+    const response = await apiClient.post<PurchaseOrder>(
+      `${API_ENDPOINTS.PURCHASE_ORDER_DETAIL(String(id))}cancel/`,
+      reason ? { reason } : undefined,
+    );
+    if (response.error || !response.data) {
+      throw new Error(response.error || 'Failed to cancel purchase order');
+    }
+    return response.data;
+  },
+
+  reopen: async (id: number | string): Promise<PurchaseOrder> => {
+    const response = await apiClient.post<PurchaseOrder>(`${API_ENDPOINTS.PURCHASE_ORDER_DETAIL(String(id))}reopen/`);
+    if (response.error || !response.data) {
+      throw new Error(response.error || 'Failed to reopen purchase order');
+    }
+    return response.data;
+  },
 };
 

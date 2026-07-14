@@ -35,6 +35,7 @@ export default function PurchaseRequestDetailScreen() {
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
 
   const su = user?.is_superuser ?? false;
   const canApprove = su || ((hasPermission('purchase_request', 'approve') ?? false) && user?.role !== 'procurement_officer' && user?.role !== 'site_engineer');
@@ -76,6 +77,20 @@ export default function PurchaseRequestDetailScreen() {
     finally { setUndoing(false); }
   };
 
+  const handleResubmit = async () => {
+    if (!await confirm('Resubmit this request for approval?')) return;
+    try {
+      setResubmitting(true);
+      await purchaseRequestsApi.resubmit(id);
+      toast('Request resubmitted for approval', 'success');
+      load();
+    } catch (e: any) {
+      toast(e.message || 'Failed to resubmit', 'error');
+    } finally {
+      setResubmitting(false);
+    }
+  };
+
   const handleCreateQR = () => {
     if (!isProcurement) { toast('Only Procurement Officer can create Quotation Request', 'error'); return; }
     if ((request as any)?.has_awarded_quotation) { toast('Already has an awarded quotation', 'error'); return; }
@@ -98,7 +113,9 @@ export default function PurchaseRequestDetailScreen() {
 
   const S = makeStyles(C);
 
-  const showBottomBar = !loading && !!request && request.status === 'pending' && (canApprove || canReject);
+  const showApproveRejectBar = !loading && !!request && request.status === 'pending' && (canApprove || canReject);
+  const showResubmitBar = !loading && !!request && request.status === 'rejected';
+  const showBottomBar = showApproveRejectBar || showResubmitBar;
 
   if (loading && !request) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
@@ -238,26 +255,38 @@ export default function PurchaseRequestDetailScreen() {
         <View style={{ height: 8 }} />
       </ScrollView>
 
-      {/* Fixed bottom action bar — pending approval/rejection only */}
+      {/* Fixed bottom action bar */}
       {showBottomBar && (
         <View style={[S.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          {canApprove && (
+          {showApproveRejectBar && canApprove && (
             <AppButton
-              title={approving ? 'Processing...' : 'Approve'}
+              title="Approve"
               variant="successOutline"
               size="md"
               onPress={handleApprove}
-              disabled={approving}
+              disabled={approving || rejecting}
               loading={approving}
               style={{ flex: 1 }}
             />
           )}
-          {canReject && (
+          {showApproveRejectBar && canReject && (
             <AppButton
               title="Reject"
               variant="dangerOutline"
               size="md"
               onPress={() => setRejectOpen(true)}
+              disabled={approving || rejecting}
+              style={{ flex: 1 }}
+            />
+          )}
+          {showResubmitBar && (
+            <AppButton
+              title="Resubmit for Approval"
+              variant="primary"
+              size="md"
+              onPress={handleResubmit}
+              disabled={resubmitting}
+              loading={resubmitting}
               style={{ flex: 1 }}
             />
           )}

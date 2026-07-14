@@ -2,52 +2,74 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert, Modal,
-  TextInput, ScrollView,
+  RefreshControl, Modal, TextInput, ScrollView, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/contexts/AuthContext';
-import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppBadge } from '@/components/ui/AppBadge';
+import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { hrRequestsApi, HRRequest, HRLeaveBalance } from '@/lib/api/hr';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { toast, confirm } from '@/lib/hooks/use-toast';
 
 const REQUEST_TYPES = [
-  { value: 'annual_leave', label: 'Annual Leave' },
-  { value: 'sick_leave', label: 'Sick Leave' },
-  { value: 'emergency_leave', label: 'Emergency Leave' },
-  { value: 'unpaid_leave', label: 'Unpaid Leave' },
-  { value: 'work_from_home', label: 'Work From Home' },
-  { value: 'overtime', label: 'Overtime' },
-  { value: 'advance_salary', label: 'Advance Salary' },
-  { value: 'document_request', label: 'Document Request' },
-  { value: 'other', label: 'Other' },
+  { value: 'annual_leave',    label: 'Annual Leave',        icon: 'calendar' },
+  { value: 'sick_leave',      label: 'Sick Leave',          icon: 'cross.circle' },
+  { value: 'emergency_leave', label: 'Emergency Leave',     icon: 'exclamationmark.triangle' },
+  { value: 'unpaid_leave',    label: 'Unpaid Leave',        icon: 'calendar.badge.minus' },
+  { value: 'work_from_home',  label: 'Work From Home',      icon: 'laptopcomputer' },
+  { value: 'overtime',        label: 'Overtime',            icon: 'clock' },
+  { value: 'advance_salary',  label: 'Advance Salary',      icon: 'dollarsign.circle' },
+  { value: 'document_request',label: 'Document / HR Letter',icon: 'doc.text' },
+  { value: 'other',           label: 'Other',               icon: 'ellipsis.circle' },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
-  approved: '#10b981',
-  rejected: '#ef4444',
-  cancelled: '#6b7280',
-};
+type BadgeVariant = 'success' | 'danger' | 'warning' | 'default';
+
+function getStatusVariant(status: string): BadgeVariant {
+  switch (status) {
+    case 'approved': return 'success';
+    case 'rejected': return 'danger';
+    case 'pending':  return 'warning';
+    default:         return 'default';
+  }
+}
+
+type AppColors = typeof Colors.light | typeof Colors.dark;
 
 export default function HRRequestsScreen() {
   const { user } = useAuth();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+  const insets = useSafeAreaInsets();
   const { type: typeParam } = useLocalSearchParams<{ type?: string }>();
+
+  const su = user?.is_superuser ?? false;
+  const isManager = su || user?.role === 'hr_manager' || user?.role === 'super_admin';
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [approving, setApproving] = useState<number | null>(null);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [requests, setRequests] = useState<HRRequest[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<HRLeaveBalance[]>([]);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<string>('');
+  const [rejectDialogId, setRejectDialogId] = useState<number | null>(null);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [viewAll, setViewAll] = useState(false);
+
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
   const [form, setForm] = useState({
     request_type: 'annual_leave',
@@ -61,8 +83,7 @@ export default function HRRequestsScreen() {
   useEffect(() => {
     if (typeParam && typeParam !== handledTypeParam.current) {
       handledTypeParam.current = typeParam;
-      const valid = REQUEST_TYPES.find(t => t.value === typeParam);
-      if (valid) {
+      if (REQUEST_TYPES.find(t => t.value === typeParam)) {
         setForm(f => ({ ...f, request_type: typeParam }));
         setShowForm(true);
       }
@@ -77,34 +98,34 @@ export default function HRRequestsScreen() {
       const me = employees.find(
         (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
       );
-      if (!me) { setLoading(false); setRefreshing(false); return; }
-      setEmployeeId(me.id);
+      if (!me && !isManager) { setLoading(false); setRefreshing(false); return; }
+      if (me) setEmployeeId(me.id);
 
-      const params: any = { employee: me.id };
+      const params: any = {};
+      if (!viewAll && me) params.employee = me.id;
       if (filterStatus) params.status = filterStatus;
-      const res = await hrRequestsApi.getAll(params);
-      setRequests(res.results ?? []);
 
-      const year = new Date().getFullYear();
-      const balances = await hrRequestsApi.getLeaveBalances(me.id, year);
-      setLeaveBalances(balances);
-    } catch (e) {
-      console.error('HR requests load error:', e);
+      const [reqRes, balanceRes] = await Promise.allSettled([
+        hrRequestsApi.getAll(params),
+        me ? hrRequestsApi.getLeaveBalances(me.id, new Date().getFullYear()) : Promise.resolve([]),
+      ]);
+
+      if (reqRes.status === 'fulfilled') setRequests(reqRes.value.results ?? []);
+      if (balanceRes.status === 'fulfilled') setLeaveBalances(balanceRes.value as HRLeaveBalance[]);
+    } catch (e: any) {
+      toast(e.message || 'Failed to load', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, filterStatus]);
+  }, [user, filterStatus, viewAll, isManager]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
   const handleRefresh = () => { setRefreshing(true); loadData(); };
 
   const handleSubmit = async () => {
-    if (!employeeId) return;
-    if (!form.request_type) { Alert.alert('Error', 'Select a request type'); return; }
-    if (!form.reason.trim()) { Alert.alert('Error', 'Please enter a reason'); return; }
-
+    if (!employeeId) { toast('No employee profile linked', 'error'); return; }
+    if (!form.reason.trim()) { toast('Please enter a reason', 'error'); return; }
     setSubmitting(true);
     try {
       await hrRequestsApi.create({
@@ -117,212 +138,476 @@ export default function HRRequestsScreen() {
       });
       setShowForm(false);
       setForm({ request_type: 'annual_leave', start_date: '', end_date: '', days: '', reason: '' });
+      toast('Request submitted successfully', 'success');
       loadData();
-      Alert.alert('Submitted', 'Your request has been submitted for approval.');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to submit request');
+      toast(e.message || 'Failed to submit request', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleApprove = async (id: number) => {
+    if (!await confirm('Approve this HR request?')) return;
+    setApproving(id);
+    try {
+      await hrRequestsApi.approve(id);
+      toast('Request approved', 'success');
+      loadData();
+    } catch (e: any) {
+      toast(e.message || 'Failed to approve', 'error');
+    } finally {
+      setApproving(null);
+    }
+  };
+
+  const handleRejectConfirm = async (reason: string) => {
+    if (!rejectDialogId) return;
+    const id = rejectDialogId;
+    setRejectingId(id);
+    try {
+      await hrRequestsApi.reject(id, reason);
+      toast('Request rejected', 'info');
+      setRejectDialogId(null);
+      loadData();
+    } catch (e: any) {
+      toast(e.message || 'Failed to reject', 'error');
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
+  const annualBalance = leaveBalances.find(b =>
+    b.leave_type?.toLowerCase().includes('annual')
+  );
+
+  const S = makeStyles(C);
+
   const renderItem = ({ item }: { item: HRRequest }) => {
     const typeLabel = REQUEST_TYPES.find(t => t.value === item.request_type)?.label || item.request_type;
-    const color = STATUS_COLORS[item.status] || '#6b7280';
+    const isApprovable = item.status === 'pending' && isManager;
+
     return (
-      <View style={[s.reqCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={s.reqHeader}>
-          <Text style={[s.reqType, { color: colors.text }]}>{typeLabel}</Text>
-          <View style={[s.badge, { backgroundColor: color + '22' }]}>
-            <Text style={[s.badgeText, { color }]}>{item.status.toUpperCase()}</Text>
+      <View style={S.reqCard}>
+        <View style={S.reqHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={[S.reqType, { color: C.textPrimary }]}>{typeLabel}</Text>
+            {viewAll && item.employee_name ? (
+              <Text style={[S.reqEmployee, { color: C.textMuted }]}>{item.employee_name}</Text>
+            ) : null}
           </View>
+          <AppBadge variant={getStatusVariant(item.status)}>
+            {item.status.toUpperCase()}
+          </AppBadge>
         </View>
+
         {(item.start_date || item.end_date) && (
-          <Text style={[s.reqDates, { color: colors.textSecondary }]}>
-            {item.start_date && new Date(item.start_date).toLocaleDateString()}
-            {item.end_date && item.start_date !== item.end_date && ` → ${new Date(item.end_date).toLocaleDateString()}`}
-            {item.days && ` (${item.days} days)`}
-          </Text>
+          <View style={S.dateRow}>
+            <IconSymbol name="calendar" size={13} color={C.textMuted} />
+            <Text style={[S.reqDates, { color: C.textSecondary }]}>
+              {item.start_date
+                ? new Date(item.start_date).toLocaleDateString('en-AE', { month: 'short', day: 'numeric', year: 'numeric' })
+                : ''}
+              {item.end_date && item.start_date !== item.end_date
+                ? ` → ${new Date(item.end_date).toLocaleDateString('en-AE', { month: 'short', day: 'numeric' })}`
+                : ''}
+              {item.days ? ` · ${item.days} day${Number(item.days) !== 1 ? 's' : ''}` : ''}
+            </Text>
+          </View>
         )}
+
         {item.reason ? (
-          <Text style={[s.reqReason, { color: colors.textSecondary }]} numberOfLines={2}>{item.reason}</Text>
+          <Text style={[S.reqReason, { color: C.textSecondary }]} numberOfLines={2}>{item.reason}</Text>
         ) : null}
+
         {item.reject_reason ? (
-          <Text style={[s.rejectReason, { color: '#ef4444' }]}>Rejected: {item.reject_reason}</Text>
+          <View style={[S.rejectBox, { backgroundColor: C.dangerBg, borderColor: C.danger }]}>
+            <Text style={[S.rejectLabel, { color: C.danger }]}>Rejection Reason</Text>
+            <Text style={[S.rejectText, { color: C.danger }]}>{item.reject_reason}</Text>
+          </View>
         ) : null}
-        <Text style={[s.reqDate, { color: colors.textSecondary }]}>
-          Submitted {new Date(item.created_at).toLocaleDateString()}
+
+        {item.approver_name && item.status !== 'pending' ? (
+          <Text style={[S.approvedBy, { color: C.textMuted }]}>
+            {item.status === 'approved' ? 'Approved' : 'Reviewed'} by {item.approver_name}
+          </Text>
+        ) : null}
+
+        <Text style={[S.submittedAt, { color: C.textMuted }]}>
+          {new Date(item.created_at).toLocaleDateString('en-AE', { month: 'short', day: 'numeric', year: 'numeric' })}
         </Text>
+
+        {isApprovable && (
+          <View style={S.actionRow}>
+            <AppButton
+              title="Approve"
+              variant="successOutline"
+              size="sm"
+              onPress={() => handleApprove(item.id)}
+              loading={approving === item.id}
+              disabled={approving === item.id || rejectingId === item.id}
+              style={{ flex: 1 }}
+            />
+            <AppButton
+              title="Reject"
+              variant="dangerOutline"
+              size="sm"
+              onPress={() => setRejectDialogId(item.id)}
+              disabled={approving === item.id || rejectingId === item.id}
+              style={{ flex: 1 }}
+            />
+          </View>
+        )}
       </View>
     );
   };
 
-  const leaveBalance = leaveBalances.find(b => b.leave_type === 'Annual Leave' || b.leave_type === 'annual');
-
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScreenHeader
-        title="My Requests"
+    <SafeAreaView style={[S.root, { backgroundColor: C.background }]} edges={['top']}>
+      <AppHeader
+        title="HR Requests"
         showBack
-        rightElement={
-          <TouchableOpacity
-            style={[s.newBtn, { backgroundColor: colors.tint }]}
-            onPress={() => setShowForm(true)}
-          >
-            <Text style={s.newBtnText}>+ New</Text>
-          </TouchableOpacity>
+        right={
+          employeeId ? (
+            <TouchableOpacity
+              style={[S.newBtn, { backgroundColor: C.primary }]}
+              onPress={() => setShowForm(true)}
+              activeOpacity={0.8}
+            >
+              <IconSymbol name="plus" size={13} color={C.primaryText} />
+              <Text style={[S.newBtnText, { color: C.primaryText }]}>New</Text>
+            </TouchableOpacity>
+          ) : undefined
         }
       />
 
       {/* Leave balance strip */}
-      {leaveBalance && (
-        <View style={[s.balanceStrip, { backgroundColor: colors.tint + '15', borderBottomColor: colors.border }]}>
-          <Text style={[s.balanceText, { color: colors.tint }]}>
-            Annual Leave: {leaveBalance.remaining_days} days remaining
+      {annualBalance && (
+        <View style={[S.balanceStrip, { backgroundColor: C.primarySoft }]}>
+          <IconSymbol name="calendar" size={14} color={C.primary} />
+          <Text style={[S.balanceText, { color: C.primary }]}>
+            Annual Leave:{' '}
+            <Text style={{ fontWeight: '700' }}>{annualBalance.remaining_days} days</Text> remaining
           </Text>
         </View>
       )}
 
+      {/* Manager toggle — my vs all */}
+      {isManager && (
+        <View style={[S.toggleRow, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
+          {[
+            { key: false, label: 'My Requests' },
+            { key: true,  label: 'All Requests' },
+          ].map(opt => (
+            <TouchableOpacity
+              key={String(opt.key)}
+              style={[S.toggleBtn, viewAll === opt.key && { backgroundColor: C.primary }]}
+              onPress={() => setViewAll(opt.key)}
+            >
+              <Text style={[S.toggleBtnText, {
+                color: viewAll === opt.key ? C.primaryText : C.textSecondary,
+              }]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Status filter chips */}
-      <View style={s.chips}>
-        {['', 'pending', 'approved', 'rejected'].map(st => (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={S.chips}
+        style={S.chipsScroll}
+      >
+        {[
+          { key: '',         label: 'All' },
+          { key: 'pending',  label: 'Pending' },
+          { key: 'approved', label: 'Approved' },
+          { key: 'rejected', label: 'Rejected' },
+        ].map(opt => (
           <TouchableOpacity
-            key={st}
-            style={[s.chip, { borderColor: colors.border, backgroundColor: filterStatus === st ? colors.tint : colors.card }]}
-            onPress={() => setFilterStatus(st)}
+            key={opt.key}
+            style={[S.chip, {
+              backgroundColor: filterStatus === opt.key ? C.primary : C.surface,
+              borderColor:     filterStatus === opt.key ? C.primary : C.border,
+            }]}
+            onPress={() => setFilterStatus(opt.key)}
           >
-            <Text style={[s.chipText, { color: filterStatus === st ? '#fff' : colors.text }]}>
-              {st ? st.charAt(0).toUpperCase() + st.slice(1) : 'All'}
+            <Text style={[S.chipText, {
+              color: filterStatus === opt.key ? C.primaryText : C.textSecondary,
+            }]}>
+              {opt.label}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {loading ? (
-        <View style={s.center}><ActivityIndicator size="large" color={colors.tint} /></View>
+        <AppEmptyState variant="loading" title="Loading requests…" />
       ) : requests.length === 0 ? (
-        <View style={s.center}>
-          <IconSymbol name="calendar.badge.clock" size={40} color={colors.textSecondary} />
-          <Text style={[s.emptyText, { color: colors.textSecondary }]}>No requests yet</Text>
-        </View>
+        <AppEmptyState
+          variant="empty"
+          icon="calendar.badge.clock"
+          title="No requests"
+          message={filterStatus ? `No ${filterStatus} requests found.` : 'No HR requests yet.'}
+        />
       ) : (
         <FlatList
           data={requests}
           renderItem={renderItem}
           keyExtractor={item => String(item.id)}
-          contentContainerStyle={s.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.tint} />}
+          contentContainerStyle={S.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={C.primary}
+              colors={[C.primary]}
+            />
+          }
         />
       )}
 
-      {/* New Request Modal */}
+      {/* ── New Request Modal ── */}
       <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={[s.modal, { backgroundColor: colors.background }]}>
-          <View style={[s.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[s.modalTitle, { color: colors.text }]}>New Request</Text>
-            <TouchableOpacity onPress={() => setShowForm(false)}>
-              <IconSymbol name="xmark.circle.fill" size={26} color={colors.textSecondary} />
+        <SafeAreaView style={[S.modal, { backgroundColor: C.background }]}>
+          <View style={[S.modalHeader, { borderBottomColor: C.border }]}>
+            <Text style={[S.modalTitle, { color: C.textPrimary }]}>New Request</Text>
+            <TouchableOpacity onPress={() => setShowForm(false)} hitSlop={8}>
+              <IconSymbol name="xmark.circle.fill" size={26} color={C.textMuted} />
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={s.modalBody}>
-            <Text style={[s.label, { color: colors.text }]}>Request Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+          <ScrollView
+            contentContainerStyle={S.modalBody}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Request type */}
+            <Text style={[S.formLabel, { color: C.textPrimary }]}>Request Type</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {REQUEST_TYPES.map(rt => (
                   <TouchableOpacity
                     key={rt.value}
-                    style={[s.typeChip, { borderColor: colors.border, backgroundColor: form.request_type === rt.value ? colors.tint : colors.card }]}
+                    style={[S.typeChip, {
+                      backgroundColor: form.request_type === rt.value ? C.primary : C.surface,
+                      borderColor:     form.request_type === rt.value ? C.primary : C.border,
+                    }]}
                     onPress={() => setForm(f => ({ ...f, request_type: rt.value }))}
                   >
-                    <Text style={[s.typeChipText, { color: form.request_type === rt.value ? '#fff' : colors.text }]}>{rt.label}</Text>
+                    <Text style={[S.typeChipText, {
+                      color: form.request_type === rt.value ? C.primaryText : C.textSecondary,
+                    }]}>
+                      {rt.label}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </ScrollView>
 
-            <Text style={[s.label, { color: colors.text }]}>Start Date</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textSecondary}
-              value={form.start_date}
-              onChangeText={v => setForm(f => ({ ...f, start_date: v }))}
-            />
+            {/* Start date */}
+            <Text style={[S.formLabel, { color: C.textPrimary }]}>Start Date</Text>
+            <TouchableOpacity
+              style={[S.dateBtn, {
+                backgroundColor: C.surface,
+                borderColor: form.start_date ? C.primary : C.border,
+              }]}
+              onPress={() => setShowStartPicker(true)}
+            >
+              <IconSymbol name="calendar" size={16} color={form.start_date ? C.primary : C.textMuted} />
+              <Text style={[S.dateBtnText, { color: form.start_date ? C.textPrimary : C.textMuted }]}>
+                {form.start_date
+                  ? new Date(form.start_date).toLocaleDateString('en-AE', { month: 'long', day: 'numeric', year: 'numeric' })
+                  : 'Select start date'}
+              </Text>
+            </TouchableOpacity>
+            {showStartPicker && (
+              <DateTimePicker
+                value={form.start_date ? new Date(form.start_date) : new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_, date) => {
+                  setShowStartPicker(Platform.OS === 'ios');
+                  if (date) setForm(f => ({ ...f, start_date: date.toISOString().split('T')[0] }));
+                }}
+              />
+            )}
 
-            <Text style={[s.label, { color: colors.text }]}>End Date</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textSecondary}
-              value={form.end_date}
-              onChangeText={v => setForm(f => ({ ...f, end_date: v }))}
-            />
+            {/* End date */}
+            <Text style={[S.formLabel, { color: C.textPrimary }]}>End Date</Text>
+            <TouchableOpacity
+              style={[S.dateBtn, {
+                backgroundColor: C.surface,
+                borderColor: form.end_date ? C.primary : C.border,
+              }]}
+              onPress={() => setShowEndPicker(true)}
+            >
+              <IconSymbol name="calendar" size={16} color={form.end_date ? C.primary : C.textMuted} />
+              <Text style={[S.dateBtnText, { color: form.end_date ? C.textPrimary : C.textMuted }]}>
+                {form.end_date
+                  ? new Date(form.end_date).toLocaleDateString('en-AE', { month: 'long', day: 'numeric', year: 'numeric' })
+                  : 'Select end date'}
+              </Text>
+            </TouchableOpacity>
+            {showEndPicker && (
+              <DateTimePicker
+                value={form.end_date ? new Date(form.end_date) : new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                minimumDate={form.start_date ? new Date(form.start_date) : undefined}
+                onChange={(_, date) => {
+                  setShowEndPicker(Platform.OS === 'ios');
+                  if (date) setForm(f => ({ ...f, end_date: date.toISOString().split('T')[0] }));
+                }}
+              />
+            )}
 
-            <Text style={[s.label, { color: colors.text }]}>Number of Days</Text>
+            {/* Number of days */}
+            <Text style={[S.formLabel, { color: C.textPrimary }]}>
+              Number of Days{' '}
+              <Text style={[S.formLabelOptional, { color: C.textMuted }]}>(optional)</Text>
+            </Text>
             <TextInput
-              style={[s.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+              style={[S.input, { backgroundColor: C.surface, borderColor: C.border, color: C.textPrimary }]}
               placeholder="e.g. 3"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={C.textMuted}
               keyboardType="number-pad"
               value={form.days}
               onChangeText={v => setForm(f => ({ ...f, days: v }))}
             />
 
-            <Text style={[s.label, { color: colors.text }]}>Reason *</Text>
+            {/* Reason */}
+            <Text style={[S.formLabel, { color: C.textPrimary }]}>
+              Reason <Text style={{ color: C.danger }}>*</Text>
+            </Text>
             <TextInput
-              style={[s.textarea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-              placeholder="Enter reason..."
-              placeholderTextColor={colors.textSecondary}
+              style={[S.textarea, { backgroundColor: C.surface, borderColor: C.border, color: C.textPrimary }]}
+              placeholder="Describe your request..."
+              placeholderTextColor={C.textMuted}
               multiline
               numberOfLines={4}
+              textAlignVertical="top"
               value={form.reason}
               onChangeText={v => setForm(f => ({ ...f, reason: v }))}
             />
 
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.tint, opacity: submitting ? 0.7 : 1 }]}
+            <View style={{ height: 20 }} />
+            <AppButton
+              title="Submit Request"
+              variant="primary"
+              size="lg"
               onPress={handleSubmit}
+              loading={submitting}
               disabled={submitting}
-            >
-              {submitting ? <ActivityIndicator color="#fff" /> : <Text style={s.submitBtnText}>Submit Request</Text>}
-            </TouchableOpacity>
+              fullWidth
+            />
+            <View style={{ height: insets.bottom + 24 }} />
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Rejection reason dialog */}
+      <RejectionReasonDialog
+        isOpen={rejectDialogId !== null}
+        onClose={() => { if (!rejectingId) setRejectDialogId(null); }}
+        onConfirm={handleRejectConfirm}
+        loading={rejectingId !== null}
+        title="Reject HR Request"
+        message="Please provide a reason for rejecting this request."
+      />
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  emptyText: { fontSize: 14 },
-  balanceStrip: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
-  balanceText: { fontSize: 13, fontWeight: '600' },
-  chips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
-  chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
-  chipText: { fontSize: 12, fontWeight: '500' },
-  list: { padding: 16, gap: 10 },
-  reqCard: { borderRadius: 14, padding: 14, borderWidth: 1, gap: 6 },
-  reqHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  reqType: { fontSize: 14, fontWeight: '600' },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  badgeText: { fontSize: 11, fontWeight: '700' },
-  reqDates: { fontSize: 12 },
-  reqReason: { fontSize: 12 },
-  rejectReason: { fontSize: 12, fontStyle: 'italic' },
-  reqDate: { fontSize: 11, marginTop: 2 },
-  newBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
-  newBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  modal: { flex: 1 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
-  modalTitle: { fontSize: 17, fontWeight: '700' },
-  modalBody: { padding: 16, gap: 4, paddingBottom: 48 },
-  label: { fontSize: 13, fontWeight: '500', marginBottom: 6, marginTop: 10 },
-  input: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14 },
-  textarea: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, minHeight: 100, textAlignVertical: 'top' },
-  typeChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  typeChipText: { fontSize: 12, fontWeight: '500' },
-  submitBtn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 20 },
-  submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-});
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    root: { flex: 1 },
+    list: { padding: 16, gap: 12, paddingBottom: 32 },
+
+    newBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 5,
+      paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10,
+    },
+    newBtnText: { fontSize: 13, fontWeight: '600' },
+
+    balanceStrip: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      paddingHorizontal: 16, paddingVertical: 10,
+    },
+    balanceText: { fontSize: 13 },
+
+    toggleRow: {
+      flexDirection: 'row', gap: 6,
+      paddingHorizontal: 16, paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    toggleBtn: {
+      flex: 1, alignItems: 'center',
+      paddingVertical: 8, borderRadius: 10,
+    },
+    toggleBtnText: { fontSize: 13, fontWeight: '600' },
+
+    chipsScroll: { maxHeight: 54 },
+    chips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
+    chip: {
+      paddingHorizontal: 16, paddingVertical: 7,
+      borderRadius: 20, borderWidth: 1,
+    },
+    chipText: { fontSize: 12, fontWeight: '600' },
+
+    reqCard: {
+      backgroundColor: C.surface,
+      borderRadius: 16, padding: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      gap: 8,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    },
+    reqHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+    reqType: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2, flex: 1 },
+    reqEmployee: { fontSize: 12, marginTop: 2 },
+    dateRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    reqDates: { fontSize: 13, flex: 1 },
+    reqReason: { fontSize: 13, lineHeight: 19 },
+    rejectBox: { padding: 10, borderRadius: 8, borderWidth: 1 },
+    rejectLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 3 },
+    rejectText: { fontSize: 13 },
+    approvedBy: { fontSize: 11, fontStyle: 'italic' },
+    submittedAt: { fontSize: 11 },
+    actionRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+
+    modal: { flex: 1 },
+    modalHeader: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    modalTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
+    modalBody: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
+    formLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 },
+    formLabelOptional: { fontSize: 12, fontWeight: '400' },
+    input: {
+      borderRadius: 12, borderWidth: 1,
+      paddingHorizontal: 14, paddingVertical: 12, fontSize: 14,
+    },
+    textarea: {
+      borderRadius: 12, borderWidth: 1,
+      paddingHorizontal: 14, paddingVertical: 12,
+      fontSize: 14, minHeight: 100,
+    },
+    dateBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      borderRadius: 12, borderWidth: 1,
+      paddingHorizontal: 14, paddingVertical: 12,
+    },
+    dateBtnText: { fontSize: 14, flex: 1 },
+    typeChip: {
+      paddingHorizontal: 14, paddingVertical: 8,
+      borderRadius: 20, borderWidth: 1,
+    },
+    typeChipText: { fontSize: 12, fontWeight: '600' },
+  });
+}

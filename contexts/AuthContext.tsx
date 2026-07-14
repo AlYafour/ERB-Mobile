@@ -3,8 +3,18 @@ import { apiClient } from '@/lib/api';
 import { User } from '@/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const BRANDING_KEY = '@branding';
+
+export interface Branding {
+  logo_url: string;
+  login_bg_url: string;
+  primary_color: string;
+  company_legal_name: string;
+}
+
 interface AuthContextType {
   user: User | null;
+  branding: Branding | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -15,36 +25,60 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function fetchAndCacheBranding(): Promise<Branding | null> {
+  try {
+    const res = await apiClient.get<Branding>('/api/tenants/me/branding/');
+    if (res.data) {
+      await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(res.data));
+      return res.data;
+    }
+  } catch {}
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [branding, setBranding] = useState<Branding | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // When tokens are cleared (expired refresh token), force logout
     apiClient.setOnAuthCleared(() => setUser(null));
     loadUser();
+    // Load cached branding immediately (shown even before login on subsequent opens)
+    AsyncStorage.getItem(BRANDING_KEY).then(raw => {
+      if (raw) { try { setBranding(JSON.parse(raw)); } catch {} }
+    });
   }, []);
 
   const loadUser = async () => {
     try {
       const hasTokens = await apiClient.isAuthenticated();
-      if (!hasTokens) return; // No tokens → login screen
+      if (!hasTokens) return;
 
-      // 1. Load user from AsyncStorage cache instantly (no network needed)
       const cachedUser = await apiClient.getCurrentUser();
       if (cachedUser) setUser(cachedUser);
 
-      // 2. Proactively refresh the access token BEFORE the home screen fires
-      //    API calls. Capped at 25 seconds so the splash never hangs forever.
-      //    If Railway cold-start takes longer we still proceed — individual
-      //    requests will auto-retry via the mutex refresh logic.
-      await Promise.race([
-        apiClient.proactiveRefresh(),
-        new Promise<void>((resolve) => setTimeout(resolve, 25000)),
-      ]);
+      const tokenFresh = await apiClient.isAccessTokenFresh();
+
+      if (tokenFresh) {
+        // Token is valid — no need to hit Railway on startup.
+        // Show the app immediately; screens will load their own data.
+        // Refresh user profile in background so stale cache gets updated.
+        apiClient.get<any>('/api/auth/me/').then(res => {
+          if (res.data) {
+            AsyncStorage.setItem('user', JSON.stringify(res.data));
+            setUser(res.data);
+          }
+        }).catch(() => {});
+      } else {
+        // Token expiring or expired — must refresh before showing the app.
+        await Promise.race([
+          apiClient.proactiveRefresh(),
+          new Promise<void>((resolve) => setTimeout(resolve, 30000)),
+        ]);
+      }
 
     } catch {
-      // Network failure — keep cached user and proceed to app
     } finally {
       setIsLoading(false);
     }
@@ -63,9 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (userData) {
           setUser(userData);
         } else {
-          // Profile fetch failed (Railway cold start / network blip).
-          // Kick off background retries — when one succeeds, setUser triggers
-          // useEffect([user]) in all mounted screens so data loads automatically.
           (async () => {
             for (const delay of [2000, 4000, 8000]) {
               await new Promise<void>(r => setTimeout(r, delay));
@@ -78,6 +109,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           })();
         }
+
+        // Fetch branding in background — updates logo/color for this session and next
+        fetchAndCacheBranding().then(b => { if (b) setBranding(b); });
+
         return { success: true };
       }
 
@@ -93,13 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await apiClient.register(userData);
       if (response.data) {
-        // Auto login after registration using username
-        if (userData.username && userData.password) {
-          return await login(userData.username, userData.password);
-        } else if (userData.email && userData.password) {
-          // Fallback: try with email as username
-          return await login(userData.email, userData.password);
-        }
+        // Account is created but inactive (pending admin approval) — do not auto-login
         return { success: true };
       }
       return { success: false, error: response.error || 'Registration failed' };
@@ -131,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        branding,
         isLoading,
         isAuthenticated: !!user,
         login,
@@ -150,4 +180,3 @@ export function useAuth() {
   }
   return context;
 }
-

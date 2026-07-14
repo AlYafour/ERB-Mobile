@@ -112,5 +112,13 @@ export const goodsReceivingApi = {
     }
     return response.data;
   },
+
+  cancel: async (id: number | string): Promise<GoodsReceivedNote> => {
+    const response = await apiClient.post<GoodsReceivedNote>(`${API_ENDPOINTS.GOODS_RECEIVING_DETAIL(String(id))}cancel/`);
+    if (response.error || !response.data) {
+      throw new Error(response.error || 'Failed to cancel goods receiving note');
+    }
+    return response.data;
+  },
 };
 

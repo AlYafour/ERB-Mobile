@@ -103,6 +103,17 @@ export const purchaseRequestsApi = {
     return response.data;
   },
 
+  resubmit: async (id: number | string, comment?: string): Promise<PurchaseRequest> => {
+    const response = await apiClient.post<PurchaseRequest>(
+      `${API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id))}resubmit/`,
+      comment ? { resubmit_comment: comment } : undefined,
+    );
+    if (response.error || !response.data) {
+      throw new Error(response.error || 'Failed to resubmit purchase request');
+    }
+    return response.data;
+  },
+
   getTrackingTimeline: async (id: number | string): Promise<{
     purchase_request: {
       id: number;
