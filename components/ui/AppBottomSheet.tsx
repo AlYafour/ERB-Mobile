@@ -123,7 +123,7 @@ export function AppBottomSheet({
           {title ? (
             <View style={[s.titleRow, { borderBottomColor: c.border }]}>
               <Text style={[s.titleText, { color: c.textPrimary }]}>{title}</Text>
-              <TouchableOpacity onPress={onClose} hitSlop={12} style={s.closeBtn}>
+              <TouchableOpacity onPress={onClose} hitSlop={12} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
                 <View style={[s.closeBtnInner, { backgroundColor: c.surfaceMuted }]}>
                   <Text style={[s.closeX, { color: c.textSecondary }]}>✕</Text>
                 </View>

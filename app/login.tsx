@@ -79,7 +79,7 @@ export default function LoginScreen() {
   const loginBg    = branding?.login_bg_url;
   const companyName = branding?.company_legal_name || 'Al Yafour ERP';
   const logoUrl    = branding?.logo_url || undefined;
-  const brandColor = branding?.primary_color || '#0B1F33';
+  const brandColor = branding?.primary_color || '#C9943A';
 
   const body = (
     <KeyboardAvoidingView
@@ -143,6 +143,9 @@ export default function LoginScreen() {
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.82}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
+            accessibilityState={{ disabled: loading, busy: loading }}
           >
             {loading
               ? <ActivityIndicator color="#FFFFFF" size="small" />
@@ -152,8 +155,12 @@ export default function LoginScreen() {
 
           <View style={s.footerRow}>
             <Text style={s.footerLabel}>Don&apos;t have an account?</Text>
-            <TouchableOpacity onPress={() => router.push('/register')}>
-              <Text style={[s.footerLink, { color: loginBg ? '#93C5FD' : brandColor }]}>
+            <TouchableOpacity
+              onPress={() => router.push('/register')}
+              accessibilityRole="link"
+              accessibilityLabel="Sign up for a new account"
+            >
+              <Text style={[s.footerLink, { color: loginBg ? '#E0B86D' : brandColor }]}>
                 {' '}Sign Up
               </Text>
             </TouchableOpacity>

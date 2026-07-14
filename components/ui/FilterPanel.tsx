@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView, TextInput,
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Colors } from '@/constants/theme';
 import { IconSymbol } from './icon-symbol';
-import { Button } from './Button';
+import { AppButton as Button } from './AppButton';
 import SearchableDropdown, { DropdownOption } from './SearchableDropdown';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

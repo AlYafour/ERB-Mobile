@@ -93,6 +93,7 @@ const MAPPING = {
   'envelope.fill': 'email',
   'envelope': 'mail-outline',
   'lock.fill': 'lock',
+  'faceid': 'fingerprint',
   'lock.open.fill': 'lock-open',
   'eye.fill': 'visibility',
   'eye.slash.fill': 'visibility-off',

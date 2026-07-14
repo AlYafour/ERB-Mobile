@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Switch, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { suppliersApi } from '@/lib/api/suppliers';
@@ -94,6 +94,7 @@ export default function NewSupplierScreen() {
     <SafeAreaView style={S.container} edges={['top']}>
       <AppHeader title="New Supplier" showBack />
 
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Business Information */}
@@ -168,6 +169,7 @@ export default function NewSupplierScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Fixed bottom bar */}
       <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>

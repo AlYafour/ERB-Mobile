@@ -1,6 +1,7 @@
 import { API_BASE_URL, API_ENDPOINTS } from '@/constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { secureTokenStorage } from '@/lib/secure-storage';
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: 'access_token',
@@ -35,7 +36,7 @@ class ApiClient {
   }
 
   private async getAuthHeaders(): Promise<HeadersInit> {
-    const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    const token = await secureTokenStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -94,7 +95,7 @@ class ApiClient {
 
   private async _doRefresh(): Promise<RefreshResult> {
     try {
-      const storedRefresh = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      const storedRefresh = await secureTokenStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
       if (!storedRefresh) return 'invalid';
 
       // 40-second timeout — Railway cold starts can take 30-60 seconds
@@ -113,10 +114,10 @@ class ApiClient {
         const data = await response.json();
         const accessToken = data.access || data.access_token;
         if (accessToken) {
-          await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+          await secureTokenStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
           const newRefresh = data.refresh || data.refresh_token;
           if (newRefresh) {
-            await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
+            await secureTokenStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
           }
           return 'ok';
         }
@@ -138,10 +139,10 @@ class ApiClient {
     // Only fire once per session — prevents multiple onAuthCleared calls from concurrent 401s
     if (this.authCleared) return;
     this.authCleared = true;
-    await AsyncStorage.multiRemove([
-      STORAGE_KEYS.ACCESS_TOKEN,
-      STORAGE_KEYS.REFRESH_TOKEN,
-      STORAGE_KEYS.USER,
+    await Promise.all([
+      secureTokenStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN),
+      secureTokenStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN),
+      AsyncStorage.removeItem(STORAGE_KEYS.USER),
     ]);
     this.onAuthCleared?.();
   }
@@ -277,8 +278,8 @@ class ApiClient {
 
         // New session — reset the auth-cleared guard so clearAuth() can fire again if needed
         this.authCleared = false;
-        await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-        await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+        await secureTokenStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+        await secureTokenStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
         if (data.user) {
           await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
         }
@@ -298,8 +299,18 @@ class ApiClient {
   }
 
   async logout(): Promise<void> {
-    await this.post(API_ENDPOINTS.LOGOUT);
-    await this.clearAuth();
+    try {
+      // Backend blacklists the refresh token from the body (accounts/views.py).
+      // Without it the endpoint 400s and the session stays valid server-side.
+      const refresh = await secureTokenStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      if (refresh) {
+        await this.post(API_ENDPOINTS.LOGOUT, { refresh });
+      }
+    } catch {
+      // Local sign-out must always succeed even if the server is unreachable
+    } finally {
+      await this.clearAuth();
+    }
   }
 
   async getCurrentUser(): Promise<any | null> {
@@ -320,14 +331,14 @@ class ApiClient {
   }
 
   async isAuthenticated(): Promise<boolean> {
-    const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    const token = await secureTokenStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     return !!token;
   }
 
   /** Returns true if the stored access token has > 1 hour of validity left. */
   async isAccessTokenFresh(): Promise<boolean> {
     try {
-      const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+      const token = await secureTokenStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       if (!token) return false;
       const parts = token.split('.');
       if (parts.length !== 3) return false;
@@ -351,7 +362,7 @@ class ApiClient {
    */
   async proactiveRefresh(): Promise<void> {
     try {
-      const hasToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      const hasToken = await secureTokenStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
       if (!hasToken) return;
 
       // Skip the network call when the access token is still fresh.

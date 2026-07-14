@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.ahmed20kamel.alyafour",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Allows attaching photos from your library to purchase requests, goods receiving notes, and HR requests.",
+        "NSCameraUsageDescription": "Allows taking photos to attach to purchase requests, goods receiving notes, and HR requests."
       }
     },
     "android": {
@@ -34,9 +36,15 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#0B1F33",
+          "color": "#C9943A",
           "defaultChannel": "default",
           "sounds": []
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allows unlocking the app with Face ID when App Lock is enabled."
         }
       ],
       [
@@ -45,12 +53,15 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#F1F5F9",
+          "backgroundColor": "#F7F4F0",
           "dark": {
-            "backgroundColor": "#0B1120"
+            "backgroundColor": "#111827"
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Modal, StyleSheet } from 'react-native';
 import { useConfirm } from '@/lib/hooks/use-toast';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { Button } from './Button';
+import { AppButton as Button } from './AppButton';
 
 export default function ConfirmDialog() {
   const { confirmState, handleConfirm, handleCancel } = useConfirm();

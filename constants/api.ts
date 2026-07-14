@@ -1,12 +1,19 @@
 // API Configuration
-export const API_BASE_URL = 'https://procurement-backend-production-184f.up.railway.app';
+// Base URL comes from the EAS build profile (eas.json env → EXPO_PUBLIC_API_URL);
+// the fallback keeps plain `expo start` working against production.
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  'https://procurement-backend-production-184f.up.railway.app';
 
 export const API_ENDPOINTS = {
   // Authentication
   LOGIN: '/api/auth/login/',
   REGISTER: '/api/auth/register/',
   LOGOUT: '/api/auth/logout/',
-  REFRESH_TOKEN: '/api/auth/refresh/',
+  // NOTE: the backend registers refresh at /api/auth/token/refresh/ (procurement/urls.py).
+  // The old '/api/auth/refresh/' path never existed — every refresh 404'd, which is
+  // why sessions silently died after 15 minutes and users had to re-login.
+  REFRESH_TOKEN: '/api/auth/token/refresh/',
   USER_PROFILE: '/api/auth/me/',
   
   // Users

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Switch,
   TouchableOpacity, Alert, Platform,
@@ -11,6 +11,12 @@ import { useAppTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppHeader } from '@/components/ui/AppHeader';
+import {
+  authenticateBiometric,
+  getBiometricCapabilities,
+  isAppLockEnabled,
+  setAppLockEnabled,
+} from '@/lib/app-lock';
 
 const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 const buildNumber =
@@ -91,6 +97,56 @@ export default function SettingsScreen() {
     setColorScheme(v ? 'dark' : 'light');
   };
 
+  // ── App Lock (biometric) ──────────────────────────────────────────────
+  const [appLock, setAppLock] = useState(false);
+  const [bioLabel, setBioLabel] = useState('Biometrics');
+  const [bioAvailable, setBioAvailable] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [enabled, caps] = await Promise.all([
+        isAppLockEnabled(),
+        getBiometricCapabilities(),
+      ]);
+      setAppLock(enabled);
+      setBioLabel(caps.label);
+      setBioAvailable(caps.hasHardware && caps.enrolled);
+    })();
+  }, []);
+
+  const handleAppLock = async (v: boolean) => {
+    if (v) {
+      const caps = await getBiometricCapabilities();
+      if (!caps.hasHardware || !caps.enrolled) {
+        Alert.alert(
+          `${caps.label} not set up`,
+          caps.hasHardware
+            ? `Enroll ${caps.label} in your device settings first, then enable App Lock.`
+            : 'This device has no biometric hardware, so App Lock is unavailable.',
+        );
+        return;
+      }
+      // Enabling requires a successful LIVE authentication — proves the
+      // sensor works and confirms user intent before the gate is armed.
+      const result = await authenticateBiometric(`Enable ${caps.label} lock`);
+      if (result === 'success') {
+        await setAppLockEnabled(true);
+        setAppLock(true);
+      } else if (result === 'unavailable') {
+        Alert.alert('Unavailable', `${caps.label} is not available right now.`);
+      }
+      // cancelled / failed → switch stays off; user simply retries
+    } else {
+      // Disabling is also authenticated — the lock cannot be removed by
+      // someone who cannot pass it.
+      const result = await authenticateBiometric('Confirm to disable App Lock');
+      if (result === 'success' || result === 'unavailable') {
+        await setAppLockEnabled(false);
+        setAppLock(false);
+      }
+    }
+  };
+
   const handleNotifications = (v: boolean) => {
     setNotificationsEnabled(v);
     if (v) {
@@ -118,11 +174,29 @@ export default function SettingsScreen() {
         <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           <SettingRow
             icon="moon.fill"
-            iconColor="#7C3AED"
+            iconColor={c.tint}
             label="Dark Mode"
             description={colorScheme === 'dark' ? 'Currently using dark theme' : 'Currently using light theme'}
             value={colorScheme === 'dark'}
             onValueChange={handleDarkMode}
+            c={c}
+          />
+        </View>
+
+        {/* ── Security ── */}
+        <Text style={[s.sectionLabel, { color: c.textMuted }]}>SECURITY</Text>
+        <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <SettingRow
+            icon="faceid"
+            iconColor={c.tint}
+            label={`App Lock (${bioLabel})`}
+            description={
+              bioAvailable
+                ? `Require ${bioLabel} when opening or returning to the app`
+                : `Set up ${bioLabel} on this device to enable`
+            }
+            value={appLock}
+            onValueChange={handleAppLock}
             c={c}
           />
         </View>
@@ -132,7 +206,7 @@ export default function SettingsScreen() {
         <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           <SettingRow
             icon="bell.fill"
-            iconColor="#1D4ED8"
+            iconColor={c.info}
             label="In-App Notifications"
             description="Show alerts for approvals, updates, and reminders"
             value={notificationsEnabled}
@@ -141,7 +215,7 @@ export default function SettingsScreen() {
           />
           <SettingRow
             icon="speaker.wave.2.fill"
-            iconColor="#15803D"
+            iconColor={c.success}
             label="Sound"
             description="Play sound for new notifications and chat messages"
             value={soundEnabled}
@@ -155,21 +229,21 @@ export default function SettingsScreen() {
         <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           <InfoRow
             icon="info.circle.fill"
-            iconColor="#0369A1"
+            iconColor={c.textSecondary}
             label="App Version"
             value={buildNumber ? `${appVersion} (${buildNumber})` : appVersion}
             c={c}
           />
           <InfoRow
             icon="building.2.fill"
-            iconColor="#946200"
+            iconColor={c.warning}
             label="Company"
             value="Al Yafour General Contracting & Transport LLC"
             c={c}
           />
           <InfoRow
             icon="mappin.circle.fill"
-            iconColor="#B42318"
+            iconColor={c.danger}
             label="Registered"
             value="Abu Dhabi, UAE · CN-1028096"
             c={c}
@@ -181,7 +255,7 @@ export default function SettingsScreen() {
         <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           <InfoRow
             icon="person.crop.circle.fill"
-            iconColor="#526173"
+            iconColor={c.textSecondary}
             label="My Profile"
             value="View and manage your account"
             c={c}
@@ -189,7 +263,7 @@ export default function SettingsScreen() {
           />
           <InfoRow
             icon="bell.badge.fill"
-            iconColor="#1D4ED8"
+            iconColor={c.info}
             label="Notifications"
             value="View all alerts and messages"
             c={c}
@@ -202,7 +276,7 @@ export default function SettingsScreen() {
         <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           <InfoRow
             icon="envelope.fill"
-            iconColor="#526173"
+            iconColor={c.textSecondary}
             label="IT Support"
             value="engineering.dep@alyafour.com"
             c={c}

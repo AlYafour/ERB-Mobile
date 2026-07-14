@@ -6,17 +6,27 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://procurement-backend-production-184f.up.railway.app"
+      }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://procurement-backend-production-184f.up.railway.app"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://procurement-backend-production-184f.up.railway.app"
+      }
     }
   },
   "submit": {

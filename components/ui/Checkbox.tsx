@@ -14,6 +14,9 @@ interface CheckboxProps {
 export function Checkbox({ checked, onChange, disabled = false, indeterminate = false, title }: CheckboxProps) {
   return (
     <TouchableOpacity
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: indeterminate ? 'mixed' : checked, disabled }}
+      accessibilityLabel={title}
       style={[styles.container, disabled && styles.disabled]}
       onPress={() => !disabled && onChange(!checked)}
       disabled={disabled}

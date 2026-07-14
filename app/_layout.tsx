@@ -10,10 +10,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppThemeProvider } from '@/contexts/ThemeContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthGate } from '@/components/AuthGate';
+import { AppLockGate } from '@/components/AppLockGate';
 import { ToastContainer } from '@/components/ui/Toast';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { Colors } from '@/constants/theme';
 import { setupNotificationChannel, requestNotificationPermission } from '@/lib/notification-service';
+
+export { AppErrorBoundary as ErrorBoundary } from '@/components/AppErrorBoundary';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -76,8 +80,10 @@ function RootLayoutInner() {
             backgroundColor={isDark ? Colors.dark.background : Colors.light.background}
             translucent={false}
           />
+          <AuthGate />
           <ToastContainer />
           <ConfirmDialog />
+          <AppLockGate />
         </ThemeProvider>
       </AuthProvider>
     </SafeAreaProvider>

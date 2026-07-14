@@ -98,6 +98,9 @@ export function AppButton({
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={0.72}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: isDisabled, busy: !!loading }}
       style={[
         s.base,
         {

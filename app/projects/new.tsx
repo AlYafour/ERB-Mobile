@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Switch, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { projectsApi } from '@/lib/api/projects';
@@ -75,6 +75,7 @@ export default function NewProjectScreen() {
     <SafeAreaView style={S.container} edges={['top']}>
       <AppHeader title="New Project" showBack />
 
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Basic Information */}
@@ -129,6 +130,7 @@ export default function NewProjectScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+      </KeyboardAvoidingView>
 
       <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
         <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}

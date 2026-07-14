@@ -1,34 +1,42 @@
 import { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/Card';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppBadge } from '@/components/ui/AppBadge';
+import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { Input } from '@/components/ui/Input';
 import { User, PaginatedResponse } from '@/types';
 import { Colors } from '@/constants/theme';
-import { Spacing, BorderRadius, Typography } from '@/constants/spacing';
-import { Layout } from '@/constants/layout';
-import { CommonStyles } from '@/constants/common-styles';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Spacing, Typography } from '@/constants/spacing';
 
 export default function UsersScreen() {
   const router = useRouter();
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const loadUsers = async () => {
     try {
+      setError(null);
       const response = await apiClient.get<PaginatedResponse<User>>(API_ENDPOINTS.USERS);
       if (response.data) {
         setUsers(response.data.results || []);
+      } else if (response.error) {
+        setError(response.error);
       }
-    } catch (error) {
-      if (__DEV__) console.error('Error loading users:', error);
+    } catch {
+      setError('Could not load users. Check your connection and try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -37,6 +45,7 @@ export default function UsersScreen() {
 
   useEffect(() => {
     loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onRefresh = () => {
@@ -44,59 +53,58 @@ export default function UsersScreen() {
     loadUsers();
   };
 
+  const q = searchQuery.toLowerCase();
   const filteredUsers = users.filter(
     (user) =>
-      user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.username?.toLowerCase().includes(searchQuery.toLowerCase())
+      user.email?.toLowerCase().includes(q) ||
+      user.first_name?.toLowerCase().includes(q) ||
+      user.last_name?.toLowerCase().includes(q) ||
+      user.username?.toLowerCase().includes(q)
   );
 
   const renderItem = ({ item }: { item: User }) => (
-    <TouchableOpacity onPress={() => router.push(`/users/${item.id}` as any)}>
-      <Card style={styles.userCard}>
+    <TouchableOpacity
+      onPress={() => router.push(`/users/${item.id}` as any)}
+      accessibilityRole="button"
+      accessibilityLabel={`Open user ${item.first_name || item.email}`}
+    >
+      <AppCard style={styles.userCard}>
         <View style={styles.userInfo}>
-          <View style={styles.avatar}>
-            <ThemedText style={styles.avatarText}>
-              {item.first_name?.[0] || item.email?.[0] || 'U'}
-            </ThemedText>
+          <View style={[styles.avatar, { backgroundColor: C.tint }]}>
+            <Text style={[styles.avatarText, { color: C.primaryText }]}>
+              {(item.first_name?.[0] || item.email?.[0] || 'U').toUpperCase()}
+            </Text>
           </View>
           <View style={styles.userDetails}>
-            <ThemedText type="defaultSemiBold" style={styles.userName}>
+            <Text style={[styles.userName, { color: C.text }]} numberOfLines={1}>
               {item.first_name && item.last_name
                 ? `${item.first_name} ${item.last_name}`
                 : item.email}
-            </ThemedText>
-            <ThemedText style={styles.userEmail}>{item.email}</ThemedText>
+            </Text>
+            <Text style={[styles.userEmail, { color: C.textSecondary }]} numberOfLines={1}>
+              {item.email}
+            </Text>
             {item.username && (
-              <ThemedText style={styles.userUsername}>@{item.username}</ThemedText>
+              <Text style={[styles.userUsername, { color: C.textMuted }]}>@{item.username}</Text>
             )}
           </View>
         </View>
         <View style={styles.userBadges}>
-          {item.is_staff && (
-            <View style={[styles.badge, styles.staffBadge]}>
-              <ThemedText style={styles.badgeText}>Staff</ThemedText>
-            </View>
-          )}
+          {item.is_staff && <AppBadge variant="info">Staff</AppBadge>}
           {item.is_active ? (
-            <View style={[styles.badge, styles.activeBadge]}>
-              <ThemedText style={styles.badgeText}>Active</ThemedText>
-            </View>
+            <AppBadge variant="success">Active</AppBadge>
           ) : (
-            <View style={[styles.badge, styles.inactiveBadge]}>
-              <ThemedText style={styles.badgeText}>Inactive</ThemedText>
-            </View>
+            <AppBadge variant="default">Inactive</AppBadge>
           )}
         </View>
-      </Card>
+      </AppCard>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ThemedView style={styles.innerContainer}>
-        <View style={styles.searchContainer}>
+    <SafeAreaView style={[styles.container, { backgroundColor: C.background }]} edges={['top']}>
+      <AppHeader title="Users" showBack />
+      <View style={[styles.searchContainer, { borderBottomColor: C.divider }]}>
         <Input
           placeholder="Search users..."
           value={searchQuery}
@@ -104,48 +112,40 @@ export default function UsersScreen() {
           containerStyle={styles.searchInput}
         />
       </View>
-      <FlatList
-        data={filteredUsers}
-        renderItem={renderItem}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <ThemedText style={styles.emptyText}>
-            {loading ? 'Loading users...' : 'No users found'}
-          </ThemedText>
-        }
-      />
-      </ThemedView>
+
+      {loading ? (
+        <AppEmptyState variant="loading" title="Loading users..." />
+      ) : error ? (
+        <AppEmptyState variant="error" title="Could not load users" message={error ?? undefined} actionLabel="Retry" onAction={loadUsers} />
+      ) : filteredUsers.length === 0 ? (
+        <AppEmptyState
+          variant="empty"
+          title={searchQuery ? 'No users match your search' : 'No users found'}
+        />
+      ) : (
+        <FlatList
+          data={filteredUsers}
+          renderItem={renderItem}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    ...CommonStyles.screenContainer,
-  },
-  innerContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
+  container: { flex: 1 },
   searchContainer: {
-    paddingHorizontal: Layout.screenPadding,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     paddingBottom: Spacing.sm,
-    backgroundColor: Colors.light.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  searchInput: {
-    marginBottom: 0,
-  },
-  listContent: {
-    ...CommonStyles.listContent,
-  },
-  userCard: {
-    ...CommonStyles.itemCard,
-  },
+  searchInput: { marginBottom: 0 },
+  listContent: { padding: Spacing.lg, gap: Spacing.md },
+  userCard: { marginBottom: Spacing.md },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -155,68 +155,26 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.light.tint,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: Spacing.md,
   },
   avatarText: {
-    color: '#FFFFFF',
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.bold,
   },
-  userDetails: {
-    flex: 1,
-  },
+  userDetails: { flex: 1 },
   userName: {
-    marginBottom: Spacing.xs,
+    marginBottom: 2,
     fontSize: Typography.sizes.base,
     fontWeight: Typography.weights.semibold,
-    color: Colors.light.text,
     letterSpacing: 0.2,
   },
-  userEmail: {
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    marginBottom: Spacing.xs / 2,
-    fontWeight: Typography.weights.normal,
-  },
-  userUsername: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.light.textTertiary,
-    fontWeight: Typography.weights.normal,
-  },
+  userEmail: { fontSize: Typography.sizes.sm },
+  userUsername: { fontSize: Typography.sizes.sm, marginTop: 2 },
   userBadges: {
     flexDirection: 'row',
-    marginTop: Spacing.sm,
     gap: Spacing.sm,
     flexWrap: 'wrap',
   },
-  badge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-  },
-  staffBadge: {
-    backgroundColor: Colors.light.tint,
-  },
-  activeBadge: {
-    backgroundColor: Colors.light.success,
-  },
-  inactiveBadge: {
-    backgroundColor: Colors.light.textTertiary,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.bold,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: Spacing.xl,
-    fontSize: Typography.sizes.base,
-    color: Colors.light.textSecondary,
-    fontWeight: Typography.weights.medium,
-  },
 });
-

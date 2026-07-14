@@ -44,15 +44,15 @@ function KpiCard({ label, value, sub, icon, iconColor, c, onPress }: KpiCardProp
 
 // ── Activity Row ─────────────────────────────────────────────────────────────
 const ACTIVITY_ICONS: Record<string, { icon: string; color: string }> = {
-  purchase_request: { icon: 'doc.text.fill',    color: '#1D4ED8' },
-  quotation:        { icon: 'doc.badge.plus',    color: '#7C3AED' },
-  purchase_order:   { icon: 'cart.fill',         color: '#15803D' },
-  grn:              { icon: 'shippingbox.fill',  color: '#0369A1' },
+  purchase_request: { icon: 'doc.text.fill',    color: '#C9943A' },
+  quotation:        { icon: 'doc.badge.plus',    color: '#8A5A15' },
+  purchase_order:   { icon: 'cart.fill',         color: '#3A7D52' },
+  grn:              { icon: 'shippingbox.fill',  color: '#6F625E' },
   invoice:          { icon: 'banknote.fill',     color: '#946200' },
 };
 
 const ACTION_COLORS: Record<string, string> = {
-  created: '#1D4ED8', approved: '#15803D', rejected: '#B42318', paid: '#0E5229',
+  created: '#C9943A', approved: '#3A7D52', rejected: '#B42318', paid: '#0E5229',
 };
 
 function ActivityRow({ item, c, onPress }: { item: RecentActivity; c: typeof Colors.light; onPress: () => void }) {
@@ -92,7 +92,7 @@ function ActivityRow({ item, c, onPress }: { item: RecentActivity; c: typeof Col
 // ── Cycle Metric Bar ─────────────────────────────────────────────────────────
 function CycleBar({ stage, days, maxDays, c }: { stage: string; days: number; maxDays: number; c: typeof Colors.light }) {
   const pct = maxDays > 0 ? Math.min((days / maxDays) * 100, 100) : 0;
-  const color = pct > 66 ? '#B42318' : pct > 33 ? '#946200' : '#15803D';
+  const color = pct > 66 ? '#B42318' : pct > 33 ? '#946200' : '#3A7D52';
   return (
     <View style={cyc.row}>
       <Text style={[cyc.stage, { color: c.textPrimary }]}>{stage}</Text>
@@ -170,12 +170,12 @@ export default function DashboardScreen() {
           <Text style={[s.sectionLabel, { color: c.textMuted }]}>PROCUREMENT OVERVIEW</Text>
           <View style={s.grid}>
             {[
-              { label: 'Purchase Requests', value: stats?.purchaseRequests.total ?? '—', sub: stats?.purchaseRequests.pending ? `${stats.purchaseRequests.pending} pending` : undefined, icon: 'doc.text.fill', iconColor: '#1D4ED8', route: '/purchase-requests' },
-              { label: 'Purchase Orders', value: stats?.purchaseOrders.total ?? '—', sub: stats?.purchaseOrders.pending ? `${stats.purchaseOrders.pending} pending` : undefined, icon: 'cart.fill', iconColor: '#15803D', route: '/purchase-orders' },
-              { label: 'Goods Receiving', value: stats?.goodsReceiving.total ?? '—', icon: 'shippingbox.fill', iconColor: '#0369A1', route: '/goods-receiving' },
+              { label: 'Purchase Requests', value: stats?.purchaseRequests.total ?? '—', sub: stats?.purchaseRequests.pending ? `${stats.purchaseRequests.pending} pending` : undefined, icon: 'doc.text.fill', iconColor: '#C9943A', route: '/purchase-requests' },
+              { label: 'Purchase Orders', value: stats?.purchaseOrders.total ?? '—', sub: stats?.purchaseOrders.pending ? `${stats.purchaseOrders.pending} pending` : undefined, icon: 'cart.fill', iconColor: '#3A7D52', route: '/purchase-orders' },
+              { label: 'Goods Receiving', value: stats?.goodsReceiving.total ?? '—', icon: 'shippingbox.fill', iconColor: '#6F625E', route: '/goods-receiving' },
               { label: 'Invoices', value: stats?.invoices.total ?? '—', sub: stats?.invoices.pending ? `${stats.invoices.pending} pending` : undefined, icon: 'banknote.fill', iconColor: '#946200', route: '/purchase-invoices' },
-              { label: 'Suppliers', value: stats?.suppliers.total ?? '—', icon: 'building.2.fill', iconColor: '#7C3AED', route: '/suppliers' },
-              { label: 'Products', value: stats?.products.total ?? '—', icon: 'cube.box.fill', iconColor: '#D97706', route: '/products' },
+              { label: 'Suppliers', value: stats?.suppliers.total ?? '—', icon: 'building.2.fill', iconColor: '#8A5A15', route: '/suppliers' },
+              { label: 'Products', value: stats?.products.total ?? '—', icon: 'cube.box.fill', iconColor: '#B7791F', route: '/products' },
             ].map(k => (
               <View key={k.label} style={{ width: kpiW }}>
                 <KpiCard {...k} c={c} onPress={() => router.push(k.route as any)} />
@@ -189,8 +189,8 @@ export default function DashboardScreen() {
               <Text style={[s.sectionLabel, { color: c.textMuted }]}>APPROVAL PIPELINE</Text>
               <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
                 {[
-                  { label: 'PR Approvals Pending', count: stats.purchaseRequests.pending, total: stats.purchaseRequests.total, color: '#1D4ED8', route: '/purchase-requests' },
-                  { label: 'PO Approvals Pending', count: stats.purchaseOrders.pending, total: stats.purchaseOrders.total, color: '#15803D', route: '/purchase-orders' },
+                  { label: 'PR Approvals Pending', count: stats.purchaseRequests.pending, total: stats.purchaseRequests.total, color: '#C9943A', route: '/purchase-requests' },
+                  { label: 'PO Approvals Pending', count: stats.purchaseOrders.pending, total: stats.purchaseOrders.total, color: '#3A7D52', route: '/purchase-orders' },
                   { label: 'Invoices Awaiting Payment', count: stats.invoices.pending + stats.invoices.approved, total: stats.invoices.total, color: '#946200', route: '/purchase-invoices' },
                 ].map((item, i, arr) => {
                   const pct = item.total > 0 ? Math.round((item.count / item.total) * 100) : 0;

@@ -71,7 +71,7 @@ const HR_ACTIONS = [
   { id: 'other',            icon: 'ellipsis.circle.fill',   label: 'Miscellaneous',        sub: 'Other requests' },
 ];
 
-const ICON_COLORS = ['#1D4ED8','#15803D','#D97706','#0369A1','#7C3AED','#6B7280'];
+const ICON_COLORS = ['#C9943A','#3A7D52','#B7791F','#6F625E','#8A5A15','#6B7280'];
 
 export default function HRScreen() {
   const { user } = useAuth();
@@ -243,9 +243,9 @@ export default function HRScreen() {
 
           {[
             { icon: 'clock.fill',               color: '#10b981', label: 'Attendance',      sub: 'Check in / check out' },
-            { icon: 'calendar',                  color: '#1D4ED8', label: 'Leave Balance',   sub: 'Annual, sick, emergency' },
-            { icon: 'doc.text.fill',             color: '#7C3AED', label: 'My Requests',     sub: 'Leave, WFH, overtime' },
-            { icon: 'dollarsign.circle.fill',    color: '#D97706', label: 'Payslip',         sub: 'Monthly payroll details' },
+            { icon: 'calendar',                  color: '#C9943A', label: 'Leave Balance',   sub: 'Annual, sick, emergency' },
+            { icon: 'doc.text.fill',             color: '#8A5A15', label: 'My Requests',     sub: 'Leave, WFH, overtime' },
+            { icon: 'dollarsign.circle.fill',    color: '#B7791F', label: 'Payslip',         sub: 'Monthly payroll details' },
           ].map((item, i) => (
             <View key={i} style={[s.previewRow, { backgroundColor: c.surface, borderColor: c.border, opacity: 0.45 }]}>
               <View style={[s.previewIcon, { backgroundColor: item.color + '15' }]}>
@@ -310,7 +310,7 @@ export default function HRScreen() {
         {/* ── Today attendance ── */}
         <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           <View style={s.cardHeader}>
-            <Text style={[s.cardTitle, { color: c.textPrimary }]}>Today's Attendance</Text>
+            <Text style={[s.cardTitle, { color: c.textPrimary }]}>Today&apos;s Attendance</Text>
             <Text style={[s.cardSub, { color: c.textMuted }]}>
               {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
             </Text>
@@ -418,10 +418,10 @@ export default function HRScreen() {
         <Text style={[s.sectionLabel, { color: c.textMuted }]}>QUICK ACTIONS</Text>
         <View style={s.quickGrid}>
           {[
-            { icon: 'list.bullet.clipboard', label: 'My Requests',   route: '/hr/requests',          color: '#1D4ED8' },
-            { icon: 'clock',                label: 'History',       route: '/hr/attendance-history', color: '#15803D' },
-            { icon: 'dollarsign.circle',    label: 'Payslip',       route: '/hr/payslip',            color: '#D97706' },
-            { icon: 'plus.circle.fill',     label: 'New Request',   route: null,                     color: '#7C3AED' },
+            { icon: 'list.bullet.clipboard', label: 'My Requests',   route: '/hr/requests',          color: '#C9943A' },
+            { icon: 'clock',                label: 'History',       route: '/hr/attendance-history', color: '#3A7D52' },
+            { icon: 'dollarsign.circle',    label: 'Payslip',       route: '/hr/payslip',            color: '#B7791F' },
+            { icon: 'plus.circle.fill',     label: 'New Request',   route: null,                     color: '#8A5A15' },
           ].map(item => (
             <TouchableOpacity
               key={item.label}

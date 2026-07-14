@@ -1,234 +1,58 @@
-# Design System Guide
+# AL Yafour Mobile - Design System v3 (web-aligned)
 
-## نظم التصميم الموحد - Premium UI System
+Single source of truth: `constants/theme.ts` (colors), `constants/spacing.ts`
+(spacing, radius, typography). This document describes the ACTUAL tokens -
+if code and doc disagree, fix the code or update this doc in the same PR.
 
-هذا الدليل يوضح نظام التصميم الموحد المستخدم في التطبيق لضمان تناسق ووضوح الواجهة.
+## Brand
 
-## المبادئ الأساسية
+Aligned with the web frontend (`ERB-core-Frontend/styles/tokens/`):
 
-1. **التناسق**: كل العناصر تتبع نفس القواعد
-2. **الوضوح**: المسافات والأحجام واضحة ومحددة
-3. **البساطة**: تصميم نظيف بدون تعقيد
-4. **الاحترافية**: مظهر فخم ومرتاح للعين
+| Role | Light | Dark |
+|---|---|---|
+| Brand / primary / tint | `#C9943A` | `#D4A44C` |
+| Background | `#F7F4F0` | `#111827` |
+| Surface / card | `#FFFFFF` | `#1A2235` |
+| Text / secondary | `#1C1414` / `#6F625E` | `#F1F5F9` / `#B0BAC9` |
+| Border | `#E2DBD6` | `#1E2D45` |
+| Success | `#3A7D52` | `#6EAF86` |
+| Warning | `#B7791F` | `#DBA23C` |
+| Danger | `#DC2626` | `#F87171` |
+| Info | brand gold (like web - no blue) | brand gold |
 
-## Spacing System
+Icon-tile tints for module cards come from `ModuleTints` in `theme.ts` -
+never invent per-screen hexes.
 
-استخدم `Spacing` من `@/constants/spacing`:
+## Rules
 
-```typescript
-import { Spacing } from '@/constants/spacing';
+1. **No hardcoded hex in screens.** Pull from `Colors[useColorScheme()]`.
+   The only exception is content that must be identical in both themes
+   (rare - justify in a comment).
+2. **One component family.** `AppButton`, `AppCard`, `AppBadge`, `AppHeader`,
+   `AppScreen`, `AppEmptyState`, `AppBottomSheet`, `Input`, `Checkbox`,
+   `SearchableDropdown`, `DatePickerInput`. The legacy `Button`/`Card`/
+   `Badge`/`ScreenHeader` and `constants/common-styles.ts` were deleted -
+   do not reintroduce them.
+3. **List screens** follow the standard branch:
+   `loading -> AppEmptyState(loading)` -> `error -> AppEmptyState(error + Retry)`
+   -> `empty -> AppEmptyState(empty)` -> `FlatList`.
+4. **Forms**: shared `Input` (never raw `TextInput` for user-facing fields),
+   `KeyboardAvoidingView` (`padding` iOS / `height` Android) around every
+   form ScrollView, field-level `error` prop over toast-only validation.
+5. **Accessibility**: interactive elements get `accessibilityRole` and a
+   meaningful `accessibilityLabel`. The shared components do this for you -
+   custom touchables must do it themselves. Minimum touch target 44px
+   (or `hitSlop` to reach it).
+6. **Safe areas**: `SafeAreaView edges={['top']}` + inset-aware bottom bars.
+7. **Dark mode** is user-toggled (Settings) via `ThemeContext`; every screen
+   must render correctly in both schemes - no `Colors.light.*` literals.
 
-// المسافات المتاحة:
-Spacing.xs   // 4px
-Spacing.sm   // 8px
-Spacing.md   // 16px
-Spacing.lg   // 24px
-Spacing.xl   // 32px
-Spacing.xxl  // 48px
-```
+## Auth & security architecture (do not regress)
 
-## Layout Constants
-
-استخدم `Layout` من `@/constants/layout`:
-
-```typescript
-import { Layout } from '@/constants/layout';
-
-// المسافات الثابتة:
-Layout.screenPadding      // 16px - padding للشاشات
-Layout.cardPadding        // 20px - padding للكروت
-Layout.cardMarginBottom   // 16px - margin bottom للكروت
-Layout.sectionMarginTop   // 24px - margin top للأقسام
-Layout.formGroupMarginBottom // 20px - margin bottom لمجموعات النماذج
-```
-
-## Typography
-
-استخدم `Typography` من `@/constants/spacing`:
-
-```typescript
-import { Typography } from '@/constants/spacing';
-
-// الأحجام:
-Typography.sizes.xs    // 10px
-Typography.sizes.sm    // 12px
-Typography.sizes.base  // 14px
-Typography.sizes.md    // 16px
-Typography.sizes.lg    // 18px
-Typography.sizes.xl    // 20px
-Typography.sizes['2xl'] // 24px
-Typography.sizes['3xl'] // 28px
-Typography.sizes['4xl'] // 32px
-
-// الأوزان:
-Typography.weights.normal    // 400
-Typography.weights.medium   // 500
-Typography.weights.semibold  // 600
-Typography.weights.bold      // 700
-```
-
-## Colors
-
-استخدم `Colors` من `@/constants/theme`:
-
-```typescript
-import { Colors } from '@/constants/theme';
-
-// الألوان الأساسية:
-Colors.light.text
-Colors.light.textSecondary
-Colors.light.textTertiary
-Colors.light.background
-Colors.light.backgroundSecondary
-Colors.light.backgroundTertiary
-Colors.light.border
-Colors.light.borderLight
-Colors.light.tint
-Colors.light.success
-Colors.light.error
-Colors.light.warning
-Colors.light.info
-```
-
-## Components
-
-### Button
-
-```typescript
-<Button
-  title="Click Me"
-  variant="primary" // primary | secondary | outline | danger
-  onPress={handlePress}
-  disabled={false}
-  loading={false}
-  fullWidth={false}
-/>
-```
-
-**المواصفات:**
-- الارتفاع: 48px
-- Padding: 12px vertical, 24px horizontal
-- Border Radius: 8px
-- Font Size: 16px
-- Font Weight: 600
-
-### Card
-
-```typescript
-<Card padding={20} style={customStyle}>
-  {/* Content */}
-</Card>
-```
-
-**المواصفات:**
-- Padding الافتراضي: 20px
-- Border Radius: 12px
-- Margin Bottom: 16px
-- Border: 1px solid
-- Shadow: خفيف
-
-### Input
-
-```typescript
-<Input
-  label="Label"
-  placeholder="Placeholder"
-  value={value}
-  onChangeText={setValue}
-  error={error}
-/>
-```
-
-**المواصفات:**
-- الارتفاع: 48px
-- Padding: 12px vertical, 16px horizontal
-- Border Radius: 8px
-- Border Width: 1.5px
-- Font Size: 16px
-
-## Best Practices
-
-### 1. المسافات
-
-✅ **صحيح:**
-```typescript
-<View style={{ padding: Layout.screenPadding }}>
-  <Card style={{ marginBottom: Layout.cardMarginBottom }}>
-    {/* Content */}
-  </Card>
-</View>
-```
-
-❌ **خطأ:**
-```typescript
-<View style={{ padding: 15 }}>
-  <Card style={{ marginBottom: 10 }}>
-    {/* Content */}
-  </Card>
-</View>
-```
-
-### 2. الألوان
-
-✅ **صحيح:**
-```typescript
-<ThemedText style={{ color: Colors.light.textSecondary }}>
-  Secondary Text
-</ThemedText>
-```
-
-❌ **خطأ:**
-```typescript
-<ThemedText style={{ color: '#999' }}>
-  Secondary Text
-</ThemedText>
-```
-
-### 3. Typography
-
-✅ **صحيح:**
-```typescript
-<ThemedText style={{
-  fontSize: Typography.sizes.lg,
-  fontWeight: Typography.weights.semibold,
-}}>
-  Title
-</ThemedText>
-```
-
-❌ **خطأ:**
-```typescript
-<ThemedText style={{
-  fontSize: 18,
-  fontWeight: '600',
-}}>
-  Title
-</ThemedText>
-```
-
-### 4. التنظيم
-
-- استخدم `Layout.screenPadding` لـ padding الشاشات
-- استخدم `Layout.cardMarginBottom` بين الكروت
-- استخدم `Spacing.md` (16px) كمسافة أساسية بين العناصر
-- استخدم `Spacing.sm` (8px) للمسافات الصغيرة
-- استخدم `Spacing.lg` (24px) للمسافات الكبيرة
-
-### 5. Alignment
-
-- تأكد من أن كل العناصر في محاذاة صحيحة
-- استخدم `flexDirection: 'row'` مع `alignItems: 'center'` للعناصر الأفقية
-- استخدم `justifyContent: 'space-between'` لتوزيع العناصر
-
-## Checklist للشاشات الجديدة
-
-- [ ] استخدام `Layout.screenPadding` للـ padding
-- [ ] استخدام `Spacing` constants للمسافات
-- [ ] استخدام `Typography` constants للنصوص
-- [ ] استخدام `Colors` constants للألوان
-- [ ] التأكد من أن الأزرار 48px ارتفاع
-- [ ] التأكد من أن الـ Cards لها padding 20px
-- [ ] التأكد من أن الـ Inputs لها ارتفاع 48px
-- [ ] التأكد من عدم وجود تداخل في العناصر
-- [ ] التأكد من أن المسافات متسقة
-
+- Tokens live in **SecureStore** (`lib/secure-storage.ts`), never AsyncStorage.
+- All requests go through `lib/api.ts`: single-flight refresh mutex,
+  rotation-aware (`/api/auth/token/refresh/`), resume-time proactive refresh.
+- `components/AuthGate.tsx` is the global session guard;
+  `components/AppLockGate.tsx` + `lib/app-lock.ts` implement biometric
+  App Lock (enable/disable both require live authentication).
+- Logout always sends `{ refresh }` so the backend blacklists the session.

@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { notificationsApi } from '@/lib/api/notifications';
-import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { AppHeader } from '@/components/ui/AppHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { Colors } from '@/constants/theme';
@@ -222,10 +222,10 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScreenHeader
+      <AppHeader
         title="Notifications"
         subtitle={unreadCount > 0 ? `${unreadCount} unread` : undefined}
-        rightElement={
+        right={
           unreadCount > 0 ? (
             <TouchableOpacity
               onPress={markAllRead}

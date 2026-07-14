@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import { apiClient } from '@/lib/api';
 import { User } from '@/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -48,6 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(BRANDING_KEY).then(raw => {
       if (raw) { try { setBranding(JSON.parse(raw)); } catch {} }
     });
+
+    // Foreground resume: if the access token expired while backgrounded,
+    // refresh it BEFORE the user's next tap instead of letting the first
+    // request 401. proactiveRefresh() no-ops when the token is still fresh
+    // and is single-flight, so this is cheap and race-free.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        apiClient.proactiveRefresh();
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const loadUser = async () => {
@@ -139,6 +151,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      // App Lock is a per-session preference — clear it with the session so
+      // the next account never inherits the previous user's lock state.
+      const { setAppLockEnabled } = await import('@/lib/app-lock');
+      await setAppLockEnabled(false).catch(() => {});
       await apiClient.logout();
       setUser(null);
     } catch (error) {

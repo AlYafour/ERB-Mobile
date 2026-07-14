@@ -58,6 +58,8 @@ export function AppHeader({
             style={[s.backBtn, { backgroundColor: c.surfaceMuted }]}
             hitSlop={12}
             activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
             <IconSymbol name="chevron.left" size={16} color={c.textSecondary} />
           </TouchableOpacity>

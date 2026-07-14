@@ -33,8 +33,8 @@ const ALL_MODULES: ModuleDef[] = [
     label: 'Procurement',
     subtitle: 'Purchase Requests · Orders · GRNs · Invoices',
     icon: 'cart.fill',
-    iconColor: '#1D4ED8',
-    iconBg: '#EFF6FF',
+    iconColor: '#C9943A',
+    iconBg: '#F7EEDD',
     route: '/purchase-requests',
   },
   {
@@ -42,8 +42,8 @@ const ALL_MODULES: ModuleDef[] = [
     label: 'Human Resources',
     subtitle: 'Attendance · Leave · Payroll',
     icon: 'person.2.fill',
-    iconColor: '#15803D',
-    iconBg: '#F0FDF4',
+    iconColor: '#3A7D52',
+    iconBg: '#EAF4ED',
     route: '/(tabs)/hr',
   },
 ];
@@ -186,8 +186,8 @@ export default function HomeScreen() {
             onPress={() => hasProcurement && router.push('/purchase-requests?status=pending' as any)}
             activeOpacity={0.72}
           >
-            <View style={[s.statIcon, { backgroundColor: '#D9770618' }]}>
-              <IconSymbol name="doc.badge.clock" size={16} color="#D97706" />
+            <View style={[s.statIcon, { backgroundColor: '#B7791F18' }]}>
+              <IconSymbol name="doc.badge.clock" size={16} color="#B7791F" />
             </View>
             {statsLoading
               ? <ActivityIndicator size="small" color={c.textMuted} style={{ marginVertical: 5 }} />
@@ -201,8 +201,8 @@ export default function HomeScreen() {
             onPress={() => router.push('/(tabs)/notifications' as any)}
             activeOpacity={0.72}
           >
-            <View style={[s.statIcon, { backgroundColor: '#1D4ED818' }]}>
-              <IconSymbol name="bell.badge" size={16} color="#1D4ED8" />
+            <View style={[s.statIcon, { backgroundColor: '#C9943A18' }]}>
+              <IconSymbol name="bell.badge" size={16} color="#C9943A" />
             </View>
             {statsLoading
               ? <ActivityIndicator size="small" color={c.textMuted} style={{ marginVertical: 5 }} />
@@ -261,9 +261,9 @@ export default function HomeScreen() {
               style={[s.quickList, { backgroundColor: c.surface, borderColor: c.border }]}
             >
               {[
-                { icon: 'doc.text.fill',    label: 'Purchase Requests', sub: 'Create & track PRs',  color: '#1D4ED8', route: '/purchase-requests' },
-                { icon: 'cart.fill',        label: 'Purchase Orders',   sub: 'LPOs & approvals',    color: '#15803D', route: '/purchase-orders' },
-                { icon: 'shippingbox.fill', label: 'Goods Receiving',   sub: 'GRN management',      color: '#7C3AED', route: '/goods-receiving' },
+                { icon: 'doc.text.fill',    label: 'Purchase Requests', sub: 'Create & track PRs',  color: '#C9943A', route: '/purchase-requests' },
+                { icon: 'cart.fill',        label: 'Purchase Orders',   sub: 'LPOs & approvals',    color: '#3A7D52', route: '/purchase-orders' },
+                { icon: 'shippingbox.fill', label: 'Goods Receiving',   sub: 'GRN management',      color: '#8A5A15', route: '/goods-receiving' },
               ].map((item, i, arr) => (
                 <TouchableOpacity
                   key={item.route}
@@ -300,8 +300,8 @@ export default function HomeScreen() {
               onPress={() => router.push('/dashboard' as any)}
               activeOpacity={0.7}
             >
-              <View style={[s.analyticsIcon, { backgroundColor: '#1D4ED815' }]}>
-                <IconSymbol name="chart.bar.fill" size={18} color="#1D4ED8" />
+              <View style={[s.analyticsIcon, { backgroundColor: '#C9943A15' }]}>
+                <IconSymbol name="chart.bar.fill" size={18} color="#C9943A" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[s.analyticsLabel, { color: c.textPrimary }]}>Analytics & KPIs</Text>

@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
+import { AppButton } from '@/components/ui/AppButton';
 import { Logo } from '@/components/ui/Logo';
 
 const NAVY = '#0B1629';
@@ -203,7 +203,7 @@ export default function RegisterScreen() {
             onSubmitEditing={handleRegister}
           />
 
-          <Button
+          <AppButton
             title="Create Account"
             onPress={handleRegister}
             loading={loading}
