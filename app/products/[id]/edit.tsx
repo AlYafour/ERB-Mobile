@@ -14,6 +14,7 @@ import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import { Supplier } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -34,7 +35,7 @@ const DISCOUNT_TYPES = [
   { value: 'fixed', label: 'Fixed Amount' },
 ];
 
-export default function EditProductScreen() {
+function EditProductScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -247,4 +248,13 @@ function makeStyles(C: AppColors) {
     },
     barBtn: { flex: 1 },
   });
+}
+
+
+export default function EditProductScreen() {
+  return (
+    <AppPermissionGate category="product" action="update">
+      <EditProductScreenInner />
+    </AppPermissionGate>
+  );
 }

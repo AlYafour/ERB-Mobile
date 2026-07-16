@@ -21,7 +21,7 @@ export const purchaseRequestsApi = {
     required_by_before?: string;
     created_at_after?: string;
     created_at_before?: string;
-  }): Promise<PaginatedResponse<PurchaseRequest>> => {
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<PurchaseRequest>> => {
     const queryParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -32,7 +32,7 @@ export const purchaseRequestsApi = {
     }
     const queryString = queryParams.toString();
     const endpoint = `${API_ENDPOINTS.PURCHASE_REQUESTS}${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<PurchaseRequest>>(endpoint);
+    const response = await apiClient.get<PaginatedResponse<PurchaseRequest>>(endpoint, options);
     if (response.error || !response.data) {
       throw new Error(response.error || 'Failed to fetch purchase requests');
     }

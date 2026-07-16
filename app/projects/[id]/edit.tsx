@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -22,7 +23,7 @@ const STATUS_OPTIONS = [
   { value: 'inactive',  label: 'Inactive' },
 ];
 
-export default function EditProjectScreen() {
+function EditProjectScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -191,4 +192,13 @@ function makeStyles(C: AppColors) {
     },
     barBtn: { flex: 1 },
   });
+}
+
+
+export default function EditProjectScreen() {
+  return (
+    <AppPermissionGate category="project" action="update">
+      <EditProjectScreenInner />
+    </AppPermissionGate>
+  );
 }

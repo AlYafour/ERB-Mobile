@@ -14,6 +14,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { Project } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -42,7 +43,7 @@ function fmtDate(d?: string | null): string | null {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export default function ProjectDetailScreen() {
+function ProjectDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -184,4 +185,13 @@ function makeStyles(C: AppColors) {
     },
     editBtn: { marginTop: 8 },
   });
+}
+
+
+export default function ProjectDetailScreen() {
+  return (
+    <AppPermissionGate category="project" action="view">
+      <ProjectDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

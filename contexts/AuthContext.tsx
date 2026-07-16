@@ -13,12 +13,21 @@ export interface Branding {
   company_legal_name: string;
 }
 
+export interface LoginResult {
+  success: boolean;
+  error?: string;
+  /** Account has 2FA enabled — navigate to the code screen with tempToken. */
+  requires2FA?: boolean;
+  tempToken?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   branding: Branding | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (username: string, password: string) => Promise<LoginResult>;
+  verifyTwoFactor: (tempToken: string, code: string) => Promise<{ success: boolean; error?: string }>;
   register: (userData: any) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -67,60 +76,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const hasTokens = await apiClient.isAuthenticated();
       if (!hasTokens) return;
 
-      const cachedUser = await apiClient.getCurrentUser();
-      if (cachedUser) setUser(cachedUser);
+      const cachedUser = await apiClient.getCachedUser();
 
-      const tokenFresh = await apiClient.isAccessTokenFresh();
-
-      if (tokenFresh) {
-        // Token is valid — no need to hit Railway on startup.
-        // Show the app immediately; screens will load their own data.
-        // Refresh user profile in background so stale cache gets updated.
-        apiClient.get<any>('/api/auth/me/').then(res => {
+      if (cachedUser) {
+        // Cached profile → show the app IMMEDIATELY. Never block startup on the
+        // network: token refresh and profile sync run in the background, and the
+        // global 401 handling (executeRequest → refresh → clearAuth) covers the
+        // case where the session turns out to be dead.
+        setUser(cachedUser);
+        (async () => {
+          await apiClient.proactiveRefresh();
+          const res = await apiClient.get<any>('/api/auth/me/');
           if (res.data) {
-            AsyncStorage.setItem('user', JSON.stringify(res.data));
+            await AsyncStorage.setItem('user', JSON.stringify(res.data));
             setUser(res.data);
           }
-        }).catch(() => {});
-      } else {
-        // Token expiring or expired — must refresh before showing the app.
-        await Promise.race([
-          apiClient.proactiveRefresh(),
-          new Promise<void>((resolve) => setTimeout(resolve, 30000)),
-        ]);
+        })().catch(() => {});
+        return;
       }
 
+      // Tokens exist but no cached profile (rare: cleared cache / interrupted
+      // login). We must resolve the profile before routing, otherwise AuthGate
+      // treats the session as logged-out. proactiveRefresh no-ops when the
+      // access token is still valid, so this is one round-trip in the worst case.
+      await apiClient.proactiveRefresh();
+      const res = await apiClient.get<any>('/api/auth/me/');
+      if (res.data) {
+        await AsyncStorage.setItem('user', JSON.stringify(res.data));
+        setUser(res.data);
+      }
     } catch {
     } finally {
       setIsLoading(false);
     }
   };
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string): Promise<LoginResult> => {
     try {
       const response = await apiClient.login(username, password);
 
       if (response.data && response.status >= 200 && response.status < 300) {
-        let userData: any = null;
-        try {
-          userData = await apiClient.getCurrentUser();
-        } catch {}
+        const data = response.data as any;
 
-        if (userData) {
-          setUser(userData);
-        } else {
-          (async () => {
-            for (const delay of [2000, 4000, 8000]) {
-              await new Promise<void>(r => setTimeout(r, delay));
-              const stillLoggedIn = await apiClient.isAuthenticated().catch(() => false);
-              if (!stillLoggedIn) return;
-              try {
-                const u = await apiClient.getCurrentUser();
-                if (u) { setUser(u); return; }
-              } catch {}
-            }
-          })();
+        // 2FA challenge — no tokens yet; the caller navigates to the code screen.
+        if (data.requires_2fa) {
+          return { success: false, requires2FA: true, tempToken: data.temp_token };
         }
+
+        // The backend login response includes the full user object — use it
+        // directly so `user` is set BEFORE we report success. This removes the
+        // login→tabs→login bounce (AuthGate used to see user===null mid-redirect).
+        let userData: any = data.user ?? null;
+        if (!userData) {
+          try { userData = await apiClient.getCurrentUser(); } catch {}
+        }
+        if (!userData) {
+          // No profile — navigating would strand the user in the AuthGate
+          // bounce. Fail loudly instead of succeeding into a broken state.
+          await apiClient.logout().catch(() => {});
+          return { success: false, error: 'Could not load your profile. Please try again.' };
+        }
+        setUser(userData);
 
         // Fetch branding in background — updates logo/color for this session and next
         fetchAndCacheBranding().then(b => { if (b) setBranding(b); });
@@ -133,6 +149,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: errorMessage };
     } catch (error: any) {
       return { success: false, error: error.message || 'Login failed' };
+    }
+  };
+
+  const verifyTwoFactor = async (tempToken: string, code: string) => {
+    try {
+      const response = await apiClient.verify2FA(tempToken, code);
+      if (response.data && response.status >= 200 && response.status < 300) {
+        const userData = (response.data as any).user ?? (await apiClient.getCurrentUser());
+        if (!userData) {
+          await apiClient.logout().catch(() => {});
+          return { success: false, error: 'Could not load your profile. Please try again.' };
+        }
+        setUser(userData);
+        fetchAndCacheBranding().then(b => { if (b) setBranding(b); });
+        return { success: true };
+      }
+      return { success: false, error: response.error || 'Invalid or expired code.' };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Verification failed' };
     }
   };
 
@@ -180,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        verifyTwoFactor,
         register,
         logout,
         refreshUser,

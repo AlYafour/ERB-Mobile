@@ -3,7 +3,7 @@ import { useRouter, useSegments } from 'expo-router';
 
 import { useAuth } from '@/contexts/AuthContext';
 
-const PUBLIC_SEGMENTS = new Set(['login', 'register']);
+const PUBLIC_SEGMENTS = new Set(['login', 'register', 'two-factor']);
 
 /**
  * Global navigation guard — the missing piece that used to strand users.

@@ -12,6 +12,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { QuotationRequest } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -24,7 +25,7 @@ function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info'
   }
 }
 
-export default function QuotationRequestDetailScreen() {
+function QuotationRequestDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -190,4 +191,13 @@ function makeStyles(C: AppColors) {
     nextIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     nextSub:  { fontSize: 12 },
   });
+}
+
+
+export default function QuotationRequestDetailScreen() {
+  return (
+    <AppPermissionGate category="quotation_request" action="view">
+      <QuotationRequestDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

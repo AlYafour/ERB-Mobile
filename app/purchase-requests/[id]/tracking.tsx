@@ -17,6 +17,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -99,7 +100,7 @@ function getRelatedRoute(type: string, relatedId: number): string {
   return map[type] || '#';
 }
 
-export default function PurchaseRequestTrackingScreen() {
+function PurchaseRequestTrackingScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -385,4 +386,13 @@ function makeStyles(C: AppColors) {
     viewDetails: { marginTop: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth },
     viewDetailsText: { fontSize: 13, fontWeight: '600' },
   });
+}
+
+
+export default function PurchaseRequestTrackingScreen() {
+  return (
+    <AppPermissionGate category="purchase_request" action="view">
+      <PurchaseRequestTrackingScreenInner />
+    </AppPermissionGate>
+  );
 }

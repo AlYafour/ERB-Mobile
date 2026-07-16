@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { purchaseRequestsApi } from '@/lib/api/purchase-requests';
 import { projectsApi } from '@/lib/api/projects';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
@@ -21,6 +20,7 @@ import { Colors } from '@/constants/theme';
 import { Spacing, Typography } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 const statusLabels: Record<string, string> = {
   pending:  'Pending',
@@ -28,9 +28,8 @@ const statusLabels: Record<string, string> = {
   rejected: 'Rejected',
 };
 
-export default function PurchaseRequestsScreen() {
+function PurchaseRequestsScreenInner() {
   const router = useRouter();
-  const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -40,13 +39,30 @@ export default function PurchaseRequestsScreen() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [data, setData] = useState<PaginatedResponse<PurchaseRequest> | null>(null);
-  const [loading, setLoading] = useState(true);
+  // initialLoading fills the screen once; listLoading (pagination / filter /
+  // search reloads) keeps the list AND its pagination footer mounted.
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [projectsData, setProjectsData] = useState<Project[]>([]);
 
-  const isSuperuser = user?.is_superuser ?? false;
-  const canCreate = isSuperuser || (hasPermission('purchase_request', 'create') ?? false);
+  const canCreate = hasPermission('purchase_request', 'create');
+
+  // Stale-response guards: an older response never overwrites a newer one,
+  // superseded requests are aborted, and nothing sets state after unmount.
+  const reqSeq = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  const hasLoadedOnce = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => { loadProjects(); }, []);
 
@@ -55,29 +71,43 @@ export default function PurchaseRequestsScreen() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => { loadRequests(); }, [page, debouncedSearch, filters]);
-
   const loadProjects = async () => {
     try {
       const response = await projectsApi.getAll({ page: 1, page_size: 1000, is_active: true });
-      setProjectsData(response.results || []);
+      if (mountedRef.current) setProjectsData(response.results || []);
     } catch {}
   };
 
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
+    const seq = ++reqSeq.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setError(null);
+    if (hasLoadedOnce.current) setListLoading(true);
     try {
-      setError(null);
-      setLoading(true);
-      const response = await purchaseRequestsApi.getAll({ page, page_size: 50, search: debouncedSearch, ...filters });
+      const response = await purchaseRequestsApi.getAll(
+        { page, page_size: 50, search: debouncedSearch, ...filters },
+        { signal: controller.signal },
+      );
+      if (seq !== reqSeq.current || !mountedRef.current) return;
       setData(response);
+      hasLoadedOnce.current = true;
     } catch (err: any) {
+      if (seq !== reqSeq.current || !mountedRef.current || controller.signal.aborted) return;
       setError(err.message || 'Failed to load purchase requests');
       toast(err.message || 'Failed to load purchase requests', 'error');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (seq === reqSeq.current && mountedRef.current) {
+        setInitialLoading(false);
+        setListLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [page, debouncedSearch, filters]);
+
+  useEffect(() => { loadRequests(); }, [loadRequests]);
 
   const onRefresh = () => { setRefreshing(true); loadRequests(); };
 
@@ -239,42 +269,52 @@ export default function PurchaseRequestsScreen() {
           />
         )}
 
-        {loading && !refreshing ? (
+        {initialLoading ? (
           <AppEmptyState variant="loading" title="Loading requests…" />
         ) : error && !data?.results?.length ? (
           <AppEmptyState variant="error" title="Failed to load" message={error} actionLabel="Try Again" onAction={loadRequests} />
-        ) : !data?.results?.length ? (
+        ) : !data?.results?.length && !listLoading ? (
           <AppEmptyState variant="empty" icon="doc.text" title="No purchase requests" message="No requests found. Create one to get started." />
         ) : (
-          <FlatList
-            data={data.results}
-            renderItem={renderItem}
-            keyExtractor={(item) => String(item.id || Math.random())}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.primary}
-                colors={[colors.primary]}
-              />
-            }
-            ListFooterComponent={
-              data && data.count > 50 ? (
-                <View style={[styles.pagination, { backgroundColor: colors.surfaceSoft, borderTopColor: colors.border }]}>
-                  <AppButton title="Previous" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!data.previous || page === 1} style={styles.paginationButton} />
-                  <Text style={[styles.paginationText, { color: colors.textMuted }]}>
-                    {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
-                  </Text>
-                  <AppButton title="Next" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => p + 1)}
-                    disabled={!data.next} style={styles.paginationButton} />
-                </View>
-              ) : null
-            }
-          />
+          <View style={{ flex: 1 }}>
+            {/* Slim reload bar — the list and its pagination stay mounted */}
+            {listLoading && !refreshing ? (
+              <View style={[styles.reloadBar, { backgroundColor: colors.surfaceSoft }]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.reloadText, { color: colors.textMuted }]}>Updating…</Text>
+              </View>
+            ) : null}
+            <FlatList
+              data={data?.results ?? []}
+              renderItem={renderItem}
+              keyExtractor={(item) => String(item.id || Math.random())}
+              contentContainerStyle={styles.listContent}
+              style={listLoading ? { opacity: 0.6 } : undefined}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={colors.primary}
+                  colors={[colors.primary]}
+                />
+              }
+              ListFooterComponent={
+                data && data.count > 50 ? (
+                  <View style={[styles.pagination, { backgroundColor: colors.surfaceSoft, borderTopColor: colors.border }]}>
+                    <AppButton title="Previous" variant="secondary" size="sm"
+                      onPress={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={listLoading || !data.previous || page === 1} style={styles.paginationButton} />
+                    <Text style={[styles.paginationText, { color: colors.textMuted }]}>
+                      {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
+                    </Text>
+                    <AppButton title="Next" variant="secondary" size="sm"
+                      onPress={() => setPage((p) => p + 1)}
+                      disabled={listLoading || !data.next} style={styles.paginationButton} />
+                  </View>
+                ) : null
+              }
+            />
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -317,6 +357,12 @@ const styles = StyleSheet.create({
   metaLabel: { fontSize: 12, fontWeight: '500', width: 92, flexShrink: 0 },
   metaValue: { fontSize: 13, flex: 1 },
 
+  reloadBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, paddingVertical: 6,
+  },
+  reloadText: { fontSize: 12, fontWeight: '500' },
+
   pagination: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
@@ -325,3 +371,12 @@ const styles = StyleSheet.create({
   paginationButton: { minWidth: 80 },
   paginationText:   { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
 });
+
+
+export default function PurchaseRequestsScreen() {
+  return (
+    <AppPermissionGate category="purchase_request" action="view">
+      <PurchaseRequestsScreenInner />
+    </AppPermissionGate>
+  );
+}

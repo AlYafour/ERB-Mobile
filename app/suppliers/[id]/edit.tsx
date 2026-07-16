@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -31,7 +32,7 @@ const COUNTRIES = [
   { value: 'Other', label: 'Other' },
 ];
 
-export default function EditSupplierScreen() {
+function EditSupplierScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -236,4 +237,13 @@ function makeStyles(C: AppColors) {
     },
     barBtn: { flex: 1 },
   });
+}
+
+
+export default function EditSupplierScreen() {
+  return (
+    <AppPermissionGate category="supplier" action="update">
+      <EditSupplierScreenInner />
+    </AppPermissionGate>
+  );
 }

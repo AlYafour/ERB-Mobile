@@ -92,22 +92,37 @@ export default function HRScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // The loop MUST be stopped on cleanup: without it, every todayAttendance
+    // change stacked a new infinite loop on top of the old one, and the last
+    // loop kept running after leaving the tab (battery drain + JS-thread jank).
     if (todayAttendance?.check_in && !todayAttendance?.check_out) {
-      Animated.loop(
+      const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.06, duration: 900, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
         ])
-      ).start();
-    } else {
-      pulseAnim.setValue(1);
+      );
+      loop.start();
+      return () => {
+        loop.stop();
+        pulseAnim.setValue(1);
+      };
     }
-  }, [todayAttendance]);
+    pulseAnim.setValue(1);
+  }, [todayAttendance, pulseAnim]);
+
+  // No setState after the tab unmounts (this loader awaits 5 requests).
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const loadData = async () => {
     if (!user) { setLoading(false); setRefreshing(false); return; }
     try {
       const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
+      if (!mountedRef.current) return;
       const employees: any[] = Array.isArray(empRes.data) ? empRes.data : ((empRes.data as any)?.results ?? []);
       const myProfile = employees.find(
         (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
@@ -123,6 +138,7 @@ export default function HRScreen() {
           hrPayrollApi.getAll({ employee: myProfile.id, page: 1 }),
           hrRequestsApi.getLeaveBalances(myProfile.id, year),
         ]);
+        if (!mountedRef.current) return;
 
         if (attRes.status === 'fulfilled') {
           setTodayAttendance((attRes.value.data as any)?.results?.[0] ?? null);
@@ -140,8 +156,10 @@ export default function HRScreen() {
     } catch (e) {
       if (__DEV__) console.error('HR load error:', e);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 

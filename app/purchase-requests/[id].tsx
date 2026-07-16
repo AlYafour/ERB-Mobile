@@ -3,7 +3,6 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseRequestsApi } from '@/lib/api/purchase-requests';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 import { canCreateQuotationRequest, canCreatePurchaseOrder } from '@/lib/utils/workflow-guards';
@@ -16,14 +15,14 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PurchaseRequest } from '@/types';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
-export default function PurchaseRequestDetailScreen() {
+function PurchaseRequestDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
-  const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
@@ -37,12 +36,14 @@ export default function PurchaseRequestDetailScreen() {
   const [undoing, setUndoing] = useState(false);
   const [resubmitting, setResubmitting] = useState(false);
 
-  const su = user?.is_superuser ?? false;
-  const canApprove = su || ((hasPermission('purchase_request', 'approve') ?? false) && user?.role !== 'procurement_officer' && user?.role !== 'site_engineer');
-  const canReject = su || ((hasPermission('purchase_request', 'reject') ?? false) && user?.role !== 'procurement_officer' && user?.role !== 'site_engineer');
-  const canCreateQR = hasPermission('quotation_request', 'create') ?? false;
-  const canCreatePO = hasPermission('purchase_order', 'create') ?? false;
-  const isProcurement = user?.role === 'procurement_officer' || user?.role === 'super_admin' || su;
+  // Permission-based, matching the web (purchase-requests/[id]/page.tsx).
+  // The old role EXCLUSIONS (procurement_officer/site_engineer could never
+  // approve even when granted the permission) had no web equivalent — removed.
+  const canApprove = hasPermission('purchase_request', 'approve');
+  const canReject = hasPermission('purchase_request', 'reject');
+  const canUndoApprove = hasPermission('purchase_request', 'undo_approve');
+  const canCreateQR = hasPermission('quotation_request', 'create');
+  const canCreatePO = hasPermission('purchase_order', 'create');
 
   const load = async () => {
     try {
@@ -92,7 +93,7 @@ export default function PurchaseRequestDetailScreen() {
   };
 
   const handleCreateQR = () => {
-    if (!isProcurement) { toast('Only Procurement Officer can create Quotation Request', 'error'); return; }
+    if (!canCreateQR) { toast('You do not have permission to create a Quotation Request', 'error'); return; }
     if ((request as any)?.has_awarded_quotation) { toast('Already has an awarded quotation', 'error'); return; }
     if ((request as any)?.has_purchase_orders) { toast('Already has purchase orders', 'error'); return; }
     const guard = canCreateQuotationRequest(request?.status || '', canCreateQR);
@@ -101,7 +102,7 @@ export default function PurchaseRequestDetailScreen() {
   };
 
   const handleCreateLPO = async () => {
-    if (!isProcurement) { toast('Only Procurement Officer can create LPO', 'error'); return; }
+    if (!canCreatePO) { toast('You do not have permission to create an LPO', 'error'); return; }
     const guard = canCreatePurchaseOrder(undefined, request?.status);
     if (!guard.canProceed) { toast(guard.reason || 'Cannot create LPO', 'error'); return; }
     if (guard.warning && !await confirm(guard.warning + '\n\nContinue?')) return;
@@ -198,7 +199,7 @@ export default function PurchaseRequestDetailScreen() {
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Next Steps</Text>
 
-            {(canApprove || su) && !r.has_quotation_requests && !r.has_purchase_orders && (
+            {canUndoApprove && !r.has_quotation_requests && !r.has_purchase_orders && (
               <AppButton
                 title={undoing ? 'Processing...' : 'Undo Approval'}
                 variant="outline"
@@ -210,10 +211,14 @@ export default function PurchaseRequestDetailScreen() {
               />
             )}
 
-            {isProcurement && !r.has_awarded_quotation && !r.has_purchase_orders && (
+            {(canCreateQR || canCreatePO) && !r.has_awarded_quotation && !r.has_purchase_orders && (
               <View style={S.actionRow}>
-                <AppButton title="Create QR" variant="primary" size="md" onPress={handleCreateQR} style={{ flex: 1 }} />
-                <AppButton title="Create LPO Direct" variant="secondary" size="md" onPress={handleCreateLPO} style={{ flex: 1 }} />
+                {canCreateQR && (
+                  <AppButton title="Create QR" variant="primary" size="md" onPress={handleCreateQR} style={{ flex: 1 }} />
+                )}
+                {canCreatePO && (
+                  <AppButton title="Create LPO Direct" variant="secondary" size="md" onPress={handleCreateLPO} style={{ flex: 1 }} />
+                )}
               </View>
             )}
 
@@ -341,4 +346,13 @@ function makeStyles(C: AppColors) {
       gap: 12,
     },
   });
+}
+
+
+export default function PurchaseRequestDetailScreen() {
+  return (
+    <AppPermissionGate category="purchase_request" action="view">
+      <PurchaseRequestDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

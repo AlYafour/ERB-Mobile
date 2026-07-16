@@ -12,6 +12,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import DatePickerInput from '@/components/ui/DatePickerInput';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -35,7 +36,7 @@ interface GRNItem {
   notes: string;
 }
 
-export default function NewGoodsReceivingScreen() {
+function NewGoodsReceivingScreenInner() {
   const { purchase_order_id } = useLocalSearchParams<{ purchase_order_id: string }>();
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
@@ -283,4 +284,13 @@ function makeStyles(C: AppColors) {
     barBtn:     { width: 90 },
     barBtnWide: { flex: 1 },
   });
+}
+
+
+export default function NewGoodsReceivingScreen() {
+  return (
+    <AppPermissionGate category="goods_receiving" action="create">
+      <NewGoodsReceivingScreenInner />
+    </AppPermissionGate>
+  );
 }

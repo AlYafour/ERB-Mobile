@@ -66,6 +66,8 @@ export default function LoginScreen() {
       const result = await login(username.trim(), password);
       if (result.success) {
         router.replace('/(tabs)');
+      } else if (result.requires2FA && result.tempToken) {
+        router.push({ pathname: '/two-factor', params: { tempToken: result.tempToken } } as any);
       } else {
         setError(result.error || 'Login failed. Please check your credentials.');
       }

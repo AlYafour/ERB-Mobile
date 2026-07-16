@@ -20,6 +20,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Spacing, Typography } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -38,7 +39,7 @@ function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info'
   }
 }
 
-export default function QuotationRequestsScreen() {
+function QuotationRequestsScreenInner() {
   const router = useRouter();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
@@ -259,4 +260,13 @@ function makeStyles(C: AppColors) {
     paginationBtn:  { minWidth: 80 },
     paginationText: { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
   });
+}
+
+
+export default function QuotationRequestsScreen() {
+  return (
+    <AppPermissionGate category="quotation_request" action="view">
+      <QuotationRequestsScreenInner />
+    </AppPermissionGate>
+  );
 }

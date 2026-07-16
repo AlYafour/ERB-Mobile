@@ -14,10 +14,11 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { Supplier } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
-export default function SupplierDetailScreen() {
+function SupplierDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -153,4 +154,13 @@ function makeStyles(C: AppColors) {
     },
     editBtn: { marginTop: 8 },
   });
+}
+
+
+export default function SupplierDetailScreen() {
+  return (
+    <AppPermissionGate category="supplier" action="view">
+      <SupplierDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

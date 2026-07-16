@@ -10,6 +10,7 @@ import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { dashboardApi, DashboardStats, RecentActivity, ProcurementCycleMetrics } from '@/lib/api/dashboard';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 const { width: SW } = Dimensions.get('window');
 const HPAD = 16;
@@ -105,7 +106,7 @@ function CycleBar({ stage, days, maxDays, c }: { stage: string; days: number; ma
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
-export default function DashboardScreen() {
+function DashboardScreenInner() {
   const router = useRouter();
   const cs = useColorScheme();
   const c = Colors[cs] as typeof Colors.light;
@@ -319,3 +320,12 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 16, fontWeight: '600' },
   emptySub: { fontSize: 13, textAlign: 'center', maxWidth: 260 },
 });
+
+
+export default function DashboardScreen() {
+  return (
+    <AppPermissionGate adminOnly>
+      <DashboardScreenInner />
+    </AppPermissionGate>
+  );
+}

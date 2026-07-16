@@ -150,10 +150,22 @@ class ApiClient {
   private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 30000): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    // Chain an external caller signal (screen unmount / superseded request)
+    // into the internal timeout controller.
+    const external = options.signal as AbortSignal | null | undefined;
+    let onExternalAbort: (() => void) | undefined;
+    if (external) {
+      if (external.aborted) controller.abort();
+      else {
+        onExternalAbort = () => controller.abort();
+        external.addEventListener('abort', onExternalAbort);
+      }
+    }
     try {
       return await fetch(url, { ...options, signal: controller.signal });
     } finally {
       clearTimeout(timeoutId);
+      if (external && onExternalAbort) external.removeEventListener('abort', onExternalAbort);
     }
   }
 
@@ -163,6 +175,10 @@ class ApiClient {
     try {
       response = await this.fetchWithTimeout(url, options);
     } catch (error: any) {
+      // Caller-initiated cancellation (unmount / superseded request) is not a network failure
+      if ((options.signal as AbortSignal | undefined)?.aborted) {
+        return { status: 0, error: 'cancelled' };
+      }
       const msg = error.name === 'AbortError' ? 'Connection timed out. Check server URL.' : error.message || 'Network error';
       return { status: 0, error: msg };
     }
@@ -200,12 +216,13 @@ class ApiClient {
     return this.handleResponse<T>(response);
   }
 
-  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+  async get<T>(endpoint: string, options?: { signal?: AbortSignal }): Promise<ApiResponse<T>> {
     const headers = await this.getAuthHeaders();
     return this.executeRequest<T>(`${this.baseURL}${endpoint}`, {
       ...this.getFetchOptions(),
       method: 'GET',
       headers,
+      signal: options?.signal,
     });
   }
 
@@ -261,27 +278,41 @@ class ApiClient {
   }
 
   // Auth methods
+
+  /** Persist tokens (+ optional user profile) from a login/2FA-verify response. */
+  private async storeSession(data: any): Promise<boolean> {
+    const accessToken =
+      data.access || data.access_token || data.tokens?.access || data.tokens?.access_token;
+    const refreshToken =
+      data.refresh || data.refresh_token || data.tokens?.refresh || data.tokens?.refresh_token;
+    if (!accessToken || !refreshToken) return false;
+
+    // New session — reset the auth-cleared guard so clearAuth() can fire again if needed
+    this.authCleared = false;
+    await secureTokenStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+    await secureTokenStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+    if (data.user) {
+      await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
+    }
+    return true;
+  }
+
   async login(username: string, password: string): Promise<ApiResponse<any>> {
     try {
       const response = await this.post(API_ENDPOINTS.LOGIN, { username, password });
 
       if (response.data && response.status >= 200 && response.status < 300) {
         const data = response.data as any;
-        const accessToken =
-          data.access || data.access_token || data.tokens?.access || data.tokens?.access_token;
-        const refreshToken =
-          data.refresh || data.refresh_token || data.tokens?.refresh || data.tokens?.refresh_token;
 
-        if (!accessToken || !refreshToken) {
-          return { status: response.status, error: 'Invalid response from server: missing authentication tokens', data: response.data };
+        // 2FA-enabled accounts get a pending challenge instead of tokens.
+        // Surface it to the caller — do NOT treat it as a malformed response.
+        if (data.requires_2fa) {
+          return response;
         }
 
-        // New session — reset the auth-cleared guard so clearAuth() can fire again if needed
-        this.authCleared = false;
-        await secureTokenStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-        await secureTokenStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
-        if (data.user) {
-          await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
+        const stored = await this.storeSession(data);
+        if (!stored) {
+          return { status: response.status, error: 'Invalid response from server: missing authentication tokens', data: response.data };
         }
       } else {
         await this.clearAuth();
@@ -292,6 +323,21 @@ class ApiClient {
       await this.clearAuth();
       return { status: 0, error: error.message || 'Network error during login' };
     }
+  }
+
+  /** Complete a 2FA challenge. Returns the same shape as login ({user, tokens}). */
+  async verify2FA(tempToken: string, code: string): Promise<ApiResponse<any>> {
+    const response = await this.post<any>(API_ENDPOINTS.TWO_FA_VERIFY, {
+      temp_token: tempToken,
+      code,
+    });
+    if (response.data && response.status >= 200 && response.status < 300) {
+      const stored = await this.storeSession(response.data);
+      if (!stored) {
+        return { status: response.status, error: 'Invalid response from server: missing authentication tokens', data: response.data };
+      }
+    }
+    return response;
   }
 
   async register(userData: any): Promise<ApiResponse<any>> {
@@ -313,12 +359,23 @@ class ApiClient {
     }
   }
 
-  async getCurrentUser(): Promise<any | null> {
+  /** Cache-only read of the stored user profile — never touches the network. */
+  async getCachedUser(): Promise<any | null> {
     try {
       const userStr = await AsyncStorage.getItem(STORAGE_KEYS.USER);
       if (userStr) {
         try { return JSON.parse(userStr); } catch {}
       }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async getCurrentUser(): Promise<any | null> {
+    try {
+      const cached = await this.getCachedUser();
+      if (cached) return cached;
       const response = await this.get(API_ENDPOINTS.USER_PROFILE);
       if (response.data) {
         await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.data));
@@ -335,7 +392,13 @@ class ApiClient {
     return !!token;
   }
 
-  /** Returns true if the stored access token has > 1 hour of validity left. */
+  /**
+   * Returns true if the stored access token is still usable (> 60s of validity left).
+   * The margin must stay well below the backend ACCESS_TOKEN_LIFETIME (15 min,
+   * procurement/settings/base.py) — the previous 1-hour margin could never be
+   * satisfied by a 15-minute token, so every app open took the blocking-refresh
+   * path and froze the splash screen.
+   */
   async isAccessTokenFresh(): Promise<boolean> {
     try {
       const token = await secureTokenStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
@@ -349,7 +412,7 @@ class ApiClient {
           .join('')
       );
       const { exp } = JSON.parse(json);
-      return !!exp && exp * 1000 > Date.now() + 3_600_000;
+      return !!exp && exp * 1000 > Date.now() + 60_000;
     } catch {
       return false;
     }

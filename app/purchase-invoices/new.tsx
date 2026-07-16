@@ -12,6 +12,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import DatePickerInput from '@/components/ui/DatePickerInput';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -23,7 +24,7 @@ interface InvItem {
   unit_price: string;
 }
 
-export default function NewPurchaseInvoiceScreen() {
+function NewPurchaseInvoiceScreenInner() {
   const params = useLocalSearchParams<{ purchase_order_id?: string; goods_receiving_id?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -280,4 +281,13 @@ function makeStyles(C: AppColors) {
     barBtn:     { width: 90 },
     barBtnWide: { flex: 1 },
   });
+}
+
+
+export default function NewPurchaseInvoiceScreen() {
+  return (
+    <AppPermissionGate category="purchase_invoice" action="create">
+      <NewPurchaseInvoiceScreenInner />
+    </AppPermissionGate>
+  );
 }

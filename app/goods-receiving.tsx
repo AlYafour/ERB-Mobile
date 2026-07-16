@@ -20,6 +20,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Spacing, Typography } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 const statusLabels: Record<string, string> = {
   draft: 'Draft',
@@ -38,7 +39,7 @@ function getStatusVariant(status?: string): 'success' | 'danger' | 'warning' | '
   }
 }
 
-export default function GoodsReceivingScreen() {
+function GoodsReceivingScreenInner() {
   const router = useRouter();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
@@ -337,3 +338,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+
+export default function GoodsReceivingScreen() {
+  return (
+    <AppPermissionGate category="goods_receiving" action="view">
+      <GoodsReceivingScreenInner />
+    </AppPermissionGate>
+  );
+}

@@ -4,7 +4,7 @@ import {
   TouchableOpacity, Text, AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { notificationsApi } from '@/lib/api/notifications';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -14,11 +14,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Notification } from '@/types';
 import { toast } from '@/lib/hooks/use-toast';
 import { useAppTheme } from '@/contexts/ThemeContext';
-import {
-  setupNotificationChannel,
-  requestNotificationPermission,
-  sendLocalNotification,
-} from '@/lib/notification-service';
+import { sendLocalNotification } from '@/lib/notification-service';
 
 const POLL_INTERVAL_MS = 60_000; // 60 seconds
 
@@ -75,6 +71,10 @@ export default function NotificationsScreen() {
         return !seenIds.current.has(key);
       });
       newItems.forEach(n => seenIds.current.add(String(n.id ?? n.created_at)));
+      // Bound the dedup set — it used to grow for the whole session
+      if (seenIds.current.size > 500) {
+        seenIds.current = new Set(results.map(n => String(n.id ?? n.created_at)));
+      }
 
       await fireNotificationSound(newItems);
 
@@ -90,42 +90,46 @@ export default function NotificationsScreen() {
     }
   }, [fireNotificationSound]);
 
-  // Setup notification channel + permissions once
-  useEffect(() => {
-    setupNotificationChannel();
-    requestNotificationPermission();
-  }, []);
+  // Channel + permission setup happens once at the root (_layout.tsx) —
+  // repeating it here caused duplicate work on startup.
 
   useEffect(() => {
     mounted.current = true;
     loadNotifications(false);
+    return () => { mounted.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // Poll when notifications are enabled and app is active
-    const startPoll = () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      if (notificationsEnabled) {
-        pollRef.current = setInterval(() => loadNotifications(true), POLL_INTERVAL_MS);
-      }
-    };
-
-    startPoll();
-
-    // Resume polling when app comes back to foreground
-    const sub = AppState.addEventListener('change', state => {
-      if (state === 'active') {
-        loadNotifications(true);
-        startPoll();
-      } else {
+  // Poll ONLY while this tab is focused and the app is active. As a tab
+  // screen it stays mounted after navigating away — the old effect kept
+  // polling every 60s in the background for the whole session.
+  useFocusEffect(
+    useCallback(() => {
+      const startPoll = () => {
         if (pollRef.current) clearInterval(pollRef.current);
-      }
-    });
+        if (notificationsEnabled) {
+          pollRef.current = setInterval(() => loadNotifications(true), POLL_INTERVAL_MS);
+        }
+      };
 
-    return () => {
-      mounted.current = false;
-      if (pollRef.current) clearInterval(pollRef.current);
-      sub.remove();
-    };
-  }, [loadNotifications, notificationsEnabled]);
+      loadNotifications(true);
+      startPoll();
+
+      const sub = AppState.addEventListener('change', state => {
+        if (state === 'active') {
+          loadNotifications(true);
+          startPoll();
+        } else {
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      });
+
+      return () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        sub.remove();
+      };
+    }, [loadNotifications, notificationsEnabled])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

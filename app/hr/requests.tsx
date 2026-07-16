@@ -3,10 +3,12 @@ import { useLocalSearchParams } from 'expo-router';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, Modal, TextInput, ScrollView, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/lib/hooks/use-permissions';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
@@ -52,10 +54,18 @@ export default function HRRequestsScreen() {
   const insets = useSafeAreaInsets();
   const { type: typeParam } = useLocalSearchParams<{ type?: string }>();
 
-  const su = user?.is_superuser ?? false;
-  const isManager = su || user?.role === 'hr_manager' || user?.role === 'super_admin';
+  // Permission-based, matching the web (hr/requests/page.tsx):
+  // approve/reject/view-all come from the permission system, not the
+  // old hardcoded hr_manager/super_admin role check.
+  const { hasPermission } = usePermissions();
+  const canApproveReq = hasPermission('hr_request', 'approve');
+  const canRejectReq = hasPermission('hr_request', 'reject');
+  const canViewAll = hasPermission('hr_request', 'view');
 
-  const [loading, setLoading] = useState(true);
+  // First load fills the screen; later reloads (filter/toggle taps) keep the
+  // list mounted and only show the slim inline indicator.
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [approving, setApproving] = useState<number | null>(null);
@@ -90,35 +100,74 @@ export default function HRRequestsScreen() {
     }
   }, [typeParam]);
 
+  // Concurrency guards:
+  // - reqSeq: monotonically increasing token; an older response can never
+  //   overwrite a newer one (rapid filter taps used to race out of order).
+  // - mountedRef: no setState after the screen is closed.
+  // - employeeIdRef: the (expensive) full-employee-list lookup runs ONCE per
+  //   session, not on every filter change like before.
+  const reqSeq = useRef(0);
+  const mountedRef = useRef(true);
+  const hasLoadedOnce = useRef(false);
+  const employeeIdRef = useRef<number | null | 'unresolved'>('unresolved');
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const resolveEmployeeId = useCallback(async (): Promise<number | null> => {
+    if (employeeIdRef.current !== 'unresolved') return employeeIdRef.current;
+    const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
+    const employees: any[] = Array.isArray(empRes.data) ? empRes.data : (empRes.data?.results ?? []);
+    const me = employees.find(
+      (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
+    );
+    const resolved: number | null = me ? me.id : null;
+    employeeIdRef.current = resolved;
+    if (mountedRef.current && me) setEmployeeId(me.id);
+    return resolved;
+  }, [user]);
+
   const loadData = useCallback(async () => {
-    if (!user) { setLoading(false); setRefreshing(false); return; }
+    if (!user) {
+      setInitialLoading(false); setRefreshing(false);
+      return;
+    }
+    const seq = ++reqSeq.current;
+    if (hasLoadedOnce.current) setListLoading(true);
     try {
-      const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
-      const employees: any[] = Array.isArray(empRes.data) ? empRes.data : (empRes.data?.results ?? []);
-      const me = employees.find(
-        (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
-      );
-      if (!me && !isManager) { setLoading(false); setRefreshing(false); return; }
-      if (me) setEmployeeId(me.id);
+      const myEmployeeId = await resolveEmployeeId();
+      if (seq !== reqSeq.current || !mountedRef.current) return;
+      if (myEmployeeId == null && !canViewAll) return;
 
       const params: any = {};
-      if (!viewAll && me) params.employee = me.id;
+      if (!viewAll && myEmployeeId != null) params.employee = myEmployeeId;
       if (filterStatus) params.status = filterStatus;
 
       const [reqRes, balanceRes] = await Promise.allSettled([
         hrRequestsApi.getAll(params),
-        me ? hrRequestsApi.getLeaveBalances(me.id, new Date().getFullYear()) : Promise.resolve([]),
+        myEmployeeId != null
+          ? hrRequestsApi.getLeaveBalances(myEmployeeId, new Date().getFullYear())
+          : Promise.resolve([]),
       ]);
 
+      if (seq !== reqSeq.current || !mountedRef.current) return;
       if (reqRes.status === 'fulfilled') setRequests(reqRes.value.results ?? []);
       if (balanceRes.status === 'fulfilled') setLeaveBalances(balanceRes.value as HRLeaveBalance[]);
+      hasLoadedOnce.current = true;
     } catch (e: any) {
-      toast(e.message || 'Failed to load', 'error');
+      if (seq === reqSeq.current && mountedRef.current) {
+        toast(e.message || 'Failed to load', 'error');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (seq === reqSeq.current && mountedRef.current) {
+        setInitialLoading(false);
+        setListLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [user, filterStatus, viewAll, isManager]);
+  }, [user, filterStatus, viewAll, canViewAll, resolveEmployeeId]);
 
   useEffect(() => { loadData(); }, [loadData]);
   const handleRefresh = () => { setRefreshing(true); loadData(); };
@@ -185,7 +234,7 @@ export default function HRRequestsScreen() {
 
   const renderItem = ({ item }: { item: HRRequest }) => {
     const typeLabel = REQUEST_TYPES.find(t => t.value === item.request_type)?.label || item.request_type;
-    const isApprovable = item.status === 'pending' && isManager;
+    const isApprovable = item.status === 'pending' && (canApproveReq || canRejectReq);
 
     return (
       <View style={S.reqCard}>
@@ -239,23 +288,27 @@ export default function HRRequestsScreen() {
 
         {isApprovable && (
           <View style={S.actionRow}>
-            <AppButton
-              title="Approve"
-              variant="successOutline"
-              size="sm"
-              onPress={() => handleApprove(item.id)}
-              loading={approving === item.id}
-              disabled={approving === item.id || rejectingId === item.id}
-              style={{ flex: 1 }}
-            />
-            <AppButton
-              title="Reject"
-              variant="dangerOutline"
-              size="sm"
-              onPress={() => setRejectDialogId(item.id)}
-              disabled={approving === item.id || rejectingId === item.id}
-              style={{ flex: 1 }}
-            />
+            {canApproveReq && (
+              <AppButton
+                title="Approve"
+                variant="successOutline"
+                size="sm"
+                onPress={() => handleApprove(item.id)}
+                loading={approving === item.id}
+                disabled={approving === item.id || rejectingId === item.id}
+                style={{ flex: 1 }}
+              />
+            )}
+            {canRejectReq && (
+              <AppButton
+                title="Reject"
+                variant="dangerOutline"
+                size="sm"
+                onPress={() => setRejectDialogId(item.id)}
+                disabled={approving === item.id || rejectingId === item.id}
+                style={{ flex: 1 }}
+              />
+            )}
           </View>
         )}
       </View>
@@ -292,8 +345,8 @@ export default function HRRequestsScreen() {
         </View>
       )}
 
-      {/* Manager toggle — my vs all */}
-      {isManager && (
+      {/* Manager toggle — my vs all (hr_request.view permission, like the web) */}
+      {canViewAll && (
         <View style={[S.toggleRow, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
           {[
             { key: false, label: 'My Requests' },
@@ -301,8 +354,15 @@ export default function HRRequestsScreen() {
           ].map(opt => (
             <TouchableOpacity
               key={String(opt.key)}
-              style={[S.toggleBtn, viewAll === opt.key && { backgroundColor: C.primary }]}
+              style={[
+                S.toggleBtn,
+                viewAll === opt.key && { backgroundColor: C.primary },
+                listLoading && S.controlDisabled,
+              ]}
               onPress={() => setViewAll(opt.key)}
+              disabled={listLoading || viewAll === opt.key}
+              accessibilityRole="button"
+              accessibilityState={{ selected: viewAll === opt.key, disabled: listLoading }}
             >
               <Text style={[S.toggleBtnText, {
                 color: viewAll === opt.key ? C.primaryText : C.textSecondary,
@@ -332,8 +392,11 @@ export default function HRRequestsScreen() {
             style={[S.chip, {
               backgroundColor: filterStatus === opt.key ? C.primary : C.surface,
               borderColor:     filterStatus === opt.key ? C.primary : C.border,
-            }]}
+            }, listLoading && S.controlDisabled]}
             onPress={() => setFilterStatus(opt.key)}
+            disabled={listLoading || filterStatus === opt.key}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filterStatus === opt.key, disabled: listLoading }}
           >
             <Text style={[S.chipText, {
               color: filterStatus === opt.key ? C.primaryText : C.textSecondary,
@@ -342,9 +405,12 @@ export default function HRRequestsScreen() {
             </Text>
           </TouchableOpacity>
         ))}
+        {listLoading && !refreshing ? (
+          <ActivityIndicator size="small" color={C.primary} style={{ marginStart: 4 }} />
+        ) : null}
       </ScrollView>
 
-      {loading ? (
+      {initialLoading ? (
         <AppEmptyState variant="loading" title="Loading requests…" />
       ) : requests.length === 0 ? (
         <AppEmptyState
@@ -548,6 +614,7 @@ function makeStyles(C: AppColors) {
       paddingVertical: 8, borderRadius: 10,
     },
     toggleBtnText: { fontSize: 13, fontWeight: '600' },
+    controlDisabled: { opacity: 0.5 },
 
     chipsScroll: { maxHeight: 54 },
     chips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },

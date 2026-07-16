@@ -9,6 +9,7 @@ import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
@@ -43,7 +44,7 @@ function InfoRow({ icon, label, value, c }: InfoRowProps) {
   );
 }
 
-export default function UserDetailScreen() {
+function UserDetailScreenInner() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const cs = useColorScheme();
@@ -256,3 +257,12 @@ const s = StyleSheet.create({
   },
   accessLabel: { fontSize: 14, fontWeight: '500' },
 });
+
+
+export default function UserDetailScreen() {
+  return (
+    <AppPermissionGate category="user" action="view">
+      <UserDetailScreenInner />
+    </AppPermissionGate>
+  );
+}

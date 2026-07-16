@@ -14,8 +14,9 @@ import { User, PaginatedResponse } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Spacing, Typography } from '@/constants/spacing';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
-export default function UsersScreen() {
+function UsersScreenInner() {
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
@@ -178,3 +179,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
 });
+
+
+export default function UsersScreen() {
+  return (
+    <AppPermissionGate category="user" action="view">
+      <UsersScreenInner />
+    </AppPermissionGate>
+  );
+}

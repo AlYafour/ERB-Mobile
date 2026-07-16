@@ -4,6 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseQuotationsApi } from '@/lib/api/purchase-quotations';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
@@ -14,6 +15,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PurchaseQuotation } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -34,7 +36,7 @@ function fmtDate(d?: string | null) {
   return new Date(d).toLocaleDateString('en-AE', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export default function PurchaseQuotationDetailScreen() {
+function PurchaseQuotationDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -50,8 +52,11 @@ export default function PurchaseQuotationDetailScreen() {
   const [awarding, setAwarding] = useState(false);
   const [rejecting, setRejecting] = useState(false);
 
-  const su = user?.is_superuser ?? false;
-  const canAward = su || user?.role === 'procurement_officer';
+  // Permission-based, matching the web (purchase-quotations/[id]/page.tsx):
+  // award/reject come from the permission system, not a hardcoded role.
+  const { hasPermission } = usePermissions();
+  const canAward = hasPermission('purchase_quotation', 'award');
+  const canReject = hasPermission('purchase_quotation', 'reject');
 
   const load = async () => {
     try { setLoading(true); setQuotation(await purchaseQuotationsApi.getById(id)); }
@@ -110,7 +115,7 @@ export default function PurchaseQuotationDetailScreen() {
     ? quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)
     : 'Pending';
 
-  const showActions = quotation.status === 'pending' && canAward;
+  const showActions = quotation.status === 'pending' && (canAward || canReject);
 
   return (
     <SafeAreaView style={S.container} edges={['top']}>
@@ -241,12 +246,16 @@ export default function PurchaseQuotationDetailScreen() {
       {/* Fixed bottom action bar */}
       {showActions ? (
         <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <AppButton title="Award Quotation" variant="primary" size="md"
-            onPress={handleAward} loading={awarding} disabled={awarding || rejecting}
-            style={S.barBtn} />
-          <AppButton title="Reject" variant="dangerOutline" size="md"
-            onPress={handleReject} loading={rejecting} disabled={awarding || rejecting}
-            style={S.barBtn} />
+          {canAward ? (
+            <AppButton title="Award Quotation" variant="primary" size="md"
+              onPress={handleAward} loading={awarding} disabled={awarding || rejecting}
+              style={S.barBtn} />
+          ) : null}
+          {canReject ? (
+            <AppButton title="Reject" variant="dangerOutline" size="md"
+              onPress={handleReject} loading={rejecting} disabled={awarding || rejecting}
+              style={S.barBtn} />
+          ) : null}
         </View>
       ) : null}
     </SafeAreaView>
@@ -285,4 +294,13 @@ function makeStyles(C: AppColors) {
     },
     barBtn: { flex: 1 },
   });
+}
+
+
+export default function PurchaseQuotationDetailScreen() {
+  return (
+    <AppPermissionGate category="purchase_quotation" action="view">
+      <PurchaseQuotationDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

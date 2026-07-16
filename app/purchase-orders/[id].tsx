@@ -16,6 +16,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PurchaseOrder } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -36,7 +37,7 @@ function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info'
   }
 }
 
-export default function PurchaseOrderDetailScreen() {
+function PurchaseOrderDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -450,4 +451,13 @@ function makeStyles(C: AppColors) {
       flexDirection: 'row', gap: 12,
     },
   });
+}
+
+
+export default function PurchaseOrderDetailScreen() {
+  return (
+    <AppPermissionGate category="purchase_order" action="view">
+      <PurchaseOrderDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

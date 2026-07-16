@@ -70,7 +70,7 @@ function getDateLabel() {
 
 export default function HomeScreen() {
   const { user, branding } = useAuth();
-  const { permissions, hasPermission } = usePermissions();
+  const { isAdmin, hasPermission, hasModule } = usePermissions();
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
   const c = Colors[cs];
@@ -80,15 +80,20 @@ export default function HomeScreen() {
   const [pendingPRs, setPendingPRs] = useState<number | string>('—');
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Mirrors the web sidebar rule (Sidebar.tsx): tenant module enabled AND
+  // (admin OR at least one procurement view permission).
   const hasProcurement = useMemo(
     () =>
-      !!(user?.is_superuser ||
-        user?.role === 'super_admin' ||
-        PROCUREMENT_PERMS.some(p => hasPermission(p, 'view'))),
-    [permissions, user],
+      !!(isAdmin ||
+        (hasModule('procurement') && PROCUREMENT_PERMS.some(p => hasPermission(p, 'view')))),
+    [isAdmin, hasModule, hasPermission],
   );
 
   const modules = useMemo(
+    // HR stays visible to every authenticated user: the tab is employee
+    // self-service (attendance / payslip / own requests), same as the web
+    // hr layout's "has own employee record" rule. Manager actions inside it
+    // are permission-gated individually.
     () => ALL_MODULES.filter(m => m.id === 'procurement' ? hasProcurement : true),
     [hasProcurement],
   );

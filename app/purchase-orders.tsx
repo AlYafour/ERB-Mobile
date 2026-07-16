@@ -20,6 +20,7 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 const statusLabels: Record<string, string> = {
   pending: 'Pending',
@@ -29,7 +30,7 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
-export default function PurchaseOrdersScreen() {
+function PurchaseOrdersScreenInner() {
   const router = useRouter();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
@@ -319,3 +320,12 @@ const styles = StyleSheet.create({
   paginationBtn:  { minWidth: 80 },
   paginationText: { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
 });
+
+
+export default function PurchaseOrdersScreen() {
+  return (
+    <AppPermissionGate category="purchase_order" action="view">
+      <PurchaseOrdersScreenInner />
+    </AppPermissionGate>
+  );
+}

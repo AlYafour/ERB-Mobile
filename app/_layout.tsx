@@ -7,9 +7,12 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 import { AppThemeProvider } from '@/contexts/ThemeContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { PermissionsProvider } from '@/contexts/PermissionsContext';
 import { AuthGate } from '@/components/AuthGate';
 import { AppLockGate } from '@/components/AppLockGate';
 import { ToastContainer } from '@/components/ui/Toast';
@@ -20,6 +23,16 @@ import { setupNotificationChannel, requestNotificationPermission } from '@/lib/n
 export { AppErrorBoundary as ErrorBoundary } from '@/components/AppErrorBoundary';
 
 SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Mobile networks flake — one automatic retry, then surface the error
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+});
 
 const PremiumLightTheme = {
   ...DefaultTheme,
@@ -65,7 +78,9 @@ function RootLayoutInner() {
 
   return (
     <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <PermissionsProvider>
         <ThemeProvider value={activeTheme}>
           <Stack
             screenOptions={{
@@ -85,7 +100,9 @@ function RootLayoutInner() {
           <ConfirmDialog />
           <AppLockGate />
         </ThemeProvider>
+        </PermissionsProvider>
       </AuthProvider>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }

@@ -15,6 +15,7 @@ import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { PurchaseInvoice } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -40,7 +41,7 @@ function fmtDate(d?: string | null) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export default function PurchaseInvoiceDetailScreen() {
+function PurchaseInvoiceDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -354,4 +355,13 @@ function makeStyles(C: AppColors) {
     },
     barBtn: { flex: 1 },
   });
+}
+
+
+export default function PurchaseInvoiceDetailScreen() {
+  return (
+    <AppPermissionGate category="purchase_invoice" action="view">
+      <PurchaseInvoiceDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

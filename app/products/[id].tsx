@@ -14,6 +14,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { Product } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -22,7 +23,7 @@ function fmtPrice(v: number | undefined | null): string | null {
   return `AED ${Number(v).toFixed(2)}`;
 }
 
-export default function ProductDetailScreen() {
+function ProductDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -165,4 +166,13 @@ function makeStyles(C: AppColors) {
     },
     editBtn: { marginTop: 8 },
   });
+}
+
+
+export default function ProductDetailScreen() {
+  return (
+    <AppPermissionGate category="product" action="view">
+      <ProductDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

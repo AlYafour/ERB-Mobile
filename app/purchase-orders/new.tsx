@@ -15,6 +15,7 @@ import SearchableDropdown, { DropdownOption } from '@/components/ui/SearchableDr
 import DatePickerInput from '@/components/ui/DatePickerInput';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -27,7 +28,7 @@ interface LPOItem {
   notes: string;
 }
 
-export default function NewPurchaseOrderScreen() {
+function NewPurchaseOrderScreenInner() {
   const params = useLocalSearchParams<{ purchase_request_id?: string; purchase_quotation_id?: string }>();
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
@@ -344,4 +345,13 @@ function makeStyles(C: AppColors) {
     barBtn:     { width: 90 },
     barBtnWide: { flex: 1 },
   });
+}
+
+
+export default function NewPurchaseOrderScreen() {
+  return (
+    <AppPermissionGate category="purchase_order" action="create">
+      <NewPurchaseOrderScreenInner />
+    </AppPermissionGate>
+  );
 }

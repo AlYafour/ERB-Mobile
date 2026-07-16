@@ -15,6 +15,10 @@ export const API_ENDPOINTS = {
   // why sessions silently died after 15 minutes and users had to re-login.
   REFRESH_TOKEN: '/api/auth/token/refresh/',
   USER_PROFILE: '/api/auth/me/',
+  TWO_FA_VERIFY: '/api/auth/2fa/verify/',
+  // Effective permissions — same endpoint/format the web frontend uses
+  // (module.category.action keys + all_permissions + modules[]).
+  MY_PERMISSIONS: '/api/auth/my-permissions/',
   
   // Users
   USERS: '/api/users/',

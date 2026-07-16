@@ -4,6 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { goodsReceivingApi, GoodsReceivedNote } from '@/lib/api/goods-receiving';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
@@ -13,6 +14,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -42,7 +44,7 @@ function getQualityVariant(s?: string): 'success' | 'danger' | 'warning' | 'info
   }
 }
 
-export default function GoodsReceivingDetailScreen() {
+function GoodsReceivingDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
@@ -57,8 +59,11 @@ export default function GoodsReceivingDetailScreen() {
   const [markingDelivered, setMarkingDelivered] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  const su = user?.is_superuser ?? false;
-  const isProcurement = user?.role === 'procurement_officer' || user?.role === 'super_admin' || su;
+  // Permission-based, matching the web (goods-receiving/[id]/page.tsx):
+  // update/cancel come from the permission system, not a hardcoded role.
+  const { hasPermission } = usePermissions();
+  const canUpdate = hasPermission('goods_receiving', 'update');
+  const canCancel = hasPermission('goods_receiving', 'cancel');
 
   const load = async () => {
     try {
@@ -104,8 +109,8 @@ export default function GoodsReceivingDetailScreen() {
 
   const S = makeStyles(C);
 
-  const showMarkDeliveredBtn = !loading && !!grn && grn.invoice_delivery_status === 'not_delivered' && grn.status !== 'cancelled';
-  const showCancelBtn = !loading && !!grn && grn.status !== 'cancelled' && isProcurement;
+  const showMarkDeliveredBtn = !loading && !!grn && grn.invoice_delivery_status === 'not_delivered' && grn.status !== 'cancelled' && canUpdate;
+  const showCancelBtn = !loading && !!grn && grn.status !== 'cancelled' && canCancel;
   const showBottomBar = showMarkDeliveredBtn || showCancelBtn;
 
   if (loading && !grn) return (
@@ -373,4 +378,13 @@ function makeStyles(C: AppColors) {
       paddingTop: 12, paddingHorizontal: 16,
     },
   });
+}
+
+
+export default function GoodsReceivingDetailScreen() {
+  return (
+    <AppPermissionGate category="goods_receiving" action="view">
+      <GoodsReceivingDetailScreenInner />
+    </AppPermissionGate>
+  );
 }

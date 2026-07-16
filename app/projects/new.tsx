@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -21,7 +22,7 @@ const STATUS_OPTIONS = [
   { value: 'inactive',  label: 'Inactive' },
 ];
 
-export default function NewProjectScreen() {
+function NewProjectScreenInner() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
@@ -162,4 +163,13 @@ function makeStyles(C: AppColors) {
     },
     barBtn: { flex: 1 },
   });
+}
+
+
+export default function NewProjectScreen() {
+  return (
+    <AppPermissionGate category="project" action="create">
+      <NewProjectScreenInner />
+    </AppPermissionGate>
+  );
 }

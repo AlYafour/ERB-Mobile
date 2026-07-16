@@ -13,10 +13,11 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import SearchableDropdown, { DropdownOption } from '@/components/ui/SearchableDropdown';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
-export default function NewQuotationRequestScreen() {
+function NewQuotationRequestScreenInner() {
   const { purchase_request_id } = useLocalSearchParams<{ purchase_request_id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -239,4 +240,13 @@ function makeStyles(C: AppColors) {
     barBtn:     { width: 90 },
     barBtnWide: { flex: 1 },
   });
+}
+
+
+export default function NewQuotationRequestScreen() {
+  return (
+    <AppPermissionGate category="quotation_request" action="create">
+      <NewQuotationRequestScreenInner />
+    </AppPermissionGate>
+  );
 }

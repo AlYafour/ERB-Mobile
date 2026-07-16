@@ -1,68 +1,31 @@
-import { useState, useEffect } from 'react';
-import { permissionsApi } from '@/lib/api/permissions';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissionsContext } from '@/contexts/PermissionsContext';
 
+/**
+ * Thin compatibility wrapper over PermissionsContext.
+ *
+ * Historically every screen that called usePermissions() fired its own
+ * GET /api/user-permission-summary/me/ with no cache — 17 independent fetches
+ * per session and visible button flicker while each one loaded. The data now
+ * comes from a single session-cached fetch of /api/auth/my-permissions/
+ * (same endpoint as the web) inside PermissionsProvider; this hook keeps the
+ * existing call signature so screens don't need to change.
+ */
 export function usePermissions() {
-  const { user } = useAuth();
-  const [permissions, setPermissions] = useState<Array<{ category: string; action: string }>>([]);
-  const [permissionSet, setPermissionSet] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadPermissions();
-  }, [user]);
-
-  const loadPermissions = async (attempt = 0) => {
-    try {
-      setIsLoading(true);
-      const data = await permissionsApi.getMyPermissions();
-      setPermissions(data.permissions || []);
-      setPermissionSet(data.permission_set);
-    } catch (error: any) {
-      const isNetworkError =
-        error.message?.includes('timed out') ||
-        error.message?.includes('Network') ||
-        error.message?.includes('fetch');
-      if (attempt === 0 && isNetworkError) {
-        // Retry once after 5s — covers ngrok tunnel reconnects and cold starts
-        setTimeout(() => loadPermissions(1), 5000);
-        return;
-      }
-      setPermissions([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const hasPermission = (category: string, action: string): boolean => {
-    if (user?.is_superuser) {
-      return true;
-    }
-    return permissions.some(
-      (p) => p.category === category && p.action === action
-    );
-  };
-
-  const hasAnyPermission = (checks: Array<{ category: string; action: string }>): boolean => {
-    return checks.some((check) => hasPermission(check.category, check.action));
-  };
-
-  const hasAllPermissions = (checks: Array<{ category: string; action: string }>): boolean => {
-    return checks.every((check) => hasPermission(check.category, check.action));
-  };
-
+  const ctx = usePermissionsContext();
   return {
-    permissions,
-    permissionSet,
-    isLoading,
-    hasPermission,
-    hasAnyPermission,
-    hasAllPermissions,
+    isLoading: ctx.isLoading,
+    isAdmin: ctx.isAdmin,
+    modules: ctx.modules,
+    hasPermission: ctx.hasPermission,
+    hasPermissionKey: ctx.hasPermissionKey,
+    hasAnyPermission: ctx.hasAnyPermission,
+    hasAllPermissions: ctx.hasAllPermissions,
+    hasModule: ctx.hasModule,
+    refetch: ctx.refetch,
   };
 }
 
 export function useHasPermission(category: string, action: string): boolean {
-  const { hasPermission } = usePermissions();
+  const { hasPermission } = usePermissionsContext();
   return hasPermission(category, action);
 }
-
