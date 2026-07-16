@@ -161,6 +161,7 @@ export default function LoginScreen() {
               onPress={() => router.push('/register')}
               accessibilityRole="link"
               accessibilityLabel="Sign up for a new account"
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
             >
               <Text style={[s.footerLink, { color: loginBg ? '#E0B86D' : brandColor }]}>
                 {' '}Sign Up

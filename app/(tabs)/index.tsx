@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, StatusBar, ActivityIndicator,
+  ScrollView, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,6 +14,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
 import { Logo } from '@/components/ui/Logo';
+import { AppSkeleton } from '@/components/ui/AppSkeleton';
 
 const H_PAD = 20;
 
@@ -195,7 +196,7 @@ export default function HomeScreen() {
               <IconSymbol name="doc.badge.clock" size={16} color="#B7791F" />
             </View>
             {statsLoading
-              ? <ActivityIndicator size="small" color={c.textMuted} style={{ marginVertical: 5 }} />
+              ? <AppSkeleton width={44} height={20} style={{ marginVertical: 4 }} />
               : <Text style={[s.statValue, { color: c.textPrimary }]}>{pendingPRs}</Text>
             }
             <Text style={[s.statLabel, { color: c.textMuted }]}>Pending PRs</Text>
@@ -210,7 +211,7 @@ export default function HomeScreen() {
               <IconSymbol name="bell.badge" size={16} color="#C9943A" />
             </View>
             {statsLoading
-              ? <ActivityIndicator size="small" color={c.textMuted} style={{ marginVertical: 5 }} />
+              ? <AppSkeleton width={44} height={20} style={{ marginVertical: 4 }} />
               : <Text style={[s.statValue, { color: c.textPrimary }]}>{unreadCount}</Text>
             }
             <Text style={[s.statLabel, { color: c.textMuted }]}>Unread Alerts</Text>

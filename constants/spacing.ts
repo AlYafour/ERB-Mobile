@@ -105,3 +105,29 @@ export const Layout = {
   cardPadding:   18,
   sectionPadding: 20,
 } as const;
+
+/**
+ * Elevation levels — pair with Colors[scheme].shadow for the shadowColor.
+ * Use these instead of ad-hoc shadow objects so surfaces stay consistent.
+ */
+export const Shadows = {
+  none: {
+    shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 }, elevation: 0,
+  },
+  sm: {
+    shadowOpacity: 0.05, shadowRadius: 4,  shadowOffset: { width: 0, height: 1 }, elevation: 1,
+  },
+  md: {
+    shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2,
+  },
+  lg: {
+    shadowOpacity: 0.14, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 6,
+  },
+} as const;
+
+/** Accessibility floor for anything tappable (Android/iOS guidelines). */
+export const TouchTarget = {
+  minHeight: 44,
+  minWidth: 44,
+  hitSlop: { top: 8, bottom: 8, left: 8, right: 8 },
+} as const;

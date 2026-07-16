@@ -3,7 +3,6 @@ import { useLocalSearchParams } from 'expo-router';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, Modal, TextInput, ScrollView, Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -13,6 +12,8 @@ import { AppHeader } from '@/components/ui/AppHeader';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppFilterBar } from '@/components/ui/AppFilterBar';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { Colors } from '@/constants/theme';
@@ -347,71 +348,33 @@ export default function HRRequestsScreen() {
 
       {/* Manager toggle — my vs all (hr_request.view permission, like the web) */}
       {canViewAll && (
-        <View style={[S.toggleRow, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
-          {[
+        <AppFilterBar
+          variant="segmented"
+          options={[
             { key: false, label: 'My Requests' },
             { key: true,  label: 'All Requests' },
-          ].map(opt => (
-            <TouchableOpacity
-              key={String(opt.key)}
-              style={[
-                S.toggleBtn,
-                viewAll === opt.key && { backgroundColor: C.primary },
-                listLoading && S.controlDisabled,
-              ]}
-              onPress={() => setViewAll(opt.key)}
-              disabled={listLoading || viewAll === opt.key}
-              accessibilityRole="button"
-              accessibilityState={{ selected: viewAll === opt.key, disabled: listLoading }}
-            >
-              <Text style={[S.toggleBtnText, {
-                color: viewAll === opt.key ? C.primaryText : C.textSecondary,
-              }]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          ]}
+          value={viewAll}
+          onChange={setViewAll}
+          loading={listLoading && !refreshing}
+        />
       )}
 
       {/* Status filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={S.chips}
-        style={S.chipsScroll}
-      >
-        {[
+      <AppFilterBar
+        options={[
           { key: '',         label: 'All' },
           { key: 'pending',  label: 'Pending' },
           { key: 'approved', label: 'Approved' },
           { key: 'rejected', label: 'Rejected' },
-        ].map(opt => (
-          <TouchableOpacity
-            key={opt.key}
-            style={[S.chip, {
-              backgroundColor: filterStatus === opt.key ? C.primary : C.surface,
-              borderColor:     filterStatus === opt.key ? C.primary : C.border,
-            }, listLoading && S.controlDisabled]}
-            onPress={() => setFilterStatus(opt.key)}
-            disabled={listLoading || filterStatus === opt.key}
-            accessibilityRole="button"
-            accessibilityState={{ selected: filterStatus === opt.key, disabled: listLoading }}
-          >
-            <Text style={[S.chipText, {
-              color: filterStatus === opt.key ? C.primaryText : C.textSecondary,
-            }]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {listLoading && !refreshing ? (
-          <ActivityIndicator size="small" color={C.primary} style={{ marginStart: 4 }} />
-        ) : null}
-      </ScrollView>
+        ]}
+        value={filterStatus}
+        onChange={setFilterStatus}
+        loading={listLoading && !refreshing}
+      />
 
       {initialLoading ? (
-        <AppEmptyState variant="loading" title="Loading requests…" />
+        <AppSkeletonList count={4} lines={3} />
       ) : requests.length === 0 ? (
         <AppEmptyState
           variant="empty"

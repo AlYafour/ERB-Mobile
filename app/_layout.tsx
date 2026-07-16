@@ -1,6 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { I18nManager } from 'react-native';
 import 'react-native-reanimated';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -23,6 +24,10 @@ import { setupNotificationChannel, requestNotificationPermission } from '@/lib/n
 export { AppErrorBoundary as ErrorBoundary } from '@/components/AppErrorBoundary';
 
 SplashScreen.preventAutoHideAsync();
+
+// RTL groundwork: let the OS mirror layout for RTL locales (Arabic).
+// Components must use start/end (not left/right) spacing for this to hold.
+I18nManager.allowRTL(true);
 
 const queryClient = new QueryClient({
   defaultOptions: {

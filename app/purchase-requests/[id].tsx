@@ -10,6 +10,7 @@ import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
@@ -121,9 +122,7 @@ function PurchaseRequestDetailScreenInner() {
   if (loading && !request) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Purchase Request" showBack />
-      <View style={S.center}>
-        <AppEmptyState variant="loading" title="Loading request..." />
-      </View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 

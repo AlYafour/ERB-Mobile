@@ -10,6 +10,9 @@ import { AppHeader } from '@/components/ui/AppHeader';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppErrorState } from '@/components/ui/AppErrorState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
+import { AppPagination } from '@/components/ui/AppPagination';
 import { AppCard } from '@/components/ui/AppCard';
 import { Input } from '@/components/ui/Input';
 import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
@@ -17,7 +20,7 @@ import FilterTags from '@/components/ui/FilterTags';
 import { PurchaseRequest, Project, PaginatedResponse } from '@/types';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { Spacing, Typography } from '@/constants/spacing';
+import { Spacing } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
@@ -270,9 +273,9 @@ function PurchaseRequestsScreenInner() {
         )}
 
         {initialLoading ? (
-          <AppEmptyState variant="loading" title="Loading requests…" />
+          <AppSkeletonList count={5} lines={4} />
         ) : error && !data?.results?.length ? (
-          <AppEmptyState variant="error" title="Failed to load" message={error} actionLabel="Try Again" onAction={loadRequests} />
+          <AppErrorState title="Failed to load" message={error} onRetry={loadRequests} />
         ) : !data?.results?.length && !listLoading ? (
           <AppEmptyState variant="empty" icon="doc.text" title="No purchase requests" message="No requests found. Create one to get started." />
         ) : (
@@ -300,17 +303,16 @@ function PurchaseRequestsScreenInner() {
               }
               ListFooterComponent={
                 data && data.count > 50 ? (
-                  <View style={[styles.pagination, { backgroundColor: colors.surfaceSoft, borderTopColor: colors.border }]}>
-                    <AppButton title="Previous" variant="secondary" size="sm"
-                      onPress={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={listLoading || !data.previous || page === 1} style={styles.paginationButton} />
-                    <Text style={[styles.paginationText, { color: colors.textMuted }]}>
-                      {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
-                    </Text>
-                    <AppButton title="Next" variant="secondary" size="sm"
-                      onPress={() => setPage((p) => p + 1)}
-                      disabled={listLoading || !data.next} style={styles.paginationButton} />
-                  </View>
+                  <AppPagination
+                    page={page}
+                    pageSize={50}
+                    totalCount={data.count}
+                    hasPrevious={!!data.previous}
+                    hasNext={!!data.next}
+                    onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+                    onNext={() => setPage((p) => p + 1)}
+                    loading={listLoading}
+                  />
                 ) : null
               }
             />
@@ -362,14 +364,6 @@ const styles = StyleSheet.create({
     gap: Spacing.sm, paddingVertical: 6,
   },
   reloadText: { fontSize: 12, fontWeight: '500' },
-
-  pagination: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
-    gap: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  paginationButton: { minWidth: 80 },
-  paginationText:   { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
 });
 
 
