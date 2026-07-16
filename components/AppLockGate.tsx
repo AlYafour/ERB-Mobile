@@ -41,14 +41,20 @@ export function AppLockGate() {
     if (promptInFlight.current) return;
     promptInFlight.current = true;
     try {
-      const result = await authenticateBiometric('Unlock AL Yafour');
+      // If the native prompt hangs (rare OS bug / interrupted sensor), the
+      // race releases the in-flight flag after 30s so the Unlock button can
+      // retry instead of becoming a permanent no-op.
+      const result = await Promise.race([
+        authenticateBiometric('Unlock AL Yafour'),
+        new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 30_000)),
+      ]);
       if (result === 'success') {
         setLocked(false);
         setUnavailable(false);
       } else if (result === 'unavailable') {
         setUnavailable(true);
       }
-      // 'cancelled' / 'failed' → stay locked; user retries explicitly
+      // 'cancelled' / 'failed' / 'timeout' → stay locked; user retries explicitly
     } finally {
       promptInFlight.current = false;
     }

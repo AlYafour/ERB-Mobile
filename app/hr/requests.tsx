@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   RefreshControl, Modal, TextInput, ScrollView, Platform,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +48,9 @@ function getStatusVariant(status: string): BadgeVariant {
 }
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
+
+// FlashList ignores `gap` in contentContainerStyle — spacing via separator.
+const ListGap = () => <View style={{ height: 12 }} />;
 
 export default function HRRequestsScreen() {
   const { user } = useAuth();
@@ -383,11 +387,12 @@ export default function HRRequestsScreen() {
           message={filterStatus ? `No ${filterStatus} requests found.` : 'No HR requests yet.'}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={requests}
           renderItem={renderItem}
           keyExtractor={item => String(item.id)}
           contentContainerStyle={S.list}
+          ItemSeparatorComponent={ListGap}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -553,7 +558,8 @@ export default function HRRequestsScreen() {
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
     root: { flex: 1 },
-    list: { padding: 16, gap: 12, paddingBottom: 32 },
+    // gap intentionally absent — FlashList spacing comes from ListGap separator
+    list: { padding: 16, paddingBottom: 32 },
 
     newBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 5,

@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { apiClient } from '@/lib/api';
 import { User } from '@/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerDeviceForPush, unregisterDeviceForPush } from '@/lib/push-notifications';
 
 const BRANDING_KEY = '@branding';
 
@@ -91,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await AsyncStorage.setItem('user', JSON.stringify(res.data));
             setUser(res.data);
           }
+          // Keep this device's push registration fresh (no-ops without FCM)
+          registerDeviceForPush().catch(() => {});
         })().catch(() => {});
         return;
       }
@@ -138,8 +141,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setUser(userData);
 
-        // Fetch branding in background — updates logo/color for this session and next
+        // Background: branding + push-device registration (both non-blocking)
         fetchAndCacheBranding().then(b => { if (b) setBranding(b); });
+        registerDeviceForPush().catch(() => {});
 
         return { success: true };
       }
@@ -163,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setUser(userData);
         fetchAndCacheBranding().then(b => { if (b) setBranding(b); });
+        registerDeviceForPush().catch(() => {});
         return { success: true };
       }
       return { success: false, error: response.error || 'Invalid or expired code.' };
@@ -190,6 +195,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // the next account never inherits the previous user's lock state.
       const { setAppLockEnabled } = await import('@/lib/app-lock');
       await setAppLockEnabled(false).catch(() => {});
+      // Deactivate this device's push registration BEFORE the tokens are
+      // cleared (the DELETE needs auth) — the next account on this device
+      // must never receive the previous user's notifications.
+      await unregisterDeviceForPush().catch(() => {});
       await apiClient.logout();
       setUser(null);
     } catch (error) {

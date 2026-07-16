@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { purchaseRequestsApi } from '@/lib/api/purchase-requests';
@@ -30,6 +31,103 @@ const statusLabels: Record<string, string> = {
   approved: 'Approved',
   rejected: 'Rejected',
 };
+
+function getStatusVariant(status?: string): 'success' | 'danger' | 'warning' | 'info' {
+  switch (status) {
+    case 'approved': return 'success';
+    case 'rejected': return 'danger';
+    case 'pending':  return 'warning';
+    default:         return 'info';
+  }
+}
+
+/**
+ * Memoized list row — re-renders only when its item or theme changes, not on
+ * every parent state change (pagination, filters, loading flags).
+ */
+const PRCard = React.memo(function PRCard({
+  item,
+  colors,
+  onOpen,
+}: {
+  item: PurchaseRequest;
+  colors: typeof Colors.light | typeof Colors.dark;
+  onOpen: (id: number) => void;
+}) {
+  const itemId      = Number(item.id);
+  const projectName = typeof item.project === 'object' ? item.project?.name : (item as any).project_code || '-';
+  const projectCode = typeof item.project === 'object' ? (item.project as any)?.code : (item as any).project_code || '';
+  const reqDate = (item as any).request_date
+    ? new Date((item as any).request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  const reqByRaw: string | undefined = (item as any).required_by;
+  const reqByDate  = reqByRaw ? new Date(reqByRaw) : null;
+  const reqBy      = reqByDate ? reqByDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+  const now        = new Date();
+  const twoDaysOut = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+  const isOverdue  = reqByDate ? reqByDate < now : false;
+  const isUrgent   = reqByDate ? reqByDate < twoDaysOut : false;
+  const reqByColor = isOverdue ? colors.danger : isUrgent ? colors.warning : colors.textPrimary;
+  const itemCount  = item.items?.length ?? null;
+
+  return (
+    <AppCard style={styles.itemCard} onPress={() => onOpen(itemId)}>
+      <View style={styles.itemTopRow}>
+        <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>
+          {(item as any).code || `PR-${String(item.id).slice(0, 8)}`}
+        </Text>
+        <AppBadge variant={getStatusVariant(item.status)}>
+          {statusLabels[item.status || ''] || item.status || 'Unknown'}
+        </AppBadge>
+      </View>
+
+      {(item as any).title ? (
+        <Text style={[styles.itemTitle, { color: colors.textSecondary }]} numberOfLines={2}>
+          {(item as any).title}
+        </Text>
+      ) : null}
+
+      {(projectName || projectCode) ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Project</Text>
+          <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
+            {projectName}{projectCode ? ` · ${projectCode}` : ''}
+          </Text>
+        </View>
+      ) : null}
+      {(item as any).created_by_name ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Requester</Text>
+          <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
+            {(item as any).created_by_name}
+          </Text>
+        </View>
+      ) : null}
+      {reqDate ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Request Date</Text>
+          <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{reqDate}</Text>
+        </View>
+      ) : null}
+      {reqBy ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Required By</Text>
+          <Text style={[styles.metaValue, { color: reqByColor, fontWeight: isOverdue || isUrgent ? '600' : '400' }]}>
+            {reqBy}{isOverdue ? ' · Overdue' : isUrgent ? ' · Soon' : ''}
+          </Text>
+        </View>
+      ) : null}
+      {itemCount !== null && itemCount > 0 ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Items</Text>
+          <Text style={[styles.metaValue, { color: colors.textSecondary }]}>
+            {itemCount} item{itemCount !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      ) : null}
+    </AppCard>
+  );
+});
 
 function PurchaseRequestsScreenInner() {
   const router = useRouter();
@@ -142,90 +240,17 @@ function PurchaseRequestsScreenInner() {
     const f = { ...filters }; delete f[key]; setFilters(f); setPage(1);
   };
 
-  const getStatusVariant = (status?: string): 'success' | 'danger' | 'warning' | 'info' => {
-    switch (status) {
-      case 'approved': return 'success';
-      case 'rejected': return 'danger';
-      case 'pending':  return 'warning';
-      default:         return 'info';
-    }
-  };
+  const openRequest = useCallback(
+    (id: number) => router.push(`/purchase-requests/${id}` as any),
+    [router],
+  );
 
-  const renderItem = ({ item }: { item: PurchaseRequest }) => {
-    const itemId      = Number(item.id);
-    const projectName = typeof item.project === 'object' ? item.project?.name : (item as any).project_code || '-';
-    const projectCode = typeof item.project === 'object' ? (item.project as any)?.code : (item as any).project_code || '';
-    const reqDate = (item as any).request_date
-      ? new Date((item as any).request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      : null;
-    const reqByRaw: string | undefined = (item as any).required_by;
-    const reqByDate  = reqByRaw ? new Date(reqByRaw) : null;
-    const reqBy      = reqByDate ? reqByDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
-    const now        = new Date();
-    const twoDaysOut = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
-    const isOverdue  = reqByDate ? reqByDate < now : false;
-    const isUrgent   = reqByDate ? reqByDate < twoDaysOut : false;
-    const reqByColor = isOverdue ? colors.danger : isUrgent ? colors.warning : colors.textPrimary;
-    const itemCount  = item.items?.length ?? null;
-
-    return (
-      <AppCard style={styles.itemCard} onPress={() => router.push(`/purchase-requests/${itemId}` as any)}>
-        <View style={styles.itemTopRow}>
-          <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>
-            {(item as any).code || `PR-${String(item.id).slice(0, 8)}`}
-          </Text>
-          <AppBadge variant={getStatusVariant(item.status)}>
-            {statusLabels[item.status || ''] || item.status || 'Unknown'}
-          </AppBadge>
-        </View>
-
-        {(item as any).title ? (
-          <Text style={[styles.itemTitle, { color: colors.textSecondary }]} numberOfLines={2}>
-            {(item as any).title}
-          </Text>
-        ) : null}
-
-        {(projectName || projectCode) ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Project</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
-              {projectName}{projectCode ? ` · ${projectCode}` : ''}
-            </Text>
-          </View>
-        ) : null}
-        {(item as any).created_by_name ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Requester</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
-              {(item as any).created_by_name}
-            </Text>
-          </View>
-        ) : null}
-        {reqDate ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Request Date</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{reqDate}</Text>
-          </View>
-        ) : null}
-        {reqBy ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Required By</Text>
-            <Text style={[styles.metaValue, { color: reqByColor, fontWeight: isOverdue || isUrgent ? '600' : '400' }]}>
-              {reqBy}{isOverdue ? ' · Overdue' : isUrgent ? ' · Soon' : ''}
-            </Text>
-          </View>
-        ) : null}
-        {itemCount !== null && itemCount > 0 ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Items</Text>
-            <Text style={[styles.metaValue, { color: colors.textSecondary }]}>
-              {itemCount} item{itemCount !== 1 ? 's' : ''}
-            </Text>
-          </View>
-        ) : null}
-      </AppCard>
-    );
-  };
+  const renderItem = useCallback(
+    ({ item }: { item: PurchaseRequest }) => (
+      <PRCard item={item} colors={colors} onOpen={openRequest} />
+    ),
+    [colors, openRequest],
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -287,7 +312,7 @@ function PurchaseRequestsScreenInner() {
                 <Text style={[styles.reloadText, { color: colors.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item) => String(item.id || Math.random())}

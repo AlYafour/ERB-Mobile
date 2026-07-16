@@ -1,14 +1,15 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { I18nManager } from 'react-native';
+import { AppState, I18nManager } from 'react-native';
 import 'react-native-reanimated';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
+import NetInfo from '@react-native-community/netinfo';
 
 import { AppThemeProvider } from '@/contexts/ThemeContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -38,6 +39,13 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// TanStack Query ↔ React Native wiring:
+// online status from NetInfo (pauses/resumes queries with connectivity),
+// focus from AppState (refetch-on-focus fires on foreground, not tab switches).
+onlineManager.setEventListener(setOnline =>
+  NetInfo.addEventListener(state => setOnline(!!state.isConnected))
+);
 
 const PremiumLightTheme = {
   ...DefaultTheme,
@@ -79,6 +87,11 @@ function RootLayoutInner() {
   useEffect(() => {
     setupNotificationChannel();
     requestNotificationPermission();
+
+    const sub = AppState.addEventListener('change', state => {
+      focusManager.setFocused(state === 'active');
+    });
+    return () => sub.remove();
   }, []);
 
   return (
