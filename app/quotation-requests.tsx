@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { quotationRequestsApi } from '@/lib/api/quotation-requests';
-import { useAuth } from '@/contexts/AuthContext';
-import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
 import { Input } from '@/components/ui/Input';
 import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
@@ -41,8 +39,6 @@ function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info'
 
 function QuotationRequestsScreenInner() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { hasPermission } = usePermissions();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
@@ -54,9 +50,6 @@ function QuotationRequestsScreenInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const isSuperuser = user?.is_superuser ?? false;
-  const canCreate = isSuperuser || (hasPermission('quotation_request', 'create') ?? false);
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
@@ -146,13 +139,13 @@ function QuotationRequestsScreenInner() {
   return (
     <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
       <View style={S.inner}>
+        {/* No "New" button: a QR must be created FROM a Purchase Request's
+            detail screen (the form needs purchase_request_id) — the old
+            button opened it context-free and it loaded nothing. */}
         <AppHeader
           title="Quotation Requests"
           subtitle={data?.count != null ? `${data.count} request${data.count !== 1 ? 's' : ''}` : undefined}
-          right={canCreate ? (
-            <AppButton title="New QR" variant="primary" size="sm"
-              onPress={() => router.push('/quotation-requests/new' as any)} />
-          ) : undefined}
+          showBack
         />
 
         <View style={S.searchContainer}>

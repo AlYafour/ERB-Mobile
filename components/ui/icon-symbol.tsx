@@ -150,6 +150,12 @@ const MAPPING = {
   'person.badge.shield.checkmark.fill': 'verified-user',
   'mappin.circle.fill': 'place',
   'speaker.wave.2.fill': 'volume-up',
+  // Sweep 2026-07-17: last remaining unmapped usages
+  'number': 'tag',
+  'doc.badge.plus': 'note-add',
+  'ellipsis.circle.fill': 'more-horiz',
+  'list.bullet.clipboard': 'assignment',
+  'dollarsign.circle': 'attach-money',
 } satisfies Record<string, ComponentProps<typeof MaterialIcons>['name']>;
 
 export function IconSymbol({

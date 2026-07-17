@@ -99,15 +99,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Tokens exist but no cached profile (rare: cleared cache / interrupted
-      // login). We must resolve the profile before routing, otherwise AuthGate
-      // treats the session as logged-out. proactiveRefresh no-ops when the
-      // access token is still valid, so this is one round-trip in the worst case.
-      await apiClient.proactiveRefresh();
-      const res = await apiClient.get<any>('/api/auth/me/');
-      if (res.data) {
-        await AsyncStorage.setItem('user', JSON.stringify(res.data));
-        setUser(res.data);
-      }
+      // login). Try to resolve the profile before routing, but HARD-CAP the
+      // wait at 6s — on a cold backend the unbounded await pinned the splash
+      // for up to 40s. If the fetch wins later anyway, setUser still fires and
+      // AuthGate moves the user in.
+      await Promise.race([
+        (async () => {
+          await apiClient.proactiveRefresh();
+          const res = await apiClient.get<any>('/api/auth/me/');
+          if (res.data) {
+            await AsyncStorage.setItem('user', JSON.stringify(res.data));
+            setUser(res.data);
+          }
+        })(),
+        new Promise<void>(resolve => setTimeout(resolve, 6000)),
+      ]);
     } catch {
     } finally {
       setIsLoading(false);

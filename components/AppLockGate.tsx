@@ -35,7 +35,11 @@ export function AppLockGate() {
   const [unavailable, setUnavailable] = useState(false);
   const promptInFlight = useRef(false);
   const lockedRef = useRef(false);
-  lockedRef.current = locked;
+  // Ref sync in an effect, NOT during render — render-time ref mutation is
+  // undefined behavior under the React Compiler (enabled in app.json).
+  useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
 
   const tryUnlock = useCallback(async () => {
     if (promptInFlight.current) return;

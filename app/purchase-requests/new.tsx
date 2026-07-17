@@ -27,7 +27,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Product, Project, PurchaseRequestItem } from '@/types';
-import { usePermissions } from '@/lib/hooks/use-permissions';
+import { AppPermissionGate } from '@/components/AppPermissionGate';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -96,9 +96,8 @@ function FieldLabel({
   );
 }
 
-export default function NewPurchaseRequestScreen() {
+function NewPurchaseRequestScreenInner() {
   const router = useRouter();
-  const { hasPermission } = usePermissions();
   const cs = useColorScheme() ?? 'light';
   const c = Colors[cs];
   const insets = useSafeAreaInsets();
@@ -130,17 +129,14 @@ export default function NewPurchaseRequestScreen() {
   const [projectsError, setProjectsError] = useState(false);
   const [productsError, setProductsError] = useState(false);
 
-  const canCreate = hasPermission('purchase_request', 'create');
-
+  // Access control lives in the AppPermissionGate wrapper below — the old
+  // inline check ran during the permissions fetch (hasPermission === false
+  // while loading) and wrongly bounced authorized users opening this screen
+  // cold from a deep link or notification.
   useEffect(() => {
-    if (!canCreate) {
-      toast('You do not have permission to create purchase requests', 'error');
-      router.back();
-      return;
-    }
     loadProjects();
     loadProducts();
-  }, [canCreate]);
+  }, []);
 
   const loadProjects = async () => {
     try {
@@ -277,7 +273,6 @@ export default function NewPurchaseRequestScreen() {
     }
   };
 
-  if (!canCreate) return null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['top', 'bottom']}>
@@ -747,3 +742,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 });
+
+export default function NewPurchaseRequestScreen() {
+  return (
+    <AppPermissionGate category="purchase_request" action="create">
+      <NewPurchaseRequestScreenInner />
+    </AppPermissionGate>
+  );
+}

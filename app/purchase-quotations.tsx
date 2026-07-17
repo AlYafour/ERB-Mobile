@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { purchaseQuotationsApi } from '@/lib/api/purchase-quotations';
-import { useAuth } from '@/contexts/AuthContext';
-import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
 import { Input } from '@/components/ui/Input';
 import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
@@ -50,8 +48,6 @@ function fmtDate(d?: string | null) {
 
 function PurchaseQuotationsScreenInner() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { hasPermission } = usePermissions();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
@@ -63,9 +59,6 @@ function PurchaseQuotationsScreenInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const isSuperuser = user?.is_superuser ?? false;
-  const canCreate = isSuperuser || (hasPermission('purchase_quotation', 'create') ?? false);
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
@@ -165,13 +158,13 @@ function PurchaseQuotationsScreenInner() {
   return (
     <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
       <View style={S.inner}>
+        {/* No "New" button: quotations are created from a Quotation Request's
+            detail flow — the old button pointed at a route that doesn't exist
+            and landed users on the Unmatched Route screen. */}
         <AppHeader
           title="Purchase Quotations"
           subtitle={data?.count != null ? `${data.count} quotation${data.count !== 1 ? 's' : ''}` : undefined}
-          right={canCreate ? (
-            <AppButton title="New" variant="primary" size="sm"
-              onPress={() => router.push('/purchase-quotations/new' as any)} />
-          ) : undefined}
+          showBack
         />
 
         <View style={S.searchContainer}>

@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { purchaseInvoicesApi } from '@/lib/api/purchase-invoices';
-import { useAuth } from '@/contexts/AuthContext';
-import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
 import { Input } from '@/components/ui/Input';
 import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
@@ -52,8 +50,6 @@ function fmtDate(d?: string | null) {
 
 function PurchaseInvoicesScreenInner() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { hasPermission } = usePermissions();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
@@ -65,9 +61,6 @@ function PurchaseInvoicesScreenInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const isSuperuser = user?.is_superuser ?? false;
-  const canCreate = isSuperuser || (hasPermission('purchase_invoice', 'create') ?? false);
 
   // 400ms debounce
   useEffect(() => {
@@ -183,13 +176,13 @@ function PurchaseInvoicesScreenInner() {
   return (
     <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
       <View style={S.inner}>
+        {/* No "New" button: invoices are created from a GRN's "Create Invoice"
+            card (needs a purchase_order_id) — the old button opened the form
+            without one and it loaded nothing (getById(NaN)). */}
         <AppHeader
           title="Purchase Invoices"
           subtitle={data?.count != null ? `${data.count} invoice${data.count !== 1 ? 's' : ''}` : undefined}
-          right={canCreate ? (
-            <AppButton title="New Invoice" variant="primary" size="sm"
-              onPress={() => router.push('/purchase-invoices/new' as any)} />
-          ) : undefined}
+          showBack
         />
 
         <View style={S.searchContainer}>

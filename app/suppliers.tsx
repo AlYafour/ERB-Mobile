@@ -168,6 +168,7 @@ function SuppliersScreenInner() {
         <AppHeader
           title="Suppliers"
           subtitle={data?.count != null ? `${data.count} supplier${data.count !== 1 ? 's' : ''}` : undefined}
+          showBack
           right={canCreate ? (
             <AppButton
               title="New Supplier"

@@ -197,6 +197,7 @@ function PurchaseOrdersScreenInner() {
         <AppHeader
           title="Purchase Orders"
           subtitle={data?.count != null ? `${data.count} order${data.count !== 1 ? 's' : ''}` : undefined}
+          showBack
           right={canCreate ? (
             <AppButton title="New LPO" variant="primary" size="sm"
               onPress={() => router.push('/purchase-orders/new' as any)} />

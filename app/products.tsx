@@ -163,6 +163,7 @@ function ProductsScreenInner() {
         <AppHeader
           title="Products"
           subtitle={data?.count != null ? `${data.count} product${data.count !== 1 ? 's' : ''}` : undefined}
+          showBack
           right={canCreate ? (
             <AppButton
               title="New Product"

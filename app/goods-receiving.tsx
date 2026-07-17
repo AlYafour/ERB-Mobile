@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { goodsReceivingApi, GoodsReceivedNote } from '@/lib/api/goods-receiving';
-import { useAuth } from '@/contexts/AuthContext';
-import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
 import { Input } from '@/components/ui/Input';
 import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
@@ -41,8 +39,6 @@ function getStatusVariant(status?: string): 'success' | 'danger' | 'warning' | '
 
 function GoodsReceivingScreenInner() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { hasPermission } = usePermissions();
   const cs = useColorScheme() ?? 'light';
   const colors = Colors[cs];
 
@@ -54,9 +50,6 @@ function GoodsReceivingScreenInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const su = user?.is_superuser ?? false;
-  const canCreate = su || (hasPermission('goods_receiving', 'create') ?? false);
 
   // Debounce search 400ms
   useEffect(() => {
@@ -178,17 +171,13 @@ function GoodsReceivingScreenInner() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <View style={styles.innerContainer}>
+        {/* No "New" button: a GRN is created from an approved Purchase Order's
+            "Create GRN" card (the form needs purchase_order_id) — the old
+            button opened it context-free and it loaded nothing. */}
         <AppHeader
           title="Goods Receiving"
           subtitle={data?.count != null ? `${data.count} note${data.count !== 1 ? 's' : ''}` : undefined}
-          right={canCreate ? (
-            <AppButton
-              title="New GRN"
-              variant="primary"
-              size="sm"
-              onPress={() => router.push('/goods-receiving/new' as any)}
-            />
-          ) : undefined}
+          showBack
         />
 
         {/* Search & filter */}

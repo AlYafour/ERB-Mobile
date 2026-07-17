@@ -88,8 +88,10 @@ function RootLayoutInner() {
   const activeTheme = isDark ? PremiumDarkTheme : PremiumLightTheme;
 
   useEffect(() => {
-    setupNotificationChannel();
-    requestNotificationPermission();
+    // Boot-time native calls are fire-and-forget and must never reject
+    // unhandled — a boot rejection is invisible and hard to diagnose.
+    setupNotificationChannel().catch(() => {});
+    requestNotificationPermission().catch(() => {});
 
     const sub = AppState.addEventListener('change', state => {
       focusManager.setFocused(state === 'active');

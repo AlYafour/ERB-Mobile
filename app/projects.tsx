@@ -212,6 +212,7 @@ function ProjectsScreenInner() {
         <AppHeader
           title="Projects"
           subtitle={data?.count != null ? `${data.count} project${data.count !== 1 ? 's' : ''}` : undefined}
+          showBack
           right={canCreate ? (
             <AppButton
               title="New Project"
