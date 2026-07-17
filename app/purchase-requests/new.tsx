@@ -265,6 +265,14 @@ function NewPurchaseRequestScreenInner() {
         })),
       });
       toast('Purchase request created successfully', 'success');
+      if (result.id == null) {
+        // Defense-in-depth: the backend create response is now guaranteed
+        // to include 'id' (fixed server-side), but if it's ever missing again
+        // (bad response, network shim, etc.) fall back to the list instead of
+        // a broken "Not found" detail screen.
+        router.replace('/purchase-requests' as any);
+        return;
+      }
       router.replace(`/purchase-requests/${result.id}` as any);
     } catch (error: any) {
       toast(error.message || 'Failed to create purchase request', 'error');

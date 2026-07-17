@@ -79,6 +79,14 @@ function NewQuotationRequestScreenInner() {
         })),
       });
       toast('Quotation Request created successfully', 'success');
+      if (result.id == null) {
+        // Defense-in-depth: the backend create response is now guaranteed
+        // to include 'id' (fixed server-side), but if it's ever missing again
+        // (bad response, network shim, etc.) fall back to the list instead of
+        // a broken "Not found" detail screen.
+        router.replace('/quotation-requests' as any);
+        return;
+      }
       router.replace(`/quotation-requests/${result.id}` as any);
     } catch (e: any) {
       toast(e.message || 'Failed to create QR', 'error');

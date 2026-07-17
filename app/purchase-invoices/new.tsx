@@ -92,6 +92,14 @@ function NewPurchaseInvoiceScreenInner() {
         })),
       });
       toast('Invoice created successfully', 'success');
+      if (result.id == null) {
+        // Defense-in-depth: the backend create response is now guaranteed
+        // to include 'id' (fixed server-side), but if it's ever missing again
+        // (bad response, network shim, etc.) fall back to the list instead of
+        // a broken "Not found" detail screen.
+        router.replace('/purchase-invoices' as any);
+        return;
+      }
       router.replace(`/purchase-invoices/${result.id}` as any);
     } catch (err: any) {
       toast(err.message || 'Failed to create invoice', 'error');
