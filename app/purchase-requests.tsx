@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 import { purchaseRequestsApi } from '@/lib/api/purchase-requests';
 import { projectsApi } from '@/lib/api/projects';
 import { usePermissions } from '@/lib/hooks/use-permissions';
@@ -210,17 +211,8 @@ function PurchaseRequestsScreenInner() {
 
   useEffect(() => { loadRequests(); }, [loadRequests]);
 
-  // Refetch whenever the list REGAINS focus (e.g. returning from the create
-  // flow or a detail screen after approve/reject). Stack screens stay mounted,
-  // so without this the list showed stale data until the user left and
-  // re-entered the module. First focus is skipped — the mount effect covers it.
-  const firstFocus = useRef(true);
-  useFocusEffect(
-    useCallback(() => {
-      if (firstFocus.current) { firstFocus.current = false; return; }
-      loadRequests();
-    }, [loadRequests])
-  );
+  // Stale-list fix: refetch when the screen regains focus (create/detail flows)
+  useRefetchOnFocus(loadRequests);
 
   const onRefresh = () => { setRefreshing(true); loadRequests(); };
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 import { goodsReceivingApi, GoodsReceivedNote } from '@/lib/api/goods-receiving';
 import { toast } from '@/lib/hooks/use-toast';
 import { Input } from '@/components/ui/Input';
@@ -167,6 +168,8 @@ function GoodsReceivingScreenInner() {
       </AppCard>
     );
   };
+  // Stale-list fix: refetch when the screen regains focus (create/detail flows)
+  useRefetchOnFocus(loadReceipts);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>

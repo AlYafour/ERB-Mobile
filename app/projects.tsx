@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 import { projectsApi } from '@/lib/api/projects';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
@@ -205,6 +206,8 @@ function ProjectsScreenInner() {
       </AppCard>
     );
   };
+  // Stale-list fix: refetch when the screen regains focus (create/detail flows)
+  useRefetchOnFocus(loadProjects);
 
   return (
     <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>

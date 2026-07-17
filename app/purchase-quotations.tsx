@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 import { purchaseQuotationsApi } from '@/lib/api/purchase-quotations';
 import { toast } from '@/lib/hooks/use-toast';
 import { Input } from '@/components/ui/Input';
@@ -154,6 +155,8 @@ function PurchaseQuotationsScreenInner() {
       </AppCard>
     );
   };
+  // Stale-list fix: refetch when the screen regains focus (create/detail flows)
+  useRefetchOnFocus(loadQuotations);
 
   return (
     <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>

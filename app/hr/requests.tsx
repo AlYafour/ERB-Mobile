@@ -23,6 +23,7 @@ import { hrRequestsApi, HRRequest, HRLeaveBalance } from '@/lib/api/hr';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
 import { toast, confirm } from '@/lib/hooks/use-toast';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 
 // Icons must exist in components/ui/icon-symbol.tsx MAPPING — unmapped names
 // silently render as an empty circle on Android.
@@ -177,6 +178,8 @@ export default function HRRequestsScreen() {
   }, [user, filterStatus, viewAll, canViewAll, resolveEmployeeId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+  // Stale-list fix: refetch when the screen regains focus
+  useRefetchOnFocus(loadData);
   const handleRefresh = () => { setRefreshing(true); loadData(); };
 
   const handleSubmit = async () => {

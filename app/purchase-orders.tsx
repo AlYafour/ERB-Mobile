@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 import { purchaseOrdersApi } from '@/lib/api/purchase-orders';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
@@ -190,6 +191,8 @@ function PurchaseOrdersScreenInner() {
       </AppCard>
     );
   };
+  // Stale-list fix: refetch when the screen regains focus (create/detail flows)
+  useRefetchOnFocus(loadOrders);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>

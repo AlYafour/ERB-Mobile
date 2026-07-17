@@ -15,6 +15,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Spacing, Typography } from '@/constants/spacing';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 
 function UsersScreenInner() {
   const router = useRouter();
@@ -48,6 +49,9 @@ function UsersScreenInner() {
     loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Stale-list fix: refetch when the screen regains focus
+  useRefetchOnFocus(loadUsers);
 
   const onRefresh = () => {
     setRefreshing(true);

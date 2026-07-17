@@ -17,6 +17,7 @@ import { hrAttendanceApi, hrRequestsApi, hrPayrollApi, HRAttendance, HREmployee,
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
 import { toast } from '@/lib/hooks/use-toast';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -164,6 +165,9 @@ export default function HRScreen() {
   };
 
   useEffect(() => { loadData(); }, [user]);
+  // Tab screens stay mounted — refresh attendance/requests/payroll snapshots
+  // whenever the user switches back to the HR tab.
+  useRefetchOnFocus(loadData);
   const handleRefresh = () => { setRefreshing(true); loadData(); };
 
   const handleCheckIn = async () => {
