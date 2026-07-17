@@ -16,6 +16,7 @@ import { PurchaseQuotation } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -65,6 +66,10 @@ function PurchaseQuotationDetailScreenInner() {
   };
 
   useEffect(() => { load(); }, [id]);
+  // Stale-detail fix: refetch when the screen regains focus (a child
+  // flow - create QR/PO/GRN/invoice, approve, edit - can change this
+  // document's state while this screen stays mounted underneath).
+  useRefetchOnFocus(load);
 
   const handleAward = async () => {
     if (!await confirm('Award this quotation? This marks it as the selected supplier.')) return;
