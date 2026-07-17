@@ -8,9 +8,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
-  ImageBackground,
   ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -52,7 +52,16 @@ export default function LoginScreen() {
   }, [contextBranding]);
 
   useEffect(() => {
-    fetchPublicBranding().then(b => { if (b) setBranding(b); });
+    // Only apply fetched branding when it actually CHANGED — unconditionally
+    // setting identical data re-rendered the whole screen on every mount
+    // (part of the "login page keeps reloading" report).
+    fetchPublicBranding().then(b => {
+      if (b) {
+        setBranding(prev =>
+          prev && JSON.stringify(prev) === JSON.stringify(b) ? prev : b
+        );
+      }
+    });
   }, []);
 
   const handleLogin = async () => {
@@ -65,7 +74,8 @@ export default function LoginScreen() {
     try {
       const result = await login(username.trim(), password);
       if (result.success) {
-        router.replace('/(tabs)');
+        // Navigation happens in AuthGate (it reacts to `user` being set) —
+        // navigating from here too caused a double-replace flash.
       } else if (result.requires2FA && result.tempToken) {
         router.push({ pathname: '/two-factor', params: { tempToken: result.tempToken } } as any);
       } else {
@@ -85,7 +95,10 @@ export default function LoginScreen() {
 
   const body = (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // Android: rely on the window's adjustResize — 'height' re-laid-out and
+      // re-centered the whole screen on every keyboard open/close (looked
+      // like the page "reloading" while typing).
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1 }}
     >
       <ScrollView
@@ -173,19 +186,24 @@ export default function LoginScreen() {
     </KeyboardAvoidingView>
   );
 
-  if (loginBg) {
-    return (
-      <ImageBackground source={{ uri: loginBg }} style={{ flex: 1 }} resizeMode="cover">
-        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <View style={s.overlay} />
-        {body}
-      </ImageBackground>
-    );
-  }
-
+  // ONE stable tree for both branded and plain modes. The screen used to
+  // swap its whole root (plain View ⇄ ImageBackground) the moment the
+  // branding fetch resolved — a full remount that read as a page "reload"
+  // on every visit. Now the background image is just a layer that fades in.
   return (
     <View style={[{ flex: 1 }, { backgroundColor: '#07111F' }]}>
       <StatusBar barStyle="light-content" backgroundColor="#07111F" />
+      {loginBg ? (
+        <>
+          <Image
+            source={{ uri: loginBg }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={400}
+          />
+          <View style={s.overlay} />
+        </>
+      ) : null}
       {body}
     </View>
   );

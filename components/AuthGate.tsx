@@ -27,7 +27,11 @@ export function AuthGate() {
 
     if (!user && !onPublic) {
       router.replace('/login');
-    } else if (user && first === 'login') {
+    } else if (user && first !== undefined && PUBLIC_SEGMENTS.has(first)) {
+      // Single navigation controller: once a session exists, THIS is what
+      // moves the user off login/two-factor/register. The screens themselves
+      // no longer call router.replace — two controllers racing caused a
+      // visible double-navigation flash after sign-in.
       router.replace('/(tabs)');
     }
   }, [user, isLoading, segments, router]);

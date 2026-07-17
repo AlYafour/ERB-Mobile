@@ -44,7 +44,7 @@ export default function TwoFactorScreen() {
     try {
       const result = await verifyTwoFactor(String(tempToken ?? ''), submitted);
       if (result.success) {
-        router.replace('/(tabs)');
+        // AuthGate navigates once `user` is set — no manual replace here.
       } else {
         setError(result.error || 'Invalid or expired code.');
         setCode('');
@@ -65,7 +65,9 @@ export default function TwoFactorScreen() {
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor="#07111F" />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        // Android: rely on the window's adjustResize — 'height' visibly
+        // re-lays-out the whole screen on every keyboard open/close.
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <View style={[s.content, { paddingTop: insets.top + 64, paddingBottom: insets.bottom + 32 }]}>

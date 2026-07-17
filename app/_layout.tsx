@@ -26,9 +26,12 @@ export { AppErrorBoundary as ErrorBoundary } from '@/components/AppErrorBoundary
 
 SplashScreen.preventAutoHideAsync();
 
-// RTL groundwork: let the OS mirror layout for RTL locales (Arabic).
-// Components must use start/end (not left/right) spacing for this to hold.
-I18nManager.allowRTL(true);
+// RTL: explicitly OFF until Arabic i18n is complete. allowRTL(true) shipped
+// briefly in a preview build and is PERSISTED natively (SharedPreferences) —
+// on Arabic-locale devices it mirrored the whole English UI, which looked
+// broken. Passing false here actively resets that stored flag; do not simply
+// remove this call. Flip to true only together with real Arabic translations.
+I18nManager.allowRTL(false);
 
 const queryClient = new QueryClient({
   defaultOptions: {
