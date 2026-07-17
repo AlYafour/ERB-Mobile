@@ -14,6 +14,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/ui/Logo';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const CODE_LENGTH = 6;
 
@@ -87,12 +88,11 @@ export default function TwoFactorScreen() {
               </View>
             )}
 
-            {/* Hidden input drives the visible digit boxes */}
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={() => inputRef.current?.focus()}
-              accessibilityRole="none"
-            >
+            {/* The real input is an invisible layer COVERING the boxes — a
+                1×1px offscreen input broke backspace on several Android
+                keyboards (deleting a mistyped digit was impossible). Tapping
+                anywhere on the boxes focuses the native input directly. */}
+            <View style={s.codeArea}>
               <View style={s.digitsRow} pointerEvents="none">
                 {Array.from({ length: CODE_LENGTH }).map((_, i) => (
                   <View
@@ -106,20 +106,47 @@ export default function TwoFactorScreen() {
                   </View>
                 ))}
               </View>
-            </TouchableOpacity>
-            <TextInput
-              ref={inputRef}
-              value={code}
-              onChangeText={onChangeCode}
-              keyboardType="number-pad"
-              autoComplete="one-time-code"
-              textContentType="oneTimeCode"
-              maxLength={CODE_LENGTH}
-              autoFocus
-              style={s.hiddenInput}
-              accessibilityLabel={`Verification code, ${CODE_LENGTH} digits`}
-              editable={!loading}
-            />
+              <TextInput
+                ref={inputRef}
+                value={code}
+                onChangeText={onChangeCode}
+                keyboardType="number-pad"
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+                maxLength={CODE_LENGTH}
+                autoFocus
+                caretHidden
+                style={s.overlayInput}
+                accessibilityLabel={`Verification code, ${CODE_LENGTH} digits`}
+                editable={!loading}
+              />
+            </View>
+
+            {/* Explicit backspace — never leave the user unable to correct */}
+            <View style={s.editRow}>
+              <TouchableOpacity
+                onPress={() => { setCode(c => c.slice(0, -1)); setError(''); inputRef.current?.focus(); }}
+                disabled={loading || code.length === 0}
+                style={[s.editBtn, (loading || code.length === 0) && { opacity: 0.4 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Delete last digit"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <IconSymbol name="delete.left" size={18} color="#94A3B8" />
+                <Text style={s.editBtnText}>Delete</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setCode(''); setError(''); inputRef.current?.focus(); }}
+                disabled={loading || code.length === 0}
+                style={[s.editBtn, (loading || code.length === 0) && { opacity: 0.4 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Clear code"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <IconSymbol name="xmark.circle.fill" size={18} color="#94A3B8" />
+                <Text style={s.editBtnText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               style={[
@@ -185,7 +212,8 @@ const s = StyleSheet.create({
   },
   errorText: { color: '#FCA5A5', fontSize: 13, fontWeight: '500', textAlign: 'center' },
 
-  digitsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 20 },
+  codeArea: { position: 'relative', marginBottom: 10 },
+  digitsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   digitBox: {
     flex: 1,
     aspectRatio: 0.82,
@@ -197,7 +225,26 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   digit: { fontSize: 24, fontWeight: '700', color: '#F8FAFC' },
-  hiddenInput: { position: 'absolute', opacity: 0, height: 1, width: 1 },
+  overlayInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.02,
+    color: 'transparent',
+    fontSize: 1,
+  },
+  editRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginBottom: 14,
+  },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 10,
+  },
+  editBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
 
   btn: {
     borderRadius: 12,

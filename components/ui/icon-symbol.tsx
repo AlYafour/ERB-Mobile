@@ -152,6 +152,7 @@ const MAPPING = {
   'speaker.wave.2.fill': 'volume-up',
   // Sweep 2026-07-17: last remaining unmapped usages
   'number': 'tag',
+  'delete.left': 'backspace',
   'doc.badge.plus': 'note-add',
   'ellipsis.circle.fill': 'more-horiz',
   'list.bullet.clipboard': 'assignment',
