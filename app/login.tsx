@@ -11,6 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -201,7 +202,12 @@ export default function LoginScreen() {
             contentFit="cover"
             transition={400}
           />
-          <View style={s.overlay} />
+          {/* Gradient scrim: lighter at the top (image visible), darker
+              behind the form — reads premium and keeps text contrast. */}
+          <LinearGradient
+            colors={['rgba(7,17,31,0.55)', 'rgba(7,17,31,0.80)', 'rgba(7,17,31,0.94)']}
+            style={StyleSheet.absoluteFill}
+          />
         </>
       ) : null}
       {body}

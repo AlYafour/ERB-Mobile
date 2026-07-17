@@ -17,23 +17,25 @@ import { AppFilterBar } from '@/components/ui/AppFilterBar';
 import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
-import { Colors } from '@/constants/theme';
+import { Colors, ModuleTints } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { hrRequestsApi, HRRequest, HRLeaveBalance } from '@/lib/api/hr';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 
+// Icons must exist in components/ui/icon-symbol.tsx MAPPING — unmapped names
+// silently render as an empty circle on Android.
 const REQUEST_TYPES = [
-  { value: 'annual_leave',    label: 'Annual Leave',        icon: 'calendar' },
-  { value: 'sick_leave',      label: 'Sick Leave',          icon: 'cross.circle' },
-  { value: 'emergency_leave', label: 'Emergency Leave',     icon: 'exclamationmark.triangle' },
-  { value: 'unpaid_leave',    label: 'Unpaid Leave',        icon: 'calendar.badge.minus' },
-  { value: 'work_from_home',  label: 'Work From Home',      icon: 'laptopcomputer' },
-  { value: 'overtime',        label: 'Overtime',            icon: 'clock' },
-  { value: 'advance_salary',  label: 'Advance Salary',      icon: 'dollarsign.circle' },
-  { value: 'document_request',label: 'Document / HR Letter',icon: 'doc.text' },
-  { value: 'other',           label: 'Other',               icon: 'ellipsis.circle' },
+  { value: 'annual_leave',    label: 'Annual Leave',        icon: 'sun.max.fill',                 tint: 'hr' as const },
+  { value: 'sick_leave',      label: 'Sick Leave',          icon: 'cross.case.fill',              tint: 'operations' as const },
+  { value: 'emergency_leave', label: 'Emergency Leave',     icon: 'exclamationmark.triangle.fill', tint: 'finance' as const },
+  { value: 'unpaid_leave',    label: 'Unpaid Leave',        icon: 'calendar.badge.minus',         tint: 'operations' as const },
+  { value: 'work_from_home',  label: 'Work From Home',      icon: 'laptopcomputer',               tint: 'procurement' as const },
+  { value: 'overtime',        label: 'Overtime',            icon: 'clock.badge.plus',             tint: 'procurement' as const },
+  { value: 'advance_salary',  label: 'Advance Salary',      icon: 'banknote.fill',                tint: 'finance' as const },
+  { value: 'document_request',label: 'Document / HR Letter',icon: 'doc.text',                     tint: 'admin' as const },
+  { value: 'other',           label: 'Other',               icon: 'ellipsis.circle',              tint: 'operations' as const },
 ];
 
 type BadgeVariant = 'success' | 'danger' | 'warning' | 'default';
@@ -238,12 +240,17 @@ export default function HRRequestsScreen() {
   const S = makeStyles(C);
 
   const renderItem = ({ item }: { item: HRRequest }) => {
-    const typeLabel = REQUEST_TYPES.find(t => t.value === item.request_type)?.label || item.request_type;
+    const typeDef = REQUEST_TYPES.find(t => t.value === item.request_type);
+    const typeLabel = typeDef?.label || item.request_type;
+    const tint = ModuleTints[cs][typeDef?.tint ?? 'operations'];
     const isApprovable = item.status === 'pending' && (canApproveReq || canRejectReq);
 
     return (
       <View style={S.reqCard}>
         <View style={S.reqHeader}>
+          <View style={[S.typeTile, { backgroundColor: tint.bg }]}>
+            <IconSymbol name={(typeDef?.icon ?? 'doc.text') as any} size={17} color={tint.fg} />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={[S.reqType, { color: C.textPrimary }]}>{typeLabel}</Text>
             {viewAll && item.employee_name ? (
@@ -430,7 +437,14 @@ export default function HRRequestsScreen() {
                       borderColor:     form.request_type === rt.value ? C.primary : C.border,
                     }]}
                     onPress={() => setForm(f => ({ ...f, request_type: rt.value }))}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: form.request_type === rt.value }}
                   >
+                    <IconSymbol
+                      name={rt.icon as any}
+                      size={14}
+                      color={form.request_type === rt.value ? C.primaryText : C.textMuted}
+                    />
                     <Text style={[S.typeChipText, {
                       color: form.request_type === rt.value ? C.primaryText : C.textSecondary,
                     }]}>
@@ -602,7 +616,11 @@ function makeStyles(C: AppColors) {
       shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
     },
-    reqHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+    reqHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+    typeTile: {
+      width: 36, height: 36, borderRadius: 11,
+      alignItems: 'center', justifyContent: 'center',
+    },
     reqType: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2, flex: 1 },
     reqEmployee: { fontSize: 12, marginTop: 2 },
     dateRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -641,6 +659,7 @@ function makeStyles(C: AppColors) {
     },
     dateBtnText: { fontSize: 14, flex: 1 },
     typeChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
       paddingHorizontal: 14, paddingVertical: 8,
       borderRadius: 20, borderWidth: 1,
     },

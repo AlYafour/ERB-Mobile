@@ -11,12 +11,12 @@ import { useAppTheme } from '@/contexts/ThemeContext';
 
 const BADGE_POLL_MS = 60_000;
 
-function AlertsIcon({ focused, color, unread }: { focused: boolean; color: string; unread: number }) {
+function AlertsIcon({ focused, color, unread, badgeColor }: { focused: boolean; color: string; unread: number; badgeColor: string }) {
   return (
     <View style={s.iconWrap}>
       <IconSymbol name={focused ? 'bell.fill' : 'bell'} size={22} color={color} />
       {unread > 0 && (
-        <View style={s.badge}>
+        <View style={[s.badge, { backgroundColor: badgeColor }]}>
           <Text style={s.badgeText}>{unread > 99 ? '99+' : String(unread)}</Text>
         </View>
       )}
@@ -103,7 +103,7 @@ export default function TabLayout() {
         options={{
           title: 'Alerts',
           tabBarIcon: ({ focused, color }) => (
-            <AlertsIcon focused={focused} color={color} unread={unreadCount} />
+            <AlertsIcon focused={focused} color={color} unread={unreadCount} badgeColor={colors.danger} />
           ),
         }}
         listeners={{
@@ -148,7 +148,6 @@ const s = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,

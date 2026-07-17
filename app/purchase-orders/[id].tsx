@@ -3,7 +3,6 @@ import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseOrdersApi } from '@/lib/api/purchase-orders';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
@@ -41,7 +40,6 @@ function PurchaseOrderDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
-  const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
@@ -56,12 +54,12 @@ function PurchaseOrderDetailScreenInner() {
   const [cancelling, setCancelling] = useState(false);
   const [reopening, setReopening] = useState(false);
 
-  const su = user?.is_superuser ?? false;
-  const isProcurement  = user?.role === 'procurement_officer' || user?.role === 'super_admin' || su;
-  const canApprove     = su || (hasPermission('purchase_order', 'approve') ?? false);
-  const canReject      = su || (hasPermission('purchase_order', 'reject') ?? false);
-  const canCancel      = isProcurement || (hasPermission('purchase_order', 'cancel') ?? false);
-  const canReopen      = isProcurement || (hasPermission('purchase_order', 'reopen') ?? false);
+  // Permission-based, matching the web (purchase-orders/[id]/page.tsx) —
+  // the last remaining hardcoded-role bypass (procurement_officer) removed.
+  const canApprove = hasPermission('purchase_order', 'approve');
+  const canReject  = hasPermission('purchase_order', 'reject');
+  const canCancel  = hasPermission('purchase_order', 'cancel');
+  const canReopen  = hasPermission('purchase_order', 'reopen');
 
   const load = async () => {
     try {
@@ -296,8 +294,8 @@ function PurchaseOrderDetailScreenInner() {
           </AppCard>
         )}
 
-        {/* Next Step: Create GRN */}
-        {order.status === 'approved' && isProcurement && (
+        {/* Next Step: Create GRN — permission-gated like the web */}
+        {order.status === 'approved' && hasPermission('goods_receiving', 'create') && (
           <AppCard
             style={[S.card, { backgroundColor: C.successBg }]}
             onPress={() => router.push(`/goods-receiving/new?purchase_order_id=${id}` as any)}

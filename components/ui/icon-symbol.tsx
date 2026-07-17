@@ -1,13 +1,15 @@
 // Fallback for using MaterialIcons on Android and web.
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
+import { SymbolWeight } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
 type IconSymbolName = keyof typeof MAPPING;
 
+// Keys are SF-symbol-style names; values MUST be valid MaterialIcons names
+// (`satisfies` enforces that). A name missing from this table renders the
+// 'circle' fallback on Android — add it here before using it in a screen.
 const MAPPING = {
   // Tab bar
   'house': 'home',
@@ -112,7 +114,43 @@ const MAPPING = {
   // Legacy / used in boilerplate
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
-} as IconMapping;
+
+  // ── Previously UNMAPPED names (rendered as an empty circle on Android) ──
+  // Home stats + tabs
+  'doc.badge.clock': 'pending-actions',
+  'bell.badge': 'notifications-active',
+  'person.crop.circle': 'account-circle',
+  'person.crop.circle.fill': 'account-circle',
+  'person.crop.circle.badge.exclamationmark': 'no-accounts',
+  // Attendance / HR
+  'calendar.badge.clock': 'pending-actions',
+  'calendar.badge.plus': 'event-available',
+  'calendar.badge.minus': 'event-busy',
+  'play.circle.fill': 'play-circle-filled',
+  'pause.circle.fill': 'pause-circle-filled',
+  'stop.circle.fill': 'stop-circle',
+  'clock.badge.questionmark': 'history',
+  'clock.badge.plus': 'more-time',
+  'sun.max.fill': 'wb-sunny',
+  'cross.case.fill': 'medical-services',
+  'cross.circle': 'medical-services',
+  'laptopcomputer': 'laptop',
+  'banknote.fill': 'payments',
+  'briefcase.fill': 'work',
+  // Workflow / documents
+  'arrow.up.circle.fill': 'arrow-circle-up',
+  'arrow.down.circle.fill': 'arrow-circle-down',
+  'arrow.uturn.left.circle.fill': 'undo',
+  'tray': 'inbox',
+  'cube.box': 'inventory-2',
+  'building.2': 'business',
+  'chart.bar.xaxis': 'analytics',
+  'checkmark.shield.fill': 'verified-user',
+  'person.badge.key.fill': 'admin-panel-settings',
+  'person.badge.shield.checkmark.fill': 'verified-user',
+  'mappin.circle.fill': 'place',
+  'speaker.wave.2.fill': 'volume-up',
+} satisfies Record<string, ComponentProps<typeof MaterialIcons>['name']>;
 
 export function IconSymbol({
   name,
