@@ -78,7 +78,13 @@ export default function LoginScreen() {
         // Navigation happens in AuthGate (it reacts to `user` being set) —
         // navigating from here too caused a double-replace flash.
       } else if (result.requires2FA && result.tempToken) {
-        router.push({ pathname: '/two-factor', params: { tempToken: result.tempToken } } as any);
+        router.push({
+          pathname: '/two-factor',
+          params: {
+            tempToken: result.tempToken,
+            ...(result.expiresIn != null ? { expiresIn: String(result.expiresIn) } : {}),
+          },
+        } as any);
       } else {
         setError(result.error || 'Login failed. Please check your credentials.');
       }

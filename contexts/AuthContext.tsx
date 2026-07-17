@@ -20,6 +20,8 @@ export interface LoginResult {
   /** Account has 2FA enabled — navigate to the code screen with tempToken. */
   requires2FA?: boolean;
   tempToken?: string;
+  /** Seconds the temp_token stays valid (backend accounts/views.py:_2FA_TEMP_MAX_AGE). */
+  expiresIn?: number;
 }
 
 interface AuthContextType {
@@ -129,7 +131,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // 2FA challenge — no tokens yet; the caller navigates to the code screen.
         if (data.requires_2fa) {
-          return { success: false, requires2FA: true, tempToken: data.temp_token };
+          return {
+            success: false,
+            requires2FA: true,
+            tempToken: data.temp_token,
+            expiresIn: typeof data.expires_in === 'number' ? data.expires_in : undefined,
+          };
         }
 
         // The backend login response includes the full user object — use it

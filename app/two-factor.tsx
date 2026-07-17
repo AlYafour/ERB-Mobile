@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -18,14 +18,20 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const CODE_LENGTH = 6;
 
+// Fallback only for a cached bundle talking to a backend from before
+// accounts a3e00769a (which always sends expires_in now) — mirrors the
+// server's _2FA_TEMP_MAX_AGE default so the countdown is never wrong by more
+// than a stale-client edge case.
+const DEFAULT_EXPIRES_IN = 300;
+
 /**
  * Two-factor verification screen.
- * Reached from login when the backend responds { requires_2fa, temp_token }.
+ * Reached from login when the backend responds { requires_2fa, temp_token, expires_in }.
  * POSTs /api/auth/2fa/verify/ { temp_token, code } via AuthContext.verifyTwoFactor.
  * The temp token is single-use and short-lived — on expiry the user must sign in again.
  */
 export default function TwoFactorScreen() {
-  const { tempToken } = useLocalSearchParams<{ tempToken: string }>();
+  const { tempToken, expiresIn: expiresInParam } = useLocalSearchParams<{ tempToken: string; expiresIn?: string }>();
   const { verifyTwoFactor, branding } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -35,11 +41,29 @@ export default function TwoFactorScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const initialSeconds = (() => {
+    const n = expiresInParam ? parseInt(String(expiresInParam), 10) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_EXPIRES_IN;
+  })();
+  const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
+  const expired = secondsLeft <= 0;
+
+  // Ticks down once per second; stops cleanly once expired (no zombie timer).
+  useEffect(() => {
+    if (expired) return;
+    const id = setInterval(() => {
+      setSecondsLeft(s => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [expired]);
+
   const brandColor = branding?.primary_color || '#C9943A';
+  const timeLow = secondsLeft <= 30 && secondsLeft > 0;
+  const timeLabel = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
 
   const handleVerify = async (value?: string) => {
     const submitted = (value ?? code).trim();
-    if (submitted.length !== CODE_LENGTH || loading) return;
+    if (submitted.length !== CODE_LENGTH || loading || expired) return;
     setError('');
     setLoading(true);
     try {
@@ -77,12 +101,26 @@ export default function TwoFactorScreen() {
           </View>
 
           <View style={s.card}>
-            <Text style={s.title}>Two-Factor Verification</Text>
+            <View style={s.titleRow}>
+              <Text style={s.title}>Two-Factor Verification</Text>
+              {!expired && (
+                <View style={[s.timerPill, timeLow && s.timerPillLow]}>
+                  <Text style={[s.timerText, timeLow && s.timerTextLow]}>{timeLabel}</Text>
+                </View>
+              )}
+            </View>
             <Text style={s.sub}>
               Enter the {CODE_LENGTH}-digit code from your authenticator app
             </Text>
 
-            {!!error && (
+            {expired ? (
+              <View style={s.expiredBox}>
+                <IconSymbol name="clock.badge.questionmark" size={20} color="#FCA5A5" />
+                <Text style={s.expiredText}>
+                  This session has expired. Please sign in again to get a new code.
+                </Text>
+              </View>
+            ) : !!error && (
               <View style={s.errorBox}>
                 <Text style={s.errorText}>{error}</Text>
               </View>
@@ -99,10 +137,11 @@ export default function TwoFactorScreen() {
                     key={i}
                     style={[
                       s.digitBox,
-                      i === code.length && !loading && { borderColor: brandColor },
+                      expired && s.digitBoxExpired,
+                      i === code.length && !loading && !expired && { borderColor: brandColor },
                     ]}
                   >
-                    <Text style={s.digit}>{code[i] ?? ''}</Text>
+                    <Text style={[s.digit, expired && s.digitExpired]}>{code[i] ?? ''}</Text>
                   </View>
                 ))}
               </View>
@@ -118,68 +157,79 @@ export default function TwoFactorScreen() {
                 caretHidden
                 style={s.overlayInput}
                 accessibilityLabel={`Verification code, ${CODE_LENGTH} digits`}
-                editable={!loading}
+                editable={!loading && !expired}
               />
             </View>
 
-            {/* Explicit backspace — never leave the user unable to correct */}
-            <View style={s.editRow}>
-              <TouchableOpacity
-                onPress={() => { setCode(c => c.slice(0, -1)); setError(''); inputRef.current?.focus(); }}
-                disabled={loading || code.length === 0}
-                style={[s.editBtn, (loading || code.length === 0) && { opacity: 0.4 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Delete last digit"
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <IconSymbol name="delete.left" size={18} color="#94A3B8" />
-                <Text style={s.editBtnText}>Delete</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => { setCode(''); setError(''); inputRef.current?.focus(); }}
-                disabled={loading || code.length === 0}
-                style={[s.editBtn, (loading || code.length === 0) && { opacity: 0.4 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Clear code"
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <IconSymbol name="xmark.circle.fill" size={18} color="#94A3B8" />
-                <Text style={s.editBtnText}>Clear</Text>
-              </TouchableOpacity>
-            </View>
+            {!expired && (
+              <>
+                {/* Explicit backspace — never leave the user unable to correct */}
+                <View style={s.editRow}>
+                  <TouchableOpacity
+                    onPress={() => { setCode(c => c.slice(0, -1)); setError(''); inputRef.current?.focus(); }}
+                    disabled={loading || code.length === 0}
+                    style={[s.editBtn, (loading || code.length === 0) && { opacity: 0.4 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete last digit"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <IconSymbol name="delete.left" size={18} color="#94A3B8" />
+                    <Text style={s.editBtnText}>Delete</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { setCode(''); setError(''); inputRef.current?.focus(); }}
+                    disabled={loading || code.length === 0}
+                    style={[s.editBtn, (loading || code.length === 0) && { opacity: 0.4 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear code"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <IconSymbol name="xmark.circle.fill" size={18} color="#94A3B8" />
+                    <Text style={s.editBtnText}>Clear</Text>
+                  </TouchableOpacity>
+                </View>
 
+                <TouchableOpacity
+                  style={[
+                    s.btn,
+                    { backgroundColor: brandColor },
+                    (loading || code.length !== CODE_LENGTH) && s.btnDisabled,
+                  ]}
+                  onPress={() => handleVerify()}
+                  disabled={loading || code.length !== CODE_LENGTH}
+                  activeOpacity={0.82}
+                  accessibilityRole="button"
+                  accessibilityLabel="Verify code"
+                  accessibilityState={{ disabled: loading || code.length !== CODE_LENGTH, busy: loading }}
+                >
+                  {loading
+                    ? <ActivityIndicator color="#FFFFFF" size="small" />
+                    : <Text style={s.btnText}>Verify</Text>
+                  }
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Expired: this becomes the one obvious way forward, not a
+                subtle afterthought link. */}
             <TouchableOpacity
-              style={[
-                s.btn,
-                { backgroundColor: brandColor },
-                (loading || code.length !== CODE_LENGTH) && s.btnDisabled,
-              ]}
-              onPress={() => handleVerify()}
-              disabled={loading || code.length !== CODE_LENGTH}
+              style={expired ? [s.btn, s.btnOutline, { marginTop: 4 }] : s.backLink}
+              onPress={() => router.replace('/login')}
               activeOpacity={0.82}
               accessibilityRole="button"
-              accessibilityLabel="Verify code"
-              accessibilityState={{ disabled: loading || code.length !== CODE_LENGTH, busy: loading }}
-            >
-              {loading
-                ? <ActivityIndicator color="#FFFFFF" size="small" />
-                : <Text style={s.btnText}>Verify</Text>
-              }
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => router.replace('/login')}
-              style={s.backLink}
-              accessibilityRole="link"
-              accessibilityLabel="Back to sign in"
+              accessibilityLabel={expired ? 'Sign in again' : 'Back to sign in'}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={s.backText}>Back to Sign In</Text>
+              <Text style={expired ? s.btnOutlineText : s.backText}>
+                {expired ? 'Sign In Again' : 'Back to Sign In'}
+              </Text>
             </TouchableOpacity>
           </View>
 
           <Text style={s.hint}>
-            The code changes every 30 seconds. If it keeps failing, sign in again to get a new session.
+            {expired
+              ? 'For your security, verification sessions expire after a few minutes of inactivity.'
+              : 'The code changes every 30 seconds. If it keeps failing, sign in again to get a new session.'}
           </Text>
         </View>
       </KeyboardAvoidingView>
@@ -199,8 +249,29 @@ const s = StyleSheet.create({
     borderRadius: 22,
     padding: 28,
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#F8FAFC', marginBottom: 4 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  title: { fontSize: 20, fontWeight: '700', color: '#F8FAFC' },
   sub: { fontSize: 13, color: '#64748B', marginBottom: 22 },
+
+  timerPill: {
+    backgroundColor: 'rgba(148,163,184,0.12)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  timerPillLow: { backgroundColor: 'rgba(239,68,68,0.14)' },
+  timerText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  timerTextLow: { color: '#FCA5A5' },
 
   errorBox: {
     backgroundColor: 'rgba(239,68,68,0.10)',
@@ -211,6 +282,19 @@ const s = StyleSheet.create({
     borderColor: 'rgba(239,68,68,0.28)',
   },
   errorText: { color: '#FCA5A5', fontSize: 13, fontWeight: '500', textAlign: 'center' },
+
+  expiredBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: 'rgba(239,68,68,0.10)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.28)',
+  },
+  expiredText: { flex: 1, color: '#FCA5A5', fontSize: 13, fontWeight: '500', lineHeight: 19 },
 
   codeArea: { position: 'relative', marginBottom: 10 },
   digitsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
@@ -225,6 +309,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   digit: { fontSize: 24, fontWeight: '700', color: '#F8FAFC' },
+  digitBoxExpired: { opacity: 0.4 },
+  digitExpired: { color: '#64748B' },
   overlayInput: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0.02,
@@ -255,6 +341,8 @@ const s = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.55 },
   btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  btnOutline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#1E3349' },
+  btnOutlineText: { color: '#F8FAFC', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 
   backLink: { alignItems: 'center', marginTop: 18, minHeight: 44, justifyContent: 'center' },
   backText: { color: '#94A3B8', fontSize: 14, fontWeight: '600' },
