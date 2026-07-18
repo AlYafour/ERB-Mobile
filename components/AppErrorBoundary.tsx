@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Appearance, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ErrorBoundaryProps } from 'expo-router';
 
@@ -10,11 +10,12 @@ import { Colors } from '@/constants/theme';
  * from app/_layout.tsx). Before this existed, any unhandled render error
  * white-screened the app with no recovery path.
  *
- * Kept theme-static (light palette) on purpose: it must render even when
- * providers above it crashed, so it cannot depend on ThemeContext.
+ * Reads the scheme from the OS via Appearance (NOT the ThemeContext hook):
+ * it must render even when the providers above it — including ThemeContext —
+ * have crashed, so it cannot depend on any React context.
  */
 export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
-  const C = Colors.light;
+  const C = Colors[Appearance.getColorScheme() ?? 'light'];
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <View style={styles.center}>

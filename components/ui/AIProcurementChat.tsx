@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, FlatList,
   StyleSheet, Modal, ActivityIndicator, Animated,
@@ -12,8 +12,9 @@ import { apiClient } from '@/lib/api';
 import { productsApi } from '@/lib/api/products';
 import { Product } from '@/types';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const C = Colors.light;
+type Palette = typeof Colors.light | typeof Colors.dark;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ const WELCOME: ChatMessage = {
 };
 
 const VC: Record<VoiceState, string> = {
-  idle: C.tint, recording: '#ef4444', thinking: '#f97316', speaking: '#3b82f6',
+  idle: Colors.light.tint, recording: '#ef4444', thinking: '#f97316', speaking: '#3b82f6',
 };
 
 const VL: Record<VoiceState, string> = {
@@ -72,6 +73,8 @@ const VI: Record<VoiceState, keyof typeof MaterialIcons.glyphMap> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AIProcurementChat({ onAddItems, onFormUpdate }: Props) {
+  const C = Colors[useColorScheme() ?? 'light'];
+  const S = useMemo(() => makeStyles(C), [C]);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
   const [input, setInput] = useState('');
@@ -503,7 +506,7 @@ export default function AIProcurementChat({ onAddItems, onFormUpdate }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const S = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   // FAB
   fab: {
     flexDirection: 'row', alignItems: 'center', gap: 10,

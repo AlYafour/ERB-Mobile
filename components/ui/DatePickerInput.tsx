@@ -5,8 +5,9 @@ import {
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const C = Colors.light;
+type Palette = typeof Colors.light | typeof Colors.dark;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -60,6 +61,8 @@ export default function DatePickerInput({
   minimumDate,
   maximumDate,
 }: Props) {
+  const C = Colors[useColorScheme() ?? 'light'];
+  const S = useMemo(() => makeStyles(C), [C]);
   const initDate = toDate(value);
   const [show, setShow] = useState(false);
   const [selYear, setSelYear] = useState(initDate.getFullYear());
@@ -245,7 +248,7 @@ export default function DatePickerInput({
 
 const CELL = 44;
 
-const S = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   wrapper: { marginBottom: 16 },
   label: { fontSize: 13, fontWeight: '500', color: C.textSecondary, marginBottom: 6 },
 
@@ -260,7 +263,7 @@ const S = StyleSheet.create({
 
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.card,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingBottom: 28,
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
@@ -270,11 +273,11 @@ const S = StyleSheet.create({
   sheetHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
+    borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  sheetTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', flex: 1, textAlign: 'center' },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: C.text, flex: 1, textAlign: 'center' },
   hBtn: { paddingHorizontal: 4, paddingVertical: 4, minWidth: 60 },
-  cancelTxt: { fontSize: 15, color: '#64748B', fontWeight: '500' },
+  cancelTxt: { fontSize: 15, color: C.textSecondary, fontWeight: '500' },
   doneTxt: { fontSize: 15, color: C.tint, fontWeight: '700', textAlign: 'right' },
 
   navRow: {
@@ -282,16 +285,16 @@ const S = StyleSheet.create({
     paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4,
   },
   navBtn: { padding: 4 },
-  navMonth: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
+  navMonth: { fontSize: 17, fontWeight: '700', color: C.text },
 
   yearList: { paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
   yearChip: {
     paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 20, backgroundColor: '#F1F5F9',
+    borderRadius: 20, backgroundColor: C.cardHighlight,
     minWidth: 54, alignItems: 'center',
   },
   yearChipActive: { backgroundColor: C.tint },
-  yearChipTxt: { fontSize: 14, fontWeight: '500', color: '#475569' },
+  yearChipTxt: { fontSize: 14, fontWeight: '500', color: C.textSecondary },
   yearChipTxtActive: { color: '#FFFFFF', fontWeight: '700' },
 
   weekRow: {
@@ -299,7 +302,7 @@ const S = StyleSheet.create({
   },
   weekDay: {
     width: CELL, textAlign: 'center',
-    fontSize: 12, fontWeight: '600', color: '#94A3B8',
+    fontSize: 12, fontWeight: '600', color: C.textTertiary,
   },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 8 },
@@ -310,16 +313,16 @@ const S = StyleSheet.create({
   },
   cellSelected: { backgroundColor: C.tint },
   cellToday: { borderWidth: 1.5, borderColor: C.tint },
-  cellTxt: { fontSize: 15, fontWeight: '400', color: '#1E293B' },
+  cellTxt: { fontSize: 15, fontWeight: '400', color: C.text },
   cellTxtSelected: { color: '#FFFFFF', fontWeight: '700' },
-  cellTxtDisabled: { color: '#CBD5E1' },
+  cellTxtDisabled: { color: C.textTertiary },
 
   footer: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4,
+    borderTopWidth: 1, borderTopColor: C.border, marginTop: 4,
   },
-  footerTxt: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
+  footerTxt: { fontSize: 15, fontWeight: '600', color: C.text },
   confirmBtn: {
     backgroundColor: C.tint, borderRadius: 10,
     paddingHorizontal: 20, paddingVertical: 10,

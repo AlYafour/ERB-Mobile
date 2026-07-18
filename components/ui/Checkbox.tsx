@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { IconSymbol } from './icon-symbol';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+type Palette = typeof Colors.light | typeof Colors.dark;
 
 interface CheckboxProps {
   checked: boolean;
@@ -12,6 +15,8 @@ interface CheckboxProps {
 }
 
 export function Checkbox({ checked, onChange, disabled = false, indeterminate = false, title }: CheckboxProps) {
+  const C = Colors[useColorScheme() ?? 'light'];
+  const styles = useMemo(() => makeStyles(C), [C]);
   return (
     <TouchableOpacity
       accessibilityRole="checkbox"
@@ -34,7 +39,7 @@ export function Checkbox({ checked, onChange, disabled = false, indeterminate = 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -47,19 +52,19 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#ddd',
+    borderColor: C.border,
     borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
   checkboxChecked: {
-    backgroundColor: Colors.light.tint,
-    borderColor: Colors.light.tint,
+    backgroundColor: C.tint,
+    borderColor: C.tint,
   },
   checkboxIndeterminate: {
-    backgroundColor: Colors.light.tint,
-    borderColor: Colors.light.tint,
+    backgroundColor: C.tint,
+    borderColor: C.tint,
   },
   indeterminateLine: {
     width: 10,
