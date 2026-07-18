@@ -49,7 +49,6 @@ erb-mobile/
 │   │   ├── Button.tsx
 │   │   ├── Input.tsx
 │   │   └── Card.tsx
-│   └── ProtectedRoute.tsx
 ├── contexts/              # React Contexts
 │   └── AuthContext.tsx
 ├── lib/                   # API & Logic
@@ -90,16 +89,19 @@ npm run web
 ## API Configuration
 
 التطبيق متصل بـ Backend على:
-- **URL**: `https://erb-core-backend.onrender.com`
+- **URL**: يأتي من `EXPO_PUBLIC_API_URL` (ملف `eas.json`)، والافتراضي عند `expo start`:
+  `https://procurement-backend-production-184f.up.railway.app` (انظر `constants/api.ts`)
 
 جميع الـ endpoints موجودة في `constants/api.ts`
 
 ## Authentication
 
 التطبيق يستخدم JWT tokens للـ authentication:
-- Access Token: مخزن في AsyncStorage
-- Refresh Token: يتم استخدامه تلقائياً عند انتهاء Access Token
-- User Data: مخزن في AsyncStorage
+- **Access & Refresh Tokens**: مخزَّنة في **SecureStore** (Keychain/Keystore) عبر `lib/secure-storage.ts` — وليست في AsyncStorage. يوجد ترحيل تلقائي لمرة واحدة من التخزين القديم مع حذف النسخة النصية بعده.
+- Refresh Token: يُستخدم تلقائياً عند انتهاء Access Token (تدوير رموز مع single-flight في `lib/api.ts`).
+- User/Branding Cache (بيانات غير حساسة): يُسمح بتخزينها في AsyncStorage فقط.
+
+> ⚠️ لا تُخزّن أي رموز أو بيانات حساسة في AsyncStorage — استخدم `lib/secure-storage.ts` دائماً.
 
 ## Navigation
 

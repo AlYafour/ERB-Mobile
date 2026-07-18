@@ -215,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiClient.logout();
       setUser(null);
     } catch (error) {
-      console.error('Error logging out:', error);
+      if (__DEV__) console.error('Error logging out:', error);
       setUser(null);
     }
   };
@@ -225,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userData = await apiClient.getCurrentUser();
       setUser(userData);
     } catch (error) {
-      console.error('Error refreshing user:', error);
+      if (__DEV__) console.error('Error refreshing user:', error);
     }
   };
 
