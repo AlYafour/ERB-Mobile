@@ -40,6 +40,14 @@ export default function TwoFactorScreen() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // The backend marks temp_token "used" as soon as a verify attempt is made —
+  // BEFORE checking whether the code was even correct (accounts/views.py
+  // twofa_verify: cache.add() runs ahead of totp.verify()). So a single wrong
+  // digit permanently burns the token for the rest of the 5-minute window;
+  // retrying on the same screen would only ever produce a confusing "Token
+  // already used" error. Track that explicitly instead of inviting a retry
+  // that cannot succeed.
+  const [attemptFailed, setAttemptFailed] = useState(false);
 
   const initialSeconds = (() => {
     const n = expiresInParam ? parseInt(String(expiresInParam), 10) : NaN;
@@ -60,10 +68,13 @@ export default function TwoFactorScreen() {
   const brandColor = branding?.primary_color || '#C9943A';
   const timeLow = secondsLeft <= 30 && secondsLeft > 0;
   const timeLabel = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
+  // Both the timer running out and a spent attempt end the session the same
+  // way: the current temp_token can never succeed again.
+  const lockedOut = expired || attemptFailed;
 
   const handleVerify = async (value?: string) => {
     const submitted = (value ?? code).trim();
-    if (submitted.length !== CODE_LENGTH || loading || expired) return;
+    if (submitted.length !== CODE_LENGTH || loading || lockedOut) return;
     setError('');
     setLoading(true);
     try {
@@ -72,8 +83,8 @@ export default function TwoFactorScreen() {
         // AuthGate navigates once `user` is set — no manual replace here.
       } else {
         setError(result.error || 'Invalid or expired code.');
+        setAttemptFailed(true);
         setCode('');
-        inputRef.current?.focus();
       }
     } finally {
       setLoading(false);
@@ -81,6 +92,7 @@ export default function TwoFactorScreen() {
   };
 
   const onChangeCode = (raw: string) => {
+    if (lockedOut) return;
     const digits = raw.replace(/\D/g, '').slice(0, CODE_LENGTH);
     setCode(digits);
     if (digits.length === CODE_LENGTH) handleVerify(digits);
@@ -103,7 +115,7 @@ export default function TwoFactorScreen() {
           <View style={s.card}>
             <View style={s.titleRow}>
               <Text style={s.title}>Two-Factor Verification</Text>
-              {!expired && (
+              {!lockedOut && (
                 <View style={[s.timerPill, timeLow && s.timerPillLow]}>
                   <Text style={[s.timerText, timeLow && s.timerTextLow]}>{timeLabel}</Text>
                 </View>
@@ -137,11 +149,11 @@ export default function TwoFactorScreen() {
                     key={i}
                     style={[
                       s.digitBox,
-                      expired && s.digitBoxExpired,
-                      i === code.length && !loading && !expired && { borderColor: brandColor },
+                      lockedOut && s.digitBoxExpired,
+                      i === code.length && !loading && !lockedOut && { borderColor: brandColor },
                     ]}
                   >
-                    <Text style={[s.digit, expired && s.digitExpired]}>{code[i] ?? ''}</Text>
+                    <Text style={[s.digit, lockedOut && s.digitExpired]}>{code[i] ?? ''}</Text>
                   </View>
                 ))}
               </View>
@@ -157,11 +169,11 @@ export default function TwoFactorScreen() {
                 caretHidden
                 style={s.overlayInput}
                 accessibilityLabel={`Verification code, ${CODE_LENGTH} digits`}
-                editable={!loading && !expired}
+                editable={!loading && !lockedOut}
               />
             </View>
 
-            {!expired && (
+            {!lockedOut && (
               <>
                 {/* Explicit backspace — never leave the user unable to correct */}
                 <View style={s.editRow}>
@@ -210,18 +222,19 @@ export default function TwoFactorScreen() {
               </>
             )}
 
-            {/* Expired: this becomes the one obvious way forward, not a
-                subtle afterthought link. */}
+            {/* Locked out (expired OR a spent attempt): this becomes the one
+                obvious way forward, not a subtle afterthought link — retrying
+                on this screen can never succeed either way. */}
             <TouchableOpacity
-              style={expired ? [s.btn, s.btnOutline, { marginTop: 4 }] : s.backLink}
+              style={lockedOut ? [s.btn, s.btnOutline, { marginTop: 4 }] : s.backLink}
               onPress={() => router.replace('/login')}
               activeOpacity={0.82}
               accessibilityRole="button"
-              accessibilityLabel={expired ? 'Sign in again' : 'Back to sign in'}
+              accessibilityLabel={lockedOut ? 'Sign in again' : 'Back to sign in'}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={expired ? s.btnOutlineText : s.backText}>
-                {expired ? 'Sign In Again' : 'Back to Sign In'}
+              <Text style={lockedOut ? s.btnOutlineText : s.backText}>
+                {lockedOut ? 'Sign In Again' : 'Back to Sign In'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -229,6 +242,8 @@ export default function TwoFactorScreen() {
           <Text style={s.hint}>
             {expired
               ? 'For your security, verification sessions expire after a few minutes of inactivity.'
+              : attemptFailed
+              ? 'Each code can only be attempted once — sign in again for a new one.'
               : 'The code changes every 30 seconds. If it keeps failing, sign in again to get a new session.'}
           </Text>
         </View>
