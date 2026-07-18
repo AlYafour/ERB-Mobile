@@ -9,16 +9,24 @@ import {
   ActivityIndicator,
   StatusBar,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth, Branding } from '@/contexts/AuthContext';
+import { useAuth, Branding, LoginResult } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Logo } from '@/components/ui/Logo';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { API_BASE_URL } from '@/constants/api';
+import { authenticateBiometric, getBiometricCapabilities } from '@/lib/app-lock';
+import {
+  isBiometricLoginEnabled,
+  enableBiometricLogin,
+  getStoredLoginCredentials,
+} from '@/lib/biometric-login';
 
 const BRANDING_KEY = '@branding';
 
@@ -40,6 +48,7 @@ async function fetchPublicBranding(): Promise<Branding | null> {
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, branding: contextBranding } = useAuth();
@@ -47,6 +56,23 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
 
   const [branding, setBranding] = useState<Branding | null>(contextBranding);
+
+  // Face ID / biometric sign-in — a saved credential unlocked by biometrics,
+  // NOT a passwordless server-side ceremony (see lib/biometric-login.ts).
+  const [bioLabel, setBioLabel] = useState('Face ID');
+  const [bioReady, setBioReady] = useState(false);   // hardware+enrolled AND enabled by the user
+  const [bioBusy, setBioBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [caps, enabled] = await Promise.all([
+        getBiometricCapabilities(),
+        isBiometricLoginEnabled(),
+      ]);
+      setBioLabel(caps.label);
+      setBioReady(caps.hasHardware && caps.enrolled && enabled);
+    })();
+  }, []);
 
   useEffect(() => {
     if (contextBranding) setBranding(contextBranding);
@@ -65,6 +91,55 @@ export default function LoginScreen() {
     });
   }, []);
 
+  /** Shared by manual submit and Face ID — same result shape either way. */
+  const handleLoginResult = async (result: LoginResult, triedUsername: string, triedPassword: string) => {
+    if (result.success) {
+      // Navigation happens in AuthGate (it reacts to `user` being set) —
+      // navigating from here too caused a double-replace flash.
+      offerBiometricLoginSetup(triedUsername, triedPassword);
+    } else if (result.requires2FA && result.tempToken) {
+      router.push({
+        pathname: '/two-factor',
+        params: {
+          tempToken: result.tempToken,
+          ...(result.expiresIn != null ? { expiresIn: String(result.expiresIn) } : {}),
+        },
+      } as any);
+    } else {
+      setError(result.error || 'Login failed. Please check your credentials.');
+    }
+  };
+
+  /** After a successful password login, offer to save it behind Face ID. */
+  const offerBiometricLoginSetup = async (loggedInUsername: string, usedPassword: string) => {
+    try {
+      const [caps, alreadyEnabled] = await Promise.all([
+        getBiometricCapabilities(),
+        isBiometricLoginEnabled(),
+      ]);
+      if (!caps.hasHardware || !caps.enrolled || alreadyEnabled) return;
+
+      Alert.alert(
+        `Enable ${caps.label} Sign-In?`,
+        `Next time, sign in instantly with ${caps.label} instead of typing your password.`,
+        [
+          { text: 'Not Now', style: 'cancel' },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              const bioResult = await authenticateBiometric(`Enable ${caps.label} Sign-In`);
+              if (bioResult === 'success') {
+                await enableBiometricLogin(loggedInUsername, usedPassword);
+              }
+            },
+          },
+        ],
+      );
+    } catch {
+      // Never block login on this convenience prompt
+    }
+  };
+
   const handleLogin = async () => {
     if (!username.trim() || !password) {
       setError('Please fill in all fields');
@@ -73,24 +148,40 @@ export default function LoginScreen() {
     setError('');
     setLoading(true);
     try {
-      const result = await login(username.trim(), password);
-      if (result.success) {
-        // Navigation happens in AuthGate (it reacts to `user` being set) —
-        // navigating from here too caused a double-replace flash.
-      } else if (result.requires2FA && result.tempToken) {
-        router.push({
-          pathname: '/two-factor',
-          params: {
-            tempToken: result.tempToken,
-            ...(result.expiresIn != null ? { expiresIn: String(result.expiresIn) } : {}),
-          },
-        } as any);
-      } else {
-        setError(result.error || 'Login failed. Please check your credentials.');
-      }
+      const trimmedUsername = username.trim();
+      const result = await login(trimmedUsername, password);
+      await handleLoginResult(result, trimmedUsername, password);
     } catch (err: any) {
       setError(err.message || 'An error occurred. Please try again.');
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    if (bioBusy || loading) return;
+    setError('');
+    setBioBusy(true);
+    try {
+      const bioResult = await authenticateBiometric(`Sign in with ${bioLabel}`);
+      if (bioResult !== 'success') {
+        if (bioResult === 'unavailable') {
+          setError(`${bioLabel} is not available right now. Please sign in with your password.`);
+        }
+        return; // cancelled/failed → silently let the user use the form
+      }
+      const creds = await getStoredLoginCredentials();
+      if (!creds) {
+        setError('Saved sign-in was not found. Please sign in with your password.');
+        return;
+      }
+      setLoading(true);
+      const result = await login(creds.username, creds.password);
+      await handleLoginResult(result, creds.username, creds.password);
+    } catch (err: any) {
+      setError(err.message || 'An error occurred. Please try again.');
+    } finally {
+      setBioBusy(false);
       setLoading(false);
     }
   };
@@ -136,6 +227,34 @@ export default function LoginScreen() {
             </View>
           )}
 
+          {bioReady && (
+            <>
+              <TouchableOpacity
+                style={[s.bioBtn, { borderColor: brandColor }, bioBusy && s.btnDisabled]}
+                onPress={handleBiometricLogin}
+                disabled={bioBusy || loading}
+                activeOpacity={0.82}
+                accessibilityRole="button"
+                accessibilityLabel={`Sign in with ${bioLabel}`}
+                accessibilityState={{ disabled: bioBusy || loading, busy: bioBusy }}
+              >
+                {bioBusy ? (
+                  <ActivityIndicator color={brandColor} size="small" />
+                ) : (
+                  <>
+                    <IconSymbol name="faceid" size={20} color={brandColor} />
+                    <Text style={[s.bioBtnText, { color: brandColor }]}>Sign in with {bioLabel}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <View style={s.dividerRow}>
+                <View style={s.dividerLine} />
+                <Text style={s.dividerText}>or sign in with password</Text>
+                <View style={s.dividerLine} />
+              </View>
+            </>
+          )}
+
           <Input
             label="Username"
             value={username}
@@ -152,13 +271,33 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             placeholder="Enter your password"
-            secureTextEntry
+            secureTextEntry={!showPassword}
             autoCapitalize="none"
             autoComplete="password"
             returnKeyType="done"
             onSubmitEditing={handleLogin}
             containerStyle={s.field}
+            rightIcon={
+              <TouchableOpacity
+                onPress={() => setShowPassword(v => !v)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <IconSymbol name={showPassword ? 'eye.slash.fill' : 'eye.fill'} size={19} color="#64748B" />
+              </TouchableOpacity>
+            }
           />
+
+          <TouchableOpacity
+            onPress={() => router.push('/forgot-password' as any)}
+            style={s.forgotLink}
+            accessibilityRole="link"
+            accessibilityLabel="Forgot password"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[s.forgotText, { color: loginBg ? '#E0B86D' : brandColor }]}>Forgot password?</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[s.btn, { backgroundColor: brandColor }, loading && s.btnDisabled]}
@@ -314,6 +453,32 @@ const s = StyleSheet.create({
   },
 
   field: { marginBottom: 14 },
+
+  // Face ID sign-in
+  bioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingVertical: 14,
+    minHeight: 48,
+    marginBottom: 18,
+  },
+  bioBtnText: { fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 18,
+  },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: '#1E3349' },
+  dividerText: { fontSize: 11.5, color: '#475569', letterSpacing: 0.2 },
+
+  // Forgot password
+  forgotLink: { alignSelf: 'flex-end', marginTop: -6, marginBottom: 16, minHeight: 32, justifyContent: 'center' },
+  forgotText: { fontSize: 13, fontWeight: '600' },
 
   // Button
   btn: {

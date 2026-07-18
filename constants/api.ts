@@ -16,6 +16,8 @@ export const API_ENDPOINTS = {
   REFRESH_TOKEN: '/api/auth/token/refresh/',
   USER_PROFILE: '/api/auth/me/',
   TWO_FA_VERIFY: '/api/auth/2fa/verify/',
+  PASSWORD_RESET_REQUEST: '/api/auth/password-reset/request/',
+  PASSWORD_RESET_CONFIRM: '/api/auth/password-reset/confirm/',
   // Effective permissions — same endpoint/format the web frontend uses
   // (module.category.action keys + all_permissions + modules[]).
   MY_PERMISSIONS: '/api/auth/my-permissions/',

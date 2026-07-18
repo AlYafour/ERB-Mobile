@@ -340,6 +340,24 @@ class ApiClient {
     return response;
   }
 
+  /**
+   * Request a password-reset code. Backend always responds 200 with the same
+   * shape whether or not the account exists (anti-enumeration) — the caller
+   * just moves to the code-entry step regardless.
+   */
+  async requestPasswordReset(identifier: string): Promise<ApiResponse<{ detail: string; reset_token: string }>> {
+    return this.post(API_ENDPOINTS.PASSWORD_RESET_REQUEST, { username: identifier });
+  }
+
+  /** Confirm a password reset. No tokens are returned — the user signs in fresh afterward. */
+  async confirmPasswordReset(resetToken: string, code: string, newPassword: string): Promise<ApiResponse<{ detail: string }>> {
+    return this.post(API_ENDPOINTS.PASSWORD_RESET_CONFIRM, {
+      reset_token: resetToken,
+      code,
+      new_password: newPassword,
+    });
+  }
+
   async register(userData: any): Promise<ApiResponse<any>> {
     return this.post(API_ENDPOINTS.REGISTER, userData);
   }

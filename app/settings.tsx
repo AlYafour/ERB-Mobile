@@ -8,15 +8,23 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAppTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppHeader } from '@/components/ui/AppHeader';
+import { AppDialog } from '@/components/ui/AppDialog';
+import { Input } from '@/components/ui/Input';
 import {
   authenticateBiometric,
   getBiometricCapabilities,
   isAppLockEnabled,
   setAppLockEnabled,
 } from '@/lib/app-lock';
+import {
+  isBiometricLoginEnabled,
+  enableBiometricLogin,
+  disableBiometricLogin,
+} from '@/lib/biometric-login';
 
 const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 const buildNumber =
@@ -91,6 +99,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const cs = useColorScheme();
   const c = Colors[cs] as typeof Colors.light;
+  const { user } = useAuth();
   const { colorScheme, setColorScheme, notificationsEnabled, setNotificationsEnabled, soundEnabled, setSoundEnabled } = useAppTheme();
 
   const handleDarkMode = (v: boolean) => {
@@ -147,6 +156,57 @@ export default function SettingsScreen() {
     }
   };
 
+  // ── Face ID Sign-In (saved-credential autofill, distinct from App Lock) ──
+  const [bioLogin, setBioLogin] = useState(false);
+  const [bioLoginDialog, setBioLoginDialog] = useState(false);
+  const [bioLoginPassword, setBioLoginPassword] = useState('');
+  const [bioLoginShowPassword, setBioLoginShowPassword] = useState(false);
+  const [bioLoginBusy, setBioLoginBusy] = useState(false);
+
+  useEffect(() => {
+    isBiometricLoginEnabled().then(setBioLogin);
+  }, []);
+
+  const handleBioLoginToggle = async (v: boolean) => {
+    if (v) {
+      if (!bioAvailable) {
+        Alert.alert(
+          `${bioLabel} not set up`,
+          `Enroll ${bioLabel} in your device settings first, then enable Face ID Sign-In.`,
+        );
+        return;
+      }
+      // Need the current password to save it — collected once, gated behind
+      // a live biometric check before it's ever written to the keychain.
+      setBioLoginPassword('');
+      setBioLoginDialog(true);
+    } else {
+      const result = await authenticateBiometric('Confirm to disable Face ID Sign-In');
+      if (result === 'success' || result === 'unavailable') {
+        await disableBiometricLogin();
+        setBioLogin(false);
+      }
+    }
+  };
+
+  const confirmBioLoginSetup = async () => {
+    if (!bioLoginPassword) return;
+    setBioLoginBusy(true);
+    try {
+      const result = await authenticateBiometric(`Enable ${bioLabel} Sign-In`);
+      if (result === 'success') {
+        await enableBiometricLogin(user?.username ?? '', bioLoginPassword);
+        setBioLogin(true);
+        setBioLoginDialog(false);
+        setBioLoginPassword('');
+      } else if (result === 'unavailable') {
+        Alert.alert('Unavailable', `${bioLabel} is not available right now.`);
+      }
+    } finally {
+      setBioLoginBusy(false);
+    }
+  };
+
   const handleNotifications = (v: boolean) => {
     setNotificationsEnabled(v);
     if (v) {
@@ -197,6 +257,19 @@ export default function SettingsScreen() {
             }
             value={appLock}
             onValueChange={handleAppLock}
+            c={c}
+          />
+          <SettingRow
+            icon="person.badge.key.fill"
+            iconColor={c.tint}
+            label={`${bioLabel} Sign-In`}
+            description={
+              bioAvailable
+                ? `Sign in instantly with ${bioLabel} instead of typing your password`
+                : `Set up ${bioLabel} on this device to enable`
+            }
+            value={bioLogin}
+            onValueChange={handleBioLoginToggle}
             c={c}
           />
         </View>
@@ -283,6 +356,38 @@ export default function SettingsScreen() {
           />
         </View>
       </ScrollView>
+
+      <AppDialog
+        visible={bioLoginDialog}
+        title={`Enable ${bioLabel} Sign-In`}
+        message="Enter your current password once — it's stored in your device's secure keychain, unlocked only by your biometrics."
+        onClose={() => { if (!bioLoginBusy) { setBioLoginDialog(false); setBioLoginPassword(''); } }}
+        actions={[
+          { label: 'Cancel', variant: 'outline', onPress: () => { setBioLoginDialog(false); setBioLoginPassword(''); }, disabled: bioLoginBusy },
+          { label: 'Enable', variant: 'primary', onPress: confirmBioLoginSetup, loading: bioLoginBusy, disabled: !bioLoginPassword },
+        ]}
+      >
+        <Input
+          label="Password"
+          value={bioLoginPassword}
+          onChangeText={setBioLoginPassword}
+          placeholder="Enter your password"
+          secureTextEntry={!bioLoginShowPassword}
+          autoCapitalize="none"
+          autoFocus
+          containerStyle={{ marginBottom: 4 }}
+          rightIcon={
+            <TouchableOpacity
+              onPress={() => setBioLoginShowPassword(v => !v)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={bioLoginShowPassword ? 'Hide password' : 'Show password'}
+            >
+              <IconSymbol name={bioLoginShowPassword ? 'eye.slash.fill' : 'eye.fill'} size={19} color={c.textMuted} />
+            </TouchableOpacity>
+          }
+        />
+      </AppDialog>
     </SafeAreaView>
   );
 }
