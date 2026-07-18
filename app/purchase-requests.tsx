@@ -319,7 +319,7 @@ function PurchaseRequestsScreenInner() {
             <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
-              keyExtractor={(item) => String(item.id || Math.random())}
+              keyExtractor={(item, index) => String(item.id ?? index)}
               contentContainerStyle={styles.listContent}
               style={listLoading ? { opacity: 0.6 } : undefined}
               refreshControl={

@@ -249,7 +249,7 @@ function PurchaseOrdersScreenInner() {
           <FlatList
             data={data.results}
             renderItem={renderItem}
-            keyExtractor={(item) => String(item.id || Math.random())}
+            keyExtractor={(item, index) => String(item.id ?? index)}
             contentContainerStyle={styles.listContent}
             refreshControl={
               <RefreshControl

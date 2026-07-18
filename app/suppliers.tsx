@@ -225,7 +225,7 @@ function SuppliersScreenInner() {
           <FlatList
             data={data.results}
             renderItem={renderItem}
-            keyExtractor={(item) => String(item.id || Math.random())}
+            keyExtractor={(item, index) => String(item.id ?? index)}
             contentContainerStyle={S.listContent}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primary]} />
