@@ -16,6 +16,7 @@ import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { AppPagination } from '@/components/ui/AppPagination';
 import { AppCard } from '@/components/ui/AppCard';
+import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { Input } from '@/components/ui/Input';
 import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
 import FilterTags from '@/components/ui/FilterTags';
@@ -70,23 +71,29 @@ const PRCard = React.memo(function PRCard({
   const isUrgent   = reqByDate ? reqByDate < twoDaysOut : false;
   const reqByColor = isOverdue ? colors.danger : isUrgent ? colors.warning : colors.textPrimary;
   const itemCount  = item.items?.length ?? null;
+  const accentColor = isOverdue ? colors.danger : isUrgent ? colors.warning : undefined;
 
   return (
-    <AppCard style={styles.itemCard} onPress={() => onOpen(itemId)}>
+    <AppCard
+      style={[styles.itemCard, accentColor && { borderLeftWidth: 3, borderLeftColor: accentColor }]}
+      onPress={() => onOpen(itemId)}
+    >
       <View style={styles.itemTopRow}>
-        <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>
-          {(item as any).code || `PR-${String(item.id).slice(0, 8)}`}
-        </Text>
+        <DocumentIconTile type="purchase_request" />
+        <View style={styles.itemTitleCol}>
+          <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>
+            {(item as any).code || `PR-${String(item.id).slice(0, 8)}`}
+          </Text>
+          {(item as any).title ? (
+            <Text style={[styles.itemTitle, { color: colors.textSecondary }]} numberOfLines={1}>
+              {(item as any).title}
+            </Text>
+          ) : null}
+        </View>
         <AppBadge variant={getStatusVariant(item.status)}>
           {statusLabels[item.status || ''] || item.status || 'Unknown'}
         </AppBadge>
       </View>
-
-      {(item as any).title ? (
-        <Text style={[styles.itemTitle, { color: colors.textSecondary }]} numberOfLines={2}>
-          {(item as any).title}
-        </Text>
-      ) : null}
 
       {(projectName || projectCode) ? (
         <View style={styles.metaRow}>
@@ -375,11 +382,12 @@ const styles = StyleSheet.create({
 
   itemTopRow: {
     flexDirection: 'row', alignItems: 'center',
-    gap: Spacing.sm, marginBottom: Spacing.sm,
+    gap: Spacing.sm, marginBottom: Spacing.md,
   },
-  itemCode: { fontSize: 14, fontWeight: '600', flex: 1 },
+  itemTitleCol: { flex: 1, gap: 2 },
+  itemCode: { fontSize: 14, fontWeight: '600' },
 
-  itemTitle: { fontSize: 13, lineHeight: 18, marginBottom: Spacing.sm },
+  itemTitle: { fontSize: 13, lineHeight: 18 },
 
   metaRow: {
     flexDirection: 'row', alignItems: 'center',

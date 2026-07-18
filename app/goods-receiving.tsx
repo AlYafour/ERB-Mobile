@@ -11,6 +11,7 @@ import FilterTags from '@/components/ui/FilterTags';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
+import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -119,22 +120,23 @@ function GoodsReceivingScreenInner() {
         style={styles.receiptCard}
         onPress={() => router.push(`/goods-receiving/${item.id}` as any)}
       >
-        {/* GRN code + badge */}
+        {/* Icon + GRN code/supplier + badge */}
         <View style={styles.topRow}>
-          <Text style={[styles.grnNumber, { color: colors.textPrimary }]} numberOfLines={1}>
-            {item.grn_number || `GRN-${item.id}`}
-          </Text>
+          <DocumentIconTile type="goods_receiving" />
+          <View style={styles.titleCol}>
+            <Text style={[styles.grnNumber, { color: colors.textPrimary }]} numberOfLines={1}>
+              {item.grn_number || `GRN-${item.id}`}
+            </Text>
+            {supplierName ? (
+              <Text style={[styles.supplierText, { color: colors.textSecondary }]} numberOfLines={1}>
+                {supplierName}
+              </Text>
+            ) : null}
+          </View>
           <AppBadge variant={getStatusVariant(item.status)}>
             {statusLabels[item.status] || item.status || 'Unknown'}
           </AppBadge>
         </View>
-
-        {/* Supplier name */}
-        {supplierName ? (
-          <Text style={[styles.supplierText, { color: colors.textSecondary }]} numberOfLines={2}>
-            {supplierName}
-          </Text>
-        ) : null}
 
         {/* Meta rows */}
         {poNum ? (
@@ -300,10 +302,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  grnNumber: { fontSize: 14, fontWeight: '600', flex: 1 },
-  supplierText: { fontSize: 13, lineHeight: 18, marginBottom: Spacing.sm },
+  titleCol: { flex: 1, gap: 2 },
+  grnNumber: { fontSize: 14, fontWeight: '600' },
+  supplierText: { fontSize: 13, lineHeight: 18 },
 
   metaRow: {
     flexDirection: 'row',

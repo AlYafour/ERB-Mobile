@@ -11,6 +11,7 @@ import FilterTags from '@/components/ui/FilterTags';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
+import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -108,6 +109,7 @@ function QuotationRequestsScreenInner() {
     return (
       <AppCard style={S.itemCard} onPress={() => router.push(`/quotation-requests/${itemId}` as any)}>
         <View style={S.topRow}>
+          <DocumentIconTile type="quotation_request" />
           <Text style={[S.itemNum, { color: C.primary }]} numberOfLines={1}>{qrNum}</Text>
           <AppBadge variant={getStatusVariant(item.status)}>
             {statusLabels[item.status || ''] || item.status || 'Unknown'}
@@ -236,8 +238,8 @@ function makeStyles(C: AppColors) {
     itemCard: { marginBottom: Spacing.sm },
 
     topRow: {
-      flexDirection: 'row', alignItems: 'flex-start',
-      gap: Spacing.sm, marginBottom: Spacing.sm,
+      flexDirection: 'row', alignItems: 'center',
+      gap: Spacing.sm, marginBottom: Spacing.md,
     },
     itemNum: { fontSize: 14, fontWeight: '700', flex: 1, letterSpacing: 0.2 },
 

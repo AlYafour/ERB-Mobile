@@ -11,6 +11,7 @@ import FilterTags from '@/components/ui/FilterTags';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
+import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -121,17 +122,17 @@ function PurchaseQuotationsScreenInner() {
     return (
       <AppCard style={S.itemCard} onPress={() => router.push(`/purchase-quotations/${itemId}` as any)}>
         <View style={S.topRow}>
-          <Text style={[S.itemNum, { color: C.primary }]} numberOfLines={1}>{pqNum}</Text>
+          <DocumentIconTile type="purchase_quotation" />
+          <View style={S.titleCol}>
+            <Text style={[S.itemNum, { color: C.primary }]} numberOfLines={1}>{pqNum}</Text>
+            {supplierName ? (
+              <Text style={[S.supplierText, { color: C.textSecondary }]} numberOfLines={1}>{supplierName}</Text>
+            ) : null}
+          </View>
           <AppBadge variant={getStatusVariant(item.status)}>
             {statusLabels[item.status || ''] || item.status || 'Unknown'}
           </AppBadge>
         </View>
-        {supplierName ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Supplier</Text>
-            <Text style={[S.metaValue, { color: C.textPrimary }]} numberOfLines={1}>{supplierName}</Text>
-          </View>
-        ) : null}
         {quotDate ? (
           <View style={S.metaRow}>
             <Text style={[S.metaLabel, { color: C.textMuted }]}>Quotation Date</Text>
@@ -255,10 +256,12 @@ function makeStyles(C: AppColors) {
     itemCard: { marginBottom: Spacing.sm },
 
     topRow: {
-      flexDirection: 'row', alignItems: 'flex-start',
-      gap: Spacing.sm, marginBottom: Spacing.sm,
+      flexDirection: 'row', alignItems: 'center',
+      gap: Spacing.sm, marginBottom: Spacing.md,
     },
-    itemNum: { fontSize: 14, fontWeight: '700', flex: 1, letterSpacing: 0.2 },
+    titleCol: { flex: 1, gap: 2 },
+    itemNum: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
+    supplierText: { fontSize: 13, lineHeight: 18 },
 
     metaRow: {
       flexDirection: 'row', alignItems: 'center',

@@ -18,6 +18,7 @@ import { Layout } from '@/constants/layout';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
+import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -132,19 +133,25 @@ function PurchaseOrdersScreenInner() {
     const delivColor = isOverdue ? colors.danger : isUrgent ? colors.warning : colors.textPrimary;
     const total      = (item as any).total_amount ?? (item as any).total ?? null;
     const itemCount  = item.items?.length ?? null;
+    const accentColor = isOverdue ? colors.danger : isUrgent ? colors.warning : undefined;
 
     return (
-      <AppCard style={styles.itemCard} onPress={() => router.push(`/purchase-orders/${itemId}` as any)}>
+      <AppCard
+        style={[styles.itemCard, accentColor && { borderLeftWidth: 3, borderLeftColor: accentColor }]}
+        onPress={() => router.push(`/purchase-orders/${itemId}` as any)}
+      >
         <View style={styles.topRow}>
-          <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>{orderNum}</Text>
+          <DocumentIconTile type="purchase_order" />
+          <View style={styles.titleCol}>
+            <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>{orderNum}</Text>
+            {supplier ? (
+              <Text style={[styles.supplierText, { color: colors.textSecondary }]} numberOfLines={1}>{supplier}</Text>
+            ) : null}
+          </View>
           <AppBadge variant={getStatusVariant(item.status)}>
             {statusLabels[item.status || ''] || item.status || 'Unknown'}
           </AppBadge>
         </View>
-
-        {supplier ? (
-          <Text style={[styles.supplierText, { color: colors.textSecondary }]} numberOfLines={2}>{supplier}</Text>
-        ) : null}
 
         {project ? (
           <View style={styles.metaRow}>
@@ -304,10 +311,11 @@ const styles = StyleSheet.create({
 
   topRow: {
     flexDirection: 'row', alignItems: 'center',
-    gap: Spacing.sm, marginBottom: Spacing.sm,
+    gap: Spacing.sm, marginBottom: Spacing.md,
   },
-  itemCode:     { fontSize: 14, fontWeight: '600', flex: 1 },
-  supplierText: { fontSize: 13, lineHeight: 18, marginBottom: Spacing.sm },
+  titleCol: { flex: 1, gap: 2 },
+  itemCode:     { fontSize: 14, fontWeight: '600' },
+  supplierText: { fontSize: 13, lineHeight: 18 },
 
   metaRow: {
     flexDirection: 'row', alignItems: 'center',

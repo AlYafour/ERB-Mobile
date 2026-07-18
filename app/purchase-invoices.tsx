@@ -11,6 +11,7 @@ import FilterTags from '@/components/ui/FilterTags';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
+import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -128,22 +129,25 @@ function PurchaseInvoicesScreenInner() {
       && new Date((item as any).due_date) < new Date();
 
     return (
-      <AppCard style={S.itemCard} onPress={() => router.push(`/purchase-invoices/${itemId}` as any)}>
-        {/* Number + status badge */}
+      <AppCard
+        style={[S.itemCard, isOverdue && { borderLeftWidth: 3, borderLeftColor: C.danger }]}
+        onPress={() => router.push(`/purchase-invoices/${itemId}` as any)}
+      >
+        {/* Icon + number/supplier + status badge */}
         <View style={S.topRow}>
-          <Text style={[S.invoiceNum, { color: C.primary }]} numberOfLines={1}>{invoiceNum}</Text>
+          <DocumentIconTile type="purchase_invoice" />
+          <View style={S.titleCol}>
+            <Text style={[S.invoiceNum, { color: C.primary }]} numberOfLines={1}>{invoiceNum}</Text>
+            {supplier ? (
+              <Text style={[S.supplierText, { color: C.textSecondary }]} numberOfLines={1}>{supplier}</Text>
+            ) : null}
+          </View>
           <AppBadge variant={getStatusVariant(item.status)}>
             {statusLabels[item.status || ''] || item.status || 'Unknown'}
           </AppBadge>
         </View>
 
         {/* Meta rows */}
-        {supplier ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Supplier</Text>
-            <Text style={[S.metaValue, { color: C.textPrimary }]} numberOfLines={1}>{supplier}</Text>
-          </View>
-        ) : null}
         {poNumber ? (
           <View style={S.metaRow}>
             <Text style={[S.metaLabel, { color: C.textMuted }]}>LPO</Text>
@@ -272,10 +276,12 @@ function makeStyles(C: AppColors) {
     itemCard: { marginBottom: Spacing.sm },
 
     topRow: {
-      flexDirection: 'row', alignItems: 'flex-start',
-      gap: Spacing.sm, marginBottom: Spacing.sm,
+      flexDirection: 'row', alignItems: 'center',
+      gap: Spacing.sm, marginBottom: Spacing.md,
     },
-    invoiceNum: { fontSize: 14, fontWeight: '700', flex: 1, letterSpacing: 0.2 },
+    titleCol: { flex: 1, gap: 2 },
+    invoiceNum: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
+    supplierText: { fontSize: 13, lineHeight: 18 },
 
     metaRow: {
       flexDirection: 'row', alignItems: 'center',

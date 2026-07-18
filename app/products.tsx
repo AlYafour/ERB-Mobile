@@ -13,6 +13,7 @@ import FilterTags from '@/components/ui/FilterTags';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
+import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -113,8 +114,9 @@ function ProductsScreenInner() {
 
     return (
       <AppCard style={S.itemCard} onPress={() => router.push(`/products/${itemId}` as any)}>
-        {/* Name + active badge */}
+        {/* Icon + name + active badge */}
         <View style={S.topRow}>
+          <DocumentIconTile type="product" />
           <Text style={[S.itemName, { color: C.textPrimary }]} numberOfLines={2}>{item.name || 'Unnamed Product'}</Text>
           {isActive !== undefined ? (
             <AppBadge variant={isActive ? 'success' : 'danger'}>
