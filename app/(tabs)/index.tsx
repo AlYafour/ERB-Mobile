@@ -159,7 +159,7 @@ export default function HomeScreen() {
         </View>
         <TouchableOpacity
           style={[s.bellBtn, { backgroundColor: c.surfaceMuted }]}
-          onPress={() => router.push('/(tabs)/notifications' as any)}
+          onPress={() => router.push('/(tabs)/notifications')}
           hitSlop={10}
         >
           <IconSymbol name="bell" size={18} color={c.textSecondary} />
@@ -194,7 +194,7 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.delay(80).duration(280)} style={s.statsRow}>
           <TouchableOpacity
             style={[s.statCard, { backgroundColor: c.surface, borderColor: c.border }]}
-            onPress={() => hasProcurement && router.push('/purchase-requests?status=pending' as any)}
+            onPress={() => hasProcurement && router.push('/purchase-requests?status=pending')}
             activeOpacity={0.72}
           >
             <View style={[s.statIcon, { backgroundColor: '#B7791F18' }]}>
@@ -209,7 +209,7 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={[s.statCard, { backgroundColor: c.surface, borderColor: c.border }]}
-            onPress={() => router.push('/(tabs)/notifications' as any)}
+            onPress={() => router.push('/(tabs)/notifications')}
             activeOpacity={0.72}
           >
             <View style={[s.statIcon, { backgroundColor: '#C9943A18' }]}>
@@ -310,7 +310,7 @@ export default function HomeScreen() {
           >
             <TouchableOpacity
               style={[s.analyticsBtn, { backgroundColor: c.surface, borderColor: c.border }]}
-              onPress={() => router.push('/dashboard' as any)}
+              onPress={() => router.push('/dashboard')}
               activeOpacity={0.7}
             >
               <View style={[s.analyticsIcon, { backgroundColor: '#C9943A15' }]}>

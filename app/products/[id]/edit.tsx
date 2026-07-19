@@ -63,29 +63,28 @@ function EditProductScreenInner() {
         suppliersApi.getAll({ page_size: 100 }),
       ]);
       setSuppliers(suppResp.results || []);
-      const p = product as any;
       const supplierId =
-        typeof p.supplier === 'object' && p.supplier !== null ? Number(p.supplier.id)
-        : typeof p.supplier === 'number' ? p.supplier
+        typeof product.supplier === 'object' && product.supplier !== null ? Number(product.supplier.id)
+        : typeof product.supplier === 'number' ? product.supplier
         : undefined;
       return {
-        name:           p.name || '',
-        code:           p.code || '',
-        sku:            p.sku || '',
-        barcode:        p.barcode || '',
-        description:    p.description || '',
-        brand:          p.brand || '',
-        category:       p.category || '',
-        unit:           p.unit || 'piece',
+        name:           product.name || '',
+        code:           product.code || '',
+        sku:            product.sku || '',
+        barcode:        product.barcode || '',
+        description:    product.description || '',
+        brand:          product.brand || '',
+        category:       product.category || '',
+        unit:           product.unit || 'piece',
         supplier:       supplierId,
-        unit_price:     p.unit_price != null ? String(p.unit_price) : '',
-        buy_price:      p.buy_price != null ? String(p.buy_price) : '',
-        discount:       p.discount != null ? String(p.discount) : '',
-        discount_type:  p.discount_type || 'percentage',
-        track_stock:    p.track_stock ?? false,
-        stock_balance:  p.stock_balance != null ? String(p.stock_balance) : '',
-        min_stock_level:p.min_stock_level != null ? String(p.min_stock_level) : '',
-        is_active:      p.is_active ?? true,
+        unit_price:     product.unit_price != null ? String(product.unit_price) : '',
+        buy_price:      product.buy_price != null ? String(product.buy_price) : '',
+        discount:       product.discount != null ? String(product.discount) : '',
+        discount_type:  product.discount_type || 'percentage',
+        track_stock:    product.track_stock ?? false,
+        stock_balance:  product.stock_balance != null ? String(product.stock_balance) : '',
+        min_stock_level:product.min_stock_level != null ? String(product.min_stock_level) : '',
+        is_active:      product.is_active ?? true,
       };
     },
     validate: (f) => {
@@ -108,7 +107,7 @@ function EditProductScreenInner() {
 
   const supplierOptions = suppliers.map((s) => ({
     value: Number(s.id),
-    label: (s as any).business_name || s.name || `Supplier ${s.id}`,
+    label: s.business_name || s.name || `Supplier ${s.id}`,
   }));
 
   if (loading || !form) return (

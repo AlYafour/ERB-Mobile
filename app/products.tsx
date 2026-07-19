@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
@@ -40,15 +41,15 @@ const ProductCard = React.memo(function ProductCard({
   onOpen: (id: number) => void;
 }) {
   const itemId   = Number(item.id);
-  const isActive = (item as any).is_active;
-  const code     = (item as any).code || item.sku || null;
+  const isActive = item.is_active;
+  const code     = item.code || item.sku || null;
   const category = item.category || null;
   const unit     = item.unit || null;
   const price    = item.unit_price != null ? `AED ${Number(item.unit_price).toFixed(2)}` : null;
-  const stock    = (item as any).stock_balance != null
-    ? `${(item as any).stock_balance} ${unit || ''}`.trim()
+  const stock    = item.stock_balance != null
+    ? `${item.stock_balance} ${unit || ''}`.trim()
     : null;
-  const trackStock = (item as any).track_stock ?? false;
+  const trackStock = item.track_stock ?? false;
 
   return (
     <AppCard style={styles.itemCard} onPress={() => onOpen(itemId)}>
@@ -189,7 +190,7 @@ function ProductsScreenInner() {
   useRefetchOnFocus(loadProducts);
 
   const openProduct = useCallback(
-    (id: number) => router.push(`/products/${id}` as any),
+    (id: number) => router.push(`/products/${id}`),
     [router],
   );
 
@@ -212,7 +213,7 @@ function ProductsScreenInner() {
               title="New Product"
               variant="primary"
               size="sm"
-              onPress={() => router.push('/products/new' as any)}
+              onPress={() => router.push('/products/new')}
             />
           ) : undefined}
         />
@@ -253,7 +254,7 @@ function ProductsScreenInner() {
                 <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item, index) => String(item.id ?? index)}

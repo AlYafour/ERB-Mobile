@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Platform } from 'react-native';
 import { useToast, Toast as ToastType } from '@/lib/hooks/use-toast';
-import { IconSymbol } from './icon-symbol';
+import { IconSymbol, IconSymbolName } from './icon-symbol';
 
 const isWeb = Platform.OS === 'web' || (typeof window !== 'undefined' && window.document);
 
@@ -74,7 +74,7 @@ function ToastItem({ toast, onRemove }: { toast: ToastType; onRemove: (id: strin
     }
   };
 
-  const getIconName = () => {
+  const getIconName = (): IconSymbolName => {
     switch (toast.type) {
       case 'success':
         return 'checkmark.circle.fill';
@@ -102,7 +102,7 @@ function ToastItem({ toast, onRemove }: { toast: ToastType; onRemove: (id: strin
           transform: [{ translateY }],
         },
       ]}>
-      <IconSymbol name={getIconName() as any} size={20} color={toastStyle.iconColor} />
+      <IconSymbol name={getIconName()} size={20} color={toastStyle.iconColor} />
       <Text style={[styles.toastText, { color: toastStyle.iconColor }]}>{toast.message}</Text>
       <TouchableOpacity onPress={() => onRemove(toast.id)} style={styles.closeButton}>
         <IconSymbol name="xmark" size={16} color={toastStyle.iconColor} />

@@ -5,7 +5,7 @@ import { SymbolWeight } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
-type IconSymbolName = keyof typeof MAPPING;
+export type IconSymbolName = keyof typeof MAPPING;
 
 // Keys are SF-symbol-style names; values MUST be valid MaterialIcons names
 // (`satisfies` enforces that). A name missing from this table renders the

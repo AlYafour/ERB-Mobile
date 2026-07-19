@@ -117,7 +117,7 @@ export default function LoginScreen() {
           tempToken: result.tempToken,
           ...(result.expiresIn != null ? { expiresIn: String(result.expiresIn) } : {}),
         },
-      } as any);
+      });
     } else {
       setError(result.error || 'Login failed. Please check your credentials.');
     }
@@ -294,7 +294,7 @@ export default function LoginScreen() {
           />
 
           <TouchableOpacity
-            onPress={() => router.push('/forgot-password' as any)}
+            onPress={() => router.push('/forgot-password')}
             style={s.forgotLink}
             accessibilityRole="link"
             accessibilityLabel="Forgot password"

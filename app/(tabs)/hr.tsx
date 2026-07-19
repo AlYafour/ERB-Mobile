@@ -500,7 +500,7 @@ export default function HRScreen() {
             <Text style={[s.sectionLabel, { color: c.textMuted }]}>LATEST PAYSLIP</Text>
             <TouchableOpacity
               style={[s.payCard, { backgroundColor: c.primary }]}
-              onPress={() => router.push('/hr/payslip' as any)}
+              onPress={() => router.push('/hr/payslip')}
               activeOpacity={0.85}
             >
               <View style={{ flex: 1 }}>
@@ -523,7 +523,7 @@ export default function HRScreen() {
           <>
             <View style={[s.sectionRow]}>
               <Text style={[s.sectionLabel, { color: c.textMuted, paddingTop: 0 }]}>RECENT REQUESTS</Text>
-              <TouchableOpacity onPress={() => router.push('/hr/requests' as any)}>
+              <TouchableOpacity onPress={() => router.push('/hr/requests')}>
                 <Text style={[s.seeAll, { color: c.primary }]}>See all</Text>
               </TouchableOpacity>
             </View>
@@ -568,7 +568,7 @@ export default function HRScreen() {
             sublabel={action.sub}
             onPress={() => {
               setSheetVisible(false);
-              router.push({ pathname: '/hr/requests' as any, params: { type: action.id } });
+              router.push({ pathname: '/hr/requests', params: { type: action.id } });
             }}
           />
         ))}

@@ -70,8 +70,8 @@ export function navigateAfterCreate(
     // to include 'id' (fixed server-side), but if it's ever missing again
     // (bad response, network shim, etc.) fall back to the list instead of
     // a broken "Not found" detail screen.
-    router.replace(listPath as any);
+    router.replace(listPath);
     return;
   }
-  router.replace(detailPathFn(result.id) as any);
+  router.replace(detailPathFn(result.id));
 }

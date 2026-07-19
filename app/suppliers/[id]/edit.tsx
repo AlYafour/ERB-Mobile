@@ -68,7 +68,7 @@ function EditSupplierScreenInner() {
   const { loading, saving, errors, form, set, handleSubmit } = useEditForm<SupplierEditForm>({
     id,
     load: async () => {
-      const s = await suppliersApi.getById(id) as any;
+      const s = await suppliersApi.getById(id);
       return {
         business_name:    s.business_name || s.name || '',
         supplier_number:  s.supplier_number || '',

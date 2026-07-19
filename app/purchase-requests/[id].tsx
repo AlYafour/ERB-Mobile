@@ -51,8 +51,8 @@ function PurchaseRequestDetailScreenInner() {
   const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const handleApprove = async () => {
-    const prCode = (request as any)?.code || `PR-${id}`;
-    const prTitle = (request as any)?.title;
+    const prCode = request?.code || `PR-${id}`;
+    const prTitle = request?.title;
     const label = prTitle ? `${prCode} — ${prTitle}` : prCode;
     if (!await confirm(`Approve ${label}?\n\nThis will mark the request as approved.`)) return;
     try { setApproving(true); await purchaseRequestsApi.approve(id); toast('Approved successfully', 'success'); reload(); }
@@ -89,11 +89,11 @@ function PurchaseRequestDetailScreenInner() {
 
   const handleCreateQR = () => {
     if (!canCreateQR) { toast('You do not have permission to create a Quotation Request', 'error'); return; }
-    if ((request as any)?.has_awarded_quotation) { toast('Already has an awarded quotation', 'error'); return; }
-    if ((request as any)?.has_purchase_orders) { toast('Already has purchase orders', 'error'); return; }
+    if (request?.has_awarded_quotation) { toast('Already has an awarded quotation', 'error'); return; }
+    if (request?.has_purchase_orders) { toast('Already has purchase orders', 'error'); return; }
     const guard = canCreateQuotationRequest(request?.status || '', canCreateQR);
     if (!guard.canProceed) { toast(guard.reason || 'Cannot create QR', 'error'); return; }
-    router.push(`/quotation-requests/new?purchase_request_id=${id}` as any);
+    router.push(`/quotation-requests/new?purchase_request_id=${id}`);
   };
 
   const handleCreateLPO = async () => {
@@ -101,11 +101,10 @@ function PurchaseRequestDetailScreenInner() {
     const guard = canCreatePurchaseOrder(undefined, request?.status);
     if (!guard.canProceed) { toast(guard.reason || 'Cannot create LPO', 'error'); return; }
     if (guard.warning && !await confirm(guard.warning + '\n\nContinue?')) return;
-    router.push(`/purchase-orders/new?purchase_request_id=${id}` as any);
+    router.push(`/purchase-orders/new?purchase_request_id=${id}`);
   };
 
-  const r = request as any;
-  const code = r?.code || `PR-${id}`;
+  const code = request?.code || `PR-${id}`;
 
   const S = makeStyles(C);
 
@@ -144,21 +143,21 @@ function PurchaseRequestDetailScreenInner() {
         {/* Details */}
         <AppCard style={S.card}>
           <Text style={S.sectionTitle}>Details</Text>
-          <AppCardRow label="Title" value={r.title} />
-          <AppCardRow label="Project" value={[typeof request.project === 'object' ? (request.project as any)?.name : '', r.project_code ? `(${r.project_code})` : ''].filter(Boolean).join(' ') || null} />
-          <AppCardRow label="Request Date" value={r.request_date ? new Date(r.request_date).toLocaleDateString('en-AE') : null} />
-          <AppCardRow label="Required By" value={r.required_by ? new Date(r.required_by).toLocaleDateString('en-AE') : null} />
-          <AppCardRow label="Created By" value={r.created_by_name} />
-          <AppCardRow label="Approved By" value={r.approved_by_name} last={!r.notes && !r.rejection_reason} />
-          {r.notes && (
+          <AppCardRow label="Title" value={request.title} />
+          <AppCardRow label="Project" value={[typeof request.project === 'object' ? request.project.name : '', request.project_code ? `(${request.project_code})` : ''].filter(Boolean).join(' ') || null} />
+          <AppCardRow label="Request Date" value={request.request_date ? new Date(request.request_date).toLocaleDateString('en-AE') : null} />
+          <AppCardRow label="Required By" value={request.required_by ? new Date(request.required_by).toLocaleDateString('en-AE') : null} />
+          <AppCardRow label="Created By" value={request.created_by_name} />
+          <AppCardRow label="Approved By" value={request.approved_by_name} last={!request.notes && !request.rejection_reason} />
+          {request.notes && (
             <View style={S.notesBox}>
-              <Text style={S.notesText}>{r.notes}</Text>
+              <Text style={S.notesText}>{request.notes}</Text>
             </View>
           )}
-          {r.rejection_reason && (
+          {request.rejection_reason && (
             <View style={S.rejectionBox}>
               <Text style={S.rejectionLabel}>Rejection Reason</Text>
-              <Text style={S.rejectionText}>{r.rejection_reason}</Text>
+              <Text style={S.rejectionText}>{request.rejection_reason}</Text>
             </View>
           )}
         </AppCard>
@@ -168,8 +167,7 @@ function PurchaseRequestDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Items ({request.items.length})</Text>
             {request.items.map((item, i) => {
-              const it = item as any;
-              const name = typeof item.product === 'object' ? (item.product as any)?.name : it.product_name || 'N/A';
+              const name = typeof item.product === 'object' ? item.product.name : item.product_name || 'N/A';
               return (
                 <View key={item.id || i} style={[S.itemRow, i < request.items!.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.border }]}>
                   <View style={S.itemBadge}><Text style={S.itemBadgeText}>{i + 1}</Text></View>
@@ -177,9 +175,9 @@ function PurchaseRequestDetailScreenInner() {
                     <Text style={S.itemName} numberOfLines={2}>{name}</Text>
                     <View style={S.itemMeta}>
                       <Text style={S.itemMetaText}>Qty: {item.quantity || 0} {item.unit || ''}</Text>
-                      {it.project_site && <Text style={S.itemMetaText}>Site: {it.project_site}</Text>}
+                      {item.project_site && <Text style={S.itemMetaText}>Site: {item.project_site}</Text>}
                     </View>
-                    {it.reason && <Text style={S.itemNote}>{it.reason}</Text>}
+                    {item.reason && <Text style={S.itemNote}>{item.reason}</Text>}
                   </View>
                 </View>
               );
@@ -192,7 +190,7 @@ function PurchaseRequestDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Next Steps</Text>
 
-            {canUndoApprove && !r.has_quotation_requests && !r.has_purchase_orders && (
+            {canUndoApprove && !request.has_quotation_requests && !request.has_purchase_orders && (
               <AppButton
                 title={undoing ? 'Processing...' : 'Undo Approval'}
                 variant="outline"
@@ -204,7 +202,7 @@ function PurchaseRequestDetailScreenInner() {
               />
             )}
 
-            {(canCreateQR || canCreatePO) && !r.has_awarded_quotation && !r.has_purchase_orders && (
+            {(canCreateQR || canCreatePO) && !request.has_awarded_quotation && !request.has_purchase_orders && (
               <View style={S.actionRow}>
                 {canCreateQR && (
                   <AppButton title="Create QR" variant="primary" size="md" onPress={handleCreateQR} style={{ flex: 1 }} />
@@ -215,18 +213,18 @@ function PurchaseRequestDetailScreenInner() {
               </View>
             )}
 
-            {(r.has_awarded_quotation || r.has_purchase_orders) && (
+            {(request.has_awarded_quotation || request.has_purchase_orders) && (
               <View style={S.infoBox}>
                 <IconSymbol name="info.circle.fill" size={20} color={C.primary} />
                 <View style={{ flex: 1 }}>
-                  <Text style={S.infoTitle}>{r.has_purchase_orders ? 'LPO Created' : 'Supplier Awarded'}</Text>
+                  <Text style={S.infoTitle}>{request.has_purchase_orders ? 'LPO Created' : 'Supplier Awarded'}</Text>
                   <Text style={S.infoSubtitle}>
-                    {r.has_purchase_orders
+                    {request.has_purchase_orders
                       ? 'This PR has an active Purchase Order. View it in the LPO section.'
                       : 'A supplier has been awarded. Proceed to create an LPO if needed.'}
                   </Text>
-                  {r.has_purchase_orders && (
-                    <TouchableOpacity onPress={() => router.push(`/purchase-orders?purchase_request=${id}` as any)}>
+                  {request.has_purchase_orders && (
+                    <TouchableOpacity onPress={() => router.push(`/purchase-orders?purchase_request=${id}`)}>
                       <Text style={S.link}>View Purchase Orders →</Text>
                     </TouchableOpacity>
                   )}
@@ -237,7 +235,7 @@ function PurchaseRequestDetailScreenInner() {
         )}
 
         {/* Tracking */}
-        <AppCard style={[S.card, { backgroundColor: C.primarySoft }]} onPress={() => router.push(`/purchase-requests/${id}/tracking` as any)}>
+        <AppCard style={[S.card, { backgroundColor: C.primarySoft }]} onPress={() => router.push(`/purchase-requests/${id}/tracking`)}>
           <View style={S.trackingRow}>
             <View style={[S.trackingIcon, { backgroundColor: C.primary }]}>
               <IconSymbol name="list.bullet" size={18} color="#FFFFFF" />

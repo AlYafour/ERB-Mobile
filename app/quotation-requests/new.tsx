@@ -54,7 +54,7 @@ function NewQuotationRequestScreenInner() {
         value: s.id,
         label: s.name || s.business_name || `Supplier ${s.id}`,
       })));
-      const prItems = (prData as any).items || [];
+      const prItems = prData.items || [];
       setItems(prItems.map((item: any) => ({
         product_id:   normalizeProductRef(item)!,
         product_name: typeof item.product === 'object' ? item.product.name : item.product_name || 'Product',

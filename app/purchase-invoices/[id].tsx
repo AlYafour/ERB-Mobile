@@ -123,21 +123,20 @@ function PurchaseInvoiceDetailScreenInner() {
     </SafeAreaView>
   );
 
-  const inv         = invoice as any;
   const invoiceNum  = invoice.invoice_number || `INV-${id}`;
   const status      = invoice.status;
-  const supplierName= typeof invoice.supplier === 'object' ? (invoice.supplier as any)?.name : null;
-  const poNumber    = typeof invoice.purchase_order === 'object' ? (invoice.purchase_order as any)?.order_number : null;
-  const poId        = typeof invoice.purchase_order === 'object' ? (invoice.purchase_order as any)?.id : null;
-  const grnNumber   = typeof inv.goods_receiving === 'object' ? inv.goods_receiving?.grn_number : null;
-  const grnId       = typeof inv.goods_receiving === 'object' ? inv.goods_receiving?.id : null;
+  const supplierName= typeof invoice.supplier === 'object' ? invoice.supplier.name : null;
+  const poNumber    = typeof invoice.purchase_order === 'object' ? invoice.purchase_order.order_number : null;
+  const poId        = typeof invoice.purchase_order === 'object' ? invoice.purchase_order.id : null;
+  const grnNumber   = typeof invoice.goods_receiving === 'object' ? invoice.goods_receiving?.grn_number : null;
+  const grnId       = typeof invoice.goods_receiving === 'object' ? invoice.goods_receiving?.id : null;
 
-  const paidAmt     = inv.paid_amount != null ? Number(inv.paid_amount) : null;
+  const paidAmt     = invoice.paid_amount != null ? Number(invoice.paid_amount) : null;
   // The backend field for the grand total is inconsistently named `total` vs
   // `total_amount` depending on endpoint/serializer (see the same fallback in
   // app/purchase-invoices.tsx, app/purchase-orders.tsx, app/purchase-quotations.tsx
   // list screens) — read both so this doesn't silently show/compute a blank total.
-  const totalRaw    = inv.total ?? invoice.total_amount;
+  const totalRaw    = invoice.total ?? invoice.total_amount;
   const totalAmt    = totalRaw != null ? Number(totalRaw) : null;
   const outstanding = totalAmt != null && paidAmt != null && totalAmt > paidAmt
     ? totalAmt - paidAmt : null;
@@ -146,7 +145,7 @@ function PurchaseInvoiceDetailScreenInner() {
   // recorded). Falls back to the full total when nothing has been paid yet.
   const amountDue   = totalAmt != null ? totalAmt - (paidAmt ?? 0) : undefined;
 
-  const dueDate     = inv.due_date;
+  const dueDate     = invoice.due_date;
   const isOverdue   = dueDate && status !== 'paid' && new Date(dueDate) < new Date();
 
   const handleMarkPaid = async () => {
@@ -190,7 +189,7 @@ function PurchaseInvoiceDetailScreenInner() {
           <Text style={S.sectionTitle}>Invoice Information</Text>
           <AppCardRow label="Supplier"     value={supplierName} />
           <AppCardRow label="Invoice No."  value={invoiceNum} />
-          <AppCardRow label="Invoice Date" value={fmtDate(inv.invoice_date)} />
+          <AppCardRow label="Invoice Date" value={fmtDate(invoice.invoice_date)} />
           <AppCardRow label="Due Date"
             value={fmtDate(dueDate) ? `${fmtDate(dueDate)}${isOverdue ? ' · Overdue' : ''}` : null}
             valueColor={isOverdue ? C.danger : undefined} />
@@ -199,9 +198,9 @@ function PurchaseInvoiceDetailScreenInner() {
               <Text style={[S.notesText, { color: C.textSecondary }]}>{invoice.notes}</Text>
             </View>
           ) : null}
-          {inv.rejection_reason ? (
+          {invoice.rejection_reason ? (
             <View style={[S.notesBox, { backgroundColor: C.dangerBg }]}>
-              <Text style={[S.notesText, { color: C.danger }]}>Rejection: {inv.rejection_reason}</Text>
+              <Text style={[S.notesText, { color: C.danger }]}>Rejection: {invoice.rejection_reason}</Text>
             </View>
           ) : null}
         </AppCard>
@@ -212,7 +211,7 @@ function PurchaseInvoiceDetailScreenInner() {
             <Text style={S.sectionTitle}>Linked Documents</Text>
             {poNumber ? (
               <TouchableOpacity
-                onPress={poId ? () => router.push(`/purchase-orders/${poId}` as any) : undefined}
+                onPress={poId ? () => router.push(`/purchase-orders/${poId}`) : undefined}
                 style={[S.linkRow, { borderBottomColor: C.divider }]}
               >
                 <Text style={[S.linkLabel, { color: C.textMuted }]}>Purchase Order</Text>
@@ -221,7 +220,7 @@ function PurchaseInvoiceDetailScreenInner() {
             ) : null}
             {grnNumber ? (
               <TouchableOpacity
-                onPress={grnId ? () => router.push(`/goods-receiving/${grnId}` as any) : undefined}
+                onPress={grnId ? () => router.push(`/goods-receiving/${grnId}`) : undefined}
                 style={[S.linkRow, { borderBottomColor: C.divider }]}
               >
                 <Text style={[S.linkLabel, { color: C.textMuted }]}>Goods Receipt</Text>
@@ -236,9 +235,8 @@ function PurchaseInvoiceDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Items ({invoice.items.length})</Text>
             {invoice.items.map((item, i) => {
-              const it = item as any;
               const name = typeof item.product === 'object'
-                ? (item.product as any)?.name : it.product_name || 'Item';
+                ? item.product.name : item.product_name || 'Item';
               const lineTotal = item.quantity && item.unit_price
                 ? Number(item.quantity) * Number(item.unit_price) : null;
               return (
@@ -249,7 +247,7 @@ function PurchaseInvoiceDetailScreenInner() {
                     <Text style={[S.itemName, { color: C.textPrimary }]}>{name}</Text>
                     <View style={S.metaChips}>
                       <View style={[S.chip, { backgroundColor: C.surfaceSoft }]}>
-                        <Text style={[S.chipText, { color: C.textMuted }]}>Qty: {item.quantity} {it.unit || ''}</Text>
+                        <Text style={[S.chipText, { color: C.textMuted }]}>Qty: {item.quantity} {item.unit || ''}</Text>
                       </View>
                       {item.unit_price ? (
                         <View style={[S.chip, { backgroundColor: C.surfaceSoft }]}>
@@ -275,9 +273,9 @@ function PurchaseInvoiceDetailScreenInner() {
           {invoice.subtotal !== undefined ? (
             <AppCardRow label="Subtotal" value={formatMoney(invoice.subtotal)} />
           ) : null}
-          {inv.tax_amount !== undefined && inv.tax_amount > 0 ? (
-            <AppCardRow label={`Tax ${inv.tax_rate ? `(${inv.tax_rate}%)` : ''}`}
-              value={formatMoney(inv.tax_amount)} />
+          {invoice.tax_amount !== undefined && invoice.tax_amount > 0 ? (
+            <AppCardRow label={`Tax ${invoice.tax_rate ? `(${invoice.tax_rate}%)` : ''}`}
+              value={formatMoney(invoice.tax_amount)} />
           ) : null}
           {totalAmt != null ? (
             <View style={[S.totalRow, { borderTopColor: C.primary }]}>

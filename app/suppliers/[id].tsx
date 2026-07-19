@@ -60,15 +60,14 @@ function SupplierDetailScreenInner() {
     </SafeAreaView>
   );
 
-  const s = supplier as any;
-  const displayName = s.business_name || supplier.name || 'Unnamed Supplier';
-  const isActive    = s.is_active;
+  const displayName = supplier.business_name || supplier.name || 'Unnamed Supplier';
+  const isActive    = supplier.is_active;
 
   return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader
         title={displayName}
-        subtitle={s.supplier_number || undefined}
+        subtitle={supplier.supplier_number || undefined}
         showBack
         right={isActive !== undefined ? (
           <AppBadge variant={isActive ? 'success' : 'danger'}>
@@ -85,36 +84,36 @@ function SupplierDetailScreenInner() {
         {/* Business Information */}
         <AppCard style={S.card}>
           <Text style={S.sectionTitle}>Business Information</Text>
-          <AppCardRow label="Business Name"   value={s.business_name} />
-          <AppCardRow label="Name"            value={supplier.name !== s.business_name ? supplier.name : null} />
-          <AppCardRow label="Supplier No."    value={s.supplier_number} />
-          <AppCardRow label="Category"        value={s.category || s.supplier_type} />
-          <AppCardRow label="TRN"             value={s.trn} />
-          <AppCardRow label="Tax ID"          value={s.tax_id} />
-          <AppCardRow label="Currency"        value={s.currency} last />
+          <AppCardRow label="Business Name"   value={supplier.business_name} />
+          <AppCardRow label="Name"            value={supplier.name !== supplier.business_name ? supplier.name : null} />
+          <AppCardRow label="Supplier No."    value={supplier.supplier_number} />
+          <AppCardRow label="Category"        value={supplier.category || supplier.supplier_type} />
+          <AppCardRow label="TRN"             value={supplier.trn} />
+          <AppCardRow label="Tax ID"          value={supplier.tax_id} />
+          <AppCardRow label="Currency"        value={supplier.currency} last />
         </AppCard>
 
         {/* Contact Information */}
         <AppCard style={S.card}>
           <Text style={S.sectionTitle}>Contact Information</Text>
           <AppCardRow label="Contact Person"  value={supplier.contact_person} />
-          {(s.first_name || s.last_name) ? (
-            <AppCardRow label="Full Name" value={[s.first_name, s.last_name].filter(Boolean).join(' ')} />
+          {(supplier.first_name || supplier.last_name) ? (
+            <AppCardRow label="Full Name" value={[supplier.first_name, supplier.last_name].filter(Boolean).join(' ')} />
           ) : null}
           <AppCardRow label="Email"           value={supplier.email} />
           <AppCardRow label="Phone"           value={supplier.phone} />
-          <AppCardRow label="Telephone"       value={s.telephone} />
-          <AppCardRow label="Mobile"          value={s.mobile} last />
+          <AppCardRow label="Telephone"       value={supplier.telephone} />
+          <AppCardRow label="Mobile"          value={supplier.mobile} last />
         </AppCard>
 
         {/* Address */}
-        {(supplier.address || s.city || s.state || s.country) ? (
+        {(supplier.address || supplier.city || supplier.state || supplier.country) ? (
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Address</Text>
             <AppCardRow label="Address"   value={supplier.address} />
-            <AppCardRow label="City"      value={s.city} />
-            <AppCardRow label="State"     value={s.state} />
-            <AppCardRow label="Country"   value={s.country} last />
+            <AppCardRow label="City"      value={supplier.city} />
+            <AppCardRow label="State"     value={supplier.state} />
+            <AppCardRow label="Country"   value={supplier.country} last />
           </AppCard>
         ) : null}
 
@@ -124,7 +123,7 @@ function SupplierDetailScreenInner() {
             title="Edit Supplier"
             variant="primary"
             size="md"
-            onPress={() => router.push(`/suppliers/${id}/edit` as any)}
+            onPress={() => router.push(`/suppliers/${id}/edit`)}
             style={S.editBtn}
           />
         ) : null}

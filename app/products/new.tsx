@@ -102,7 +102,7 @@ function NewProductScreenInner() {
 
   const supplierOptions = suppliers.map((s) => ({
     value: Number(s.id),
-    label: (s as any).business_name || s.name || `Supplier ${s.id}`,
+    label: s.business_name || s.name || `Supplier ${s.id}`,
   }));
 
   return (

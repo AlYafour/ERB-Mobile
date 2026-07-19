@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
@@ -52,10 +53,10 @@ const QRCard = React.memo(function QRCard({
   onOpen: (id: number) => void;
 }) {
   const itemId       = Number(item.id);
-  const qrNum        = (item as any).request_number || `QR-${itemId}`;
+  const qrNum        = item.request_number || `QR-${itemId}`;
   const prNumber     = typeof item.purchase_request === 'object'
-    ? (item.purchase_request as any)?.code || (item.purchase_request as any)?.request_number
-    : (item as any).purchase_request_code || null;
+    ? item.purchase_request?.code || item.purchase_request?.request_number
+    : item.purchase_request_code || null;
   const supplierCount = item.suppliers && Array.isArray(item.suppliers) ? item.suppliers.length : null;
   const createdDate  = item.created_at
     ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -170,7 +171,7 @@ function QuotationRequestsScreenInner() {
   useRefetchOnFocus(loadRequests);
 
   const openRequest = useCallback(
-    (id: number) => router.push(`/quotation-requests/${id}` as any),
+    (id: number) => router.push(`/quotation-requests/${id}`),
     [router],
   );
 
@@ -226,7 +227,7 @@ function QuotationRequestsScreenInner() {
                 <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item, index) => String(item.id ?? index)}

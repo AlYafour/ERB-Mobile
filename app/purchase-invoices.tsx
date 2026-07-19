@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
@@ -66,15 +67,15 @@ const InvoiceCard = React.memo(function InvoiceCard({
   const itemId      = Number(item.id);
   const invoiceNum  = item.invoice_number || `INV-${itemId}`;
   const supplier    = typeof item.supplier === 'object'
-    ? (item.supplier as any)?.name
-    : (item as any).supplier_name || null;
+    ? item.supplier?.name
+    : item.supplier_name || null;
   const poNumber    = typeof item.purchase_order === 'object'
-    ? (item.purchase_order as any)?.order_number
-    : (item as any).purchase_order_number || null;
-  const invoiceDate = fmtDate((item as any).invoice_date);
-  const dueRaw: string | undefined = (item as any).due_date;
+    ? item.purchase_order?.order_number
+    : item.purchase_order_number || null;
+  const invoiceDate = fmtDate(item.invoice_date);
+  const dueRaw: string | undefined = item.due_date;
   const dueDate     = fmtDate(dueRaw);
-  const totalAmt    = (item as any).total ?? item.total_amount;
+  const totalAmt    = item.total ?? item.total_amount;
   const total       = totalAmt != null ? `AED ${Number(totalAmt).toFixed(2)}` : null;
 
   const isOverdue = item.status !== 'paid' && getDateAccent(dueRaw).overdue;
@@ -210,7 +211,7 @@ function PurchaseInvoicesScreenInner() {
   useRefetchOnFocus(loadInvoices);
 
   const openInvoice = useCallback(
-    (id: number) => router.push(`/purchase-invoices/${id}` as any),
+    (id: number) => router.push(`/purchase-invoices/${id}`),
     [router],
   );
 
@@ -266,7 +267,7 @@ function PurchaseInvoicesScreenInner() {
                 <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item, index) => String(item.id ?? index)}

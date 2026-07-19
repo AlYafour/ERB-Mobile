@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
@@ -40,12 +41,12 @@ const SupplierCard = React.memo(function SupplierCard({
   onOpen: (id: number) => void;
 }) {
   const itemId   = Number(item.id);
-  const name     = item.name || (item as any).business_name || 'Unnamed Supplier';
-  const supplierNum = (item as any).supplier_number || null;
-  const isActive = (item as any).is_active;
-  const category = (item as any).category || (item as any).supplier_type || null;
-  const city     = (item as any).city || null;
-  const country  = (item as any).country || null;
+  const name     = item.name || item.business_name || 'Unnamed Supplier';
+  const supplierNum = item.supplier_number || null;
+  const isActive = item.is_active;
+  const category = item.category || item.supplier_type || null;
+  const city     = item.city || null;
+  const country  = item.country || null;
   const location = [city, country].filter(Boolean).join(', ') || null;
 
   return (
@@ -194,7 +195,7 @@ function SuppliersScreenInner() {
   useRefetchOnFocus(loadSuppliers);
 
   const openSupplier = useCallback(
-    (id: number) => router.push(`/suppliers/${id}` as any),
+    (id: number) => router.push(`/suppliers/${id}`),
     [router],
   );
 
@@ -217,7 +218,7 @@ function SuppliersScreenInner() {
               title="New Supplier"
               variant="primary"
               size="sm"
-              onPress={() => router.push('/suppliers/new' as any)}
+              onPress={() => router.push('/suppliers/new')}
             />
           ) : undefined}
         />
@@ -258,7 +259,7 @@ function SuppliersScreenInner() {
                 <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item, index) => String(item.id ?? index)}

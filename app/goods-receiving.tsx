@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
@@ -53,7 +54,7 @@ const GRNCard = React.memo(function GRNCard({
   colors: typeof Colors.light | typeof Colors.dark;
   onOpen: (id: number) => void;
 }) {
-  const poObj = typeof item.purchase_order === 'object' ? item.purchase_order as any : null;
+  const poObj = typeof item.purchase_order === 'object' ? item.purchase_order : null;
   // Fall back to the numeric id when purchase_order is a populated object
   // without order_number — previously this stringified the whole object
   // into "PO-[object Object]".
@@ -206,7 +207,7 @@ function GoodsReceivingScreenInner() {
   useRefetchOnFocus(loadReceipts);
 
   const openReceipt = useCallback(
-    (id: number) => router.push(`/goods-receiving/${id}` as any),
+    (id: number) => router.push(`/goods-receiving/${id}`),
     [router],
   );
 
@@ -271,7 +272,7 @@ function GoodsReceivingScreenInner() {
                 <Text style={[styles.reloadText, { color: colors.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item, index) => String(item.id ?? index)}

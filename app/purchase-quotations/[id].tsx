@@ -115,8 +115,7 @@ function PurchaseQuotationDetailScreenInner() {
     </SafeAreaView>
   );
 
-  const q = quotation as any;
-  const supplierName = typeof quotation.supplier === 'object' ? (quotation.supplier as any)?.name : null;
+  const supplierName = typeof quotation.supplier === 'object' ? quotation.supplier.name : null;
   const pqNum = quotation.quotation_number || `PQ-${id}`;
   const statusLabel = quotation.status
     ? quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)
@@ -164,9 +163,8 @@ function PurchaseQuotationDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={[S.sectionTitle, { color: C.textPrimary }]}>Items ({quotation.items.length})</Text>
             {quotation.items.map((item, i) => {
-              const it = item as any;
               const name = typeof item.product === 'object'
-                ? (item.product as any)?.name : it.product_name || 'N/A';
+                ? item.product.name : item.product_name || 'N/A';
               const isLast = i === quotation.items!.length - 1;
               return (
                 <View key={item.id || i} style={[S.itemRow,
@@ -176,7 +174,7 @@ function PurchaseQuotationDetailScreenInner() {
                     <View style={S.metaChips}>
                       <View style={[S.chip, { backgroundColor: C.surfaceSoft }]}>
                         <Text style={[S.chipText, { color: C.textMuted }]}>
-                          Qty: {item.quantity} {it.unit || ''}
+                          Qty: {item.quantity} {item.unit || ''}
                         </Text>
                       </View>
                       {item.unit_price ? (
@@ -206,8 +204,8 @@ function PurchaseQuotationDetailScreenInner() {
             {quotation.subtotal !== undefined ? (
               <AppCardRow label="Subtotal" value={formatMoney(quotation.subtotal)} />
             ) : null}
-            {q.tax_amount !== undefined && q.tax_amount > 0 ? (
-              <AppCardRow label="Tax" value={formatMoney(q.tax_amount)} />
+            {quotation.tax_amount !== undefined && quotation.tax_amount > 0 ? (
+              <AppCardRow label="Tax" value={formatMoney(quotation.tax_amount)} />
             ) : null}
             <View style={[S.totalRow, { borderTopColor: C.primary }]}>
               <Text style={[S.totalLabel, { color: C.textPrimary }]}>Total</Text>
@@ -222,7 +220,7 @@ function PurchaseQuotationDetailScreenInner() {
         {quotation.status === 'awarded' ? (
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => router.push(`/purchase-orders/new?purchase_quotation_id=${id}` as any)}
+            onPress={() => router.push(`/purchase-orders/new?purchase_quotation_id=${id}`)}
           >
             <AppCard style={[S.card, { backgroundColor: C.successBg }]}>
               <View style={S.nextRow}>

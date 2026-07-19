@@ -57,12 +57,12 @@ const PRCard = React.memo(function PRCard({
   onOpen: (id: number) => void;
 }) {
   const itemId      = Number(item.id);
-  const projectName = typeof item.project === 'object' ? item.project?.name : (item as any).project_code || '-';
-  const projectCode = typeof item.project === 'object' ? (item.project as any)?.code : (item as any).project_code || '';
-  const reqDate = (item as any).request_date
-    ? new Date((item as any).request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const projectName = typeof item.project === 'object' ? item.project?.name : item.project_code || '-';
+  const projectCode = typeof item.project === 'object' ? item.project?.code : item.project_code || '';
+  const reqDate = item.request_date
+    ? new Date(item.request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
-  const reqByRaw: string | undefined = (item as any).required_by;
+  const reqByRaw: string | undefined = item.required_by;
   const reqByDate  = reqByRaw ? new Date(reqByRaw) : null;
   const reqBy      = reqByDate ? reqByDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
   const { overdue: isOverdue, urgent: isUrgent } = getDateAccent(reqByRaw);
@@ -79,11 +79,11 @@ const PRCard = React.memo(function PRCard({
         <DocumentIconTile type="purchase_request" />
         <View style={styles.itemTitleCol}>
           <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>
-            {(item as any).code || `PR-${String(item.id).slice(0, 8)}`}
+            {item.code || `PR-${String(item.id).slice(0, 8)}`}
           </Text>
-          {(item as any).title ? (
+          {item.title ? (
             <Text style={[styles.itemTitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              {(item as any).title}
+              {item.title}
             </Text>
           ) : null}
         </View>
@@ -100,11 +100,11 @@ const PRCard = React.memo(function PRCard({
           </Text>
         </View>
       ) : null}
-      {(item as any).created_by_name ? (
+      {item.created_by_name ? (
         <View style={styles.metaRow}>
           <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Requester</Text>
           <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
-            {(item as any).created_by_name}
+            {item.created_by_name}
           </Text>
         </View>
       ) : null}
@@ -225,7 +225,7 @@ function PurchaseRequestsScreenInner() {
     { name: 'title', label: 'Title', type: 'text', group: 'Request Info' },
     {
       name: 'project', label: 'Project', type: 'select', group: 'Request Info',
-      options: projectsData.map((p) => ({ value: Number(p.id), label: `${p.name} (${(p as any).code || ''})` })),
+      options: projectsData.map((p) => ({ value: Number(p.id), label: `${p.name} (${p.code || ''})` })),
     },
     { name: 'project_code', label: 'Project Code', type: 'text', group: 'Request Info' },
     {
@@ -249,7 +249,7 @@ function PurchaseRequestsScreenInner() {
   };
 
   const openRequest = useCallback(
-    (id: number) => router.push(`/purchase-requests/${id}` as any),
+    (id: number) => router.push(`/purchase-requests/${id}`),
     [router],
   );
 
@@ -269,7 +269,7 @@ function PurchaseRequestsScreenInner() {
           showBack
           right={canCreate ? (
             <AppButton title="New PR" variant="primary" size="sm"
-              onPress={() => router.push('/purchase-requests/new' as any)} />
+              onPress={() => router.push('/purchase-requests/new')} />
           ) : undefined}
         />
 

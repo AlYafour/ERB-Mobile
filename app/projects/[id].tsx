@@ -86,11 +86,10 @@ function ProjectDetailScreenInner() {
     </SafeAreaView>
   );
 
-  const r = project as any;
-  const status = r.project_status || project.status || null;
+  const status = project.project_status || project.status || null;
   const statusLabel = statusLabels[status || ''] || status || 'Unknown';
   const officeLocation: { id: number; name: string; latitude?: number; longitude?: number; radius_m?: number } | null =
-    r.office_location_detail || null;
+    project.office_location_detail || null;
 
   return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
@@ -115,9 +114,9 @@ function ProjectDetailScreenInner() {
           <AppCardRow label="Code"        value={project.code} />
           <AppCardRow label="Description" value={project.description} />
           <AppCardRow label="Location"    value={project.location} />
-          <AppCardRow label="Sector"      value={r.sector} />
-          <AppCardRow label="Plot"        value={r.plot} />
-          <AppCardRow label="Consultant"  value={r.consultant} last />
+          <AppCardRow label="Sector"      value={project.sector} />
+          <AppCardRow label="Plot"        value={project.plot} />
+          <AppCardRow label="Consultant"  value={project.consultant} last />
         </AppCard>
 
         {/* Contact Information */}
@@ -156,7 +155,7 @@ function ProjectDetailScreenInner() {
             title="Edit Project"
             variant="primary"
             size="md"
-            onPress={() => router.push(`/projects/${id}/edit` as any)}
+            onPress={() => router.push(`/projects/${id}/edit`)}
             style={S.editBtn}
           />
         ) : null}

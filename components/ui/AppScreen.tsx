@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { IconSymbol } from './icon-symbol';
+import { IconSymbol, IconSymbolName } from './icon-symbol';
 
 interface AppScreenProps {
   children: React.ReactNode;
@@ -74,7 +74,7 @@ interface AppStatCardProps {
   label: string;
   value: string | number;
   sub?: string;
-  iconName?: string;
+  iconName?: IconSymbolName;
   iconColor?: string;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -95,7 +95,7 @@ export function AppStatCard({
     >
       {iconName ? (
         <View style={[s.statIcon, { backgroundColor: iconColor ? iconColor + '18' : c.surfaceMuted }]}>
-          <IconSymbol name={iconName as any} size={16} color={iconColor ?? c.textMuted} />
+          <IconSymbol name={iconName} size={16} color={iconColor ?? c.textMuted} />
         </View>
       ) : null}
       <Text style={[s.statValue, { color: c.textPrimary }]} numberOfLines={1}>{value}</Text>

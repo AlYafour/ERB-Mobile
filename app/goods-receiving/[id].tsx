@@ -128,7 +128,7 @@ function GoodsReceivingDetailScreenInner() {
     </SafeAreaView>
   );
 
-  const poObj  = typeof grn.purchase_order === 'object' ? grn.purchase_order as any : null;
+  const poObj  = typeof grn.purchase_order === 'object' ? grn.purchase_order : null;
   const poId   = poObj?.id ?? grn.purchase_order_id;
   const poNum  = poObj?.order_number ?? (grn.purchase_order ? `PO-${grn.purchase_order}` : null);
   const grnNum = grn.grn_number || `GRN-${id}`;
@@ -159,7 +159,7 @@ function GoodsReceivingDetailScreenInner() {
           <Text style={S.sectionTitle}>GRN Information</Text>
           {poNum ? (
             <TouchableOpacity
-              onPress={poId ? () => router.push(`/purchase-orders/${poId}` as any) : undefined}
+              onPress={poId ? () => router.push(`/purchase-orders/${poId}`) : undefined}
               style={[S.linkRow, { borderBottomColor: C.divider }]}
             >
               <Text style={[S.linkLabel, { color: C.textMuted }]}>Purchase Order</Text>
@@ -199,7 +199,7 @@ function GoodsReceivingDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Received Items ({grn.items.length})</Text>
             {grn.items.map((item, i) => {
-              const name = typeof item.product === 'object' ? (item.product as any)?.name : (item as any).product_name || 'N/A';
+              const name = typeof item.product === 'object' ? item.product?.name : (item as any).product_name || 'N/A';
               const isLast = i === grn.items.length - 1;
               return (
                 <View
@@ -251,7 +251,7 @@ function GoodsReceivingDetailScreenInner() {
         {(grn.status === 'completed' || grn.status === 'partial') ? (
           <AppCard
             style={[S.card, { backgroundColor: C.primarySoft }]}
-            onPress={() => router.push(`/purchase-invoices/new?goods_receiving_id=${id}&purchase_order_id=${poId}` as any)}
+            onPress={() => router.push(`/purchase-invoices/new?goods_receiving_id=${id}&purchase_order_id=${poId}`)}
           >
             <View style={S.nextRow}>
               <View style={[S.nextIcon, { backgroundColor: C.primary }]}>

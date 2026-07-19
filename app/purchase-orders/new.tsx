@@ -67,7 +67,7 @@ function NewPurchaseOrderScreenInner() {
         value: s.id, label: s.name || s.business_name || `Supplier ${s.id}`,
       })));
       if (sourceData) {
-        const sd = sourceData as any;
+        const sd = sourceData;
         if (pqId) {
           setSourceLabel(sd.quotation_number || `PQ-${pqId}`);
           if (typeof sd.supplier === 'object' && sd.supplier?.id) setSelectedSupplier(sd.supplier.id);

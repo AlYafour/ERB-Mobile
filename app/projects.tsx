@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
@@ -57,15 +58,14 @@ const ProjectCard = React.memo(function ProjectCard({
   onOpen: (id: number) => void;
 }) {
   const itemId = Number(item.id);
-  const r      = item as any;
 
-  const code           = r.code || null;
-  const status         = r.project_status || r.status || null;
-  const location       = r.location || null;
-  const contactPerson  = r.contact_person || null;
-  const mobileNumber   = r.mobile_number || null;
-  const sector         = r.sector || null;
-  const officeLocation = r.office_location_detail?.name || null;
+  const code           = item.code || null;
+  const status         = item.project_status || item.status || null;
+  const location       = item.location || null;
+  const contactPerson  = item.contact_person || null;
+  const mobileNumber   = item.mobile_number || null;
+  const sector         = item.sector || null;
+  const officeLocation = item.office_location_detail?.name || null;
 
   const startDate = item.start_date
     ? new Date(item.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -241,7 +241,7 @@ function ProjectsScreenInner() {
   useRefetchOnFocus(loadProjects);
 
   const openProject = useCallback(
-    (id: number) => router.push(`/projects/${id}` as any),
+    (id: number) => router.push(`/projects/${id}`),
     [router],
   );
 
@@ -264,7 +264,7 @@ function ProjectsScreenInner() {
               title="New Project"
               variant="primary"
               size="sm"
-              onPress={() => router.push('/projects/new' as any)}
+              onPress={() => router.push('/projects/new')}
             />
           ) : undefined}
         />
@@ -305,7 +305,7 @@ function ProjectsScreenInner() {
                 <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item, index) => String(item.id ?? index)}

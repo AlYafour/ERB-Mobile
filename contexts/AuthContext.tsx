@@ -24,6 +24,15 @@ export interface LoginResult {
   expiresIn?: number;
 }
 
+/** Payload for register() — matches the fields collected by app/register.tsx's sign-up form. */
+export interface RegisterData {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  username: string;
+}
+
 interface AuthContextType {
   user: User | null;
   branding: Branding | null;
@@ -31,7 +40,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<LoginResult>;
   verifyTwoFactor: (tempToken: string, code: string) => Promise<{ success: boolean; error?: string }>;
-  register: (userData: any) => Promise<{ success: boolean; error?: string }>;
+  register: (userData: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -137,19 +146,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * the profile could leave stale tokens behind after a "failed" 2FA attempt.
    */
   const establishSession = async (
-    response: ApiResponse<any>,
+    response: ApiResponse<{ user?: User; [key: string]: any }>,
     fallbackError: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       if (!(response.data && response.status >= 200 && response.status < 300)) {
         return { success: false, error: response.error || fallbackError };
       }
-      const data = response.data as any;
+      const data = response.data;
 
       // The backend response includes the full user object — use it directly
       // so `user` is set BEFORE we report success. This removes the
       // login→tabs→login bounce (AuthGate used to see user===null mid-redirect).
-      let userData: any = data.user ?? null;
+      let userData: User | null = data.user ?? null;
       if (!userData) {
         userData = await apiClient.getCurrentUser();
       }
@@ -177,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiClient.login(username, password);
 
       if (response.data && response.status >= 200 && response.status < 300) {
-        const data = response.data as any;
+        const data = response.data;
 
         // 2FA challenge — no tokens yet; the caller navigates to the code screen.
         if (data.requires_2fa) {
@@ -210,9 +219,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (userData: any) => {
+  const register = async (userData: RegisterData) => {
     try {
-      const response = await apiClient.register(userData);
+      const response: ApiResponse<User> = await apiClient.register(userData);
       if (response.data) {
         // Account is created but inactive (pending admin approval) — do not auto-login
         return { success: true };

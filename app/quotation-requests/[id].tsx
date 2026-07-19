@@ -63,12 +63,12 @@ function QuotationRequestDetailScreenInner() {
   );
 
   const prNumber = typeof request.purchase_request === 'object'
-    ? (request.purchase_request as any)?.request_number || (request.purchase_request as any)?.code
+    ? request.purchase_request.request_number || request.purchase_request.code
     : null;
   const prId = typeof request.purchase_request === 'object'
-    ? (request.purchase_request as any)?.id
+    ? request.purchase_request.id
     : null;
-  const qrNum = (request as any).request_number || `QR-${id}`;
+  const qrNum = request.request_number || `QR-${id}`;
   const createdDate = request.created_at
     ? new Date(request.created_at).toLocaleDateString('en-AE')
     : null;
@@ -93,7 +93,7 @@ function QuotationRequestDetailScreenInner() {
           <Text style={[S.sectionTitle, { color: C.textPrimary }]}>Request Information</Text>
           {prNumber ? (
             <TouchableOpacity
-              onPress={prId ? () => router.push(`/purchase-requests/${prId}` as any) : undefined}
+              onPress={prId ? () => router.push(`/purchase-requests/${prId}`) : undefined}
               style={[S.linkRow, { borderBottomColor: C.divider }]}
             >
               <Text style={[S.linkLabel, { color: C.textMuted }]}>Purchase Request</Text>
@@ -139,7 +139,7 @@ function QuotationRequestDetailScreenInner() {
         {/* View Quotations navigation card */}
         <TouchableOpacity
           activeOpacity={0.7}
-          onPress={() => router.push(`/purchase-quotations?quotation_request=${id}` as any)}
+          onPress={() => router.push(`/purchase-quotations?quotation_request=${id}`)}
         >
           <AppCard style={[S.card, { backgroundColor: C.primarySoft }]}>
             <View style={S.nextRow}>

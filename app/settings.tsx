@@ -340,7 +340,7 @@ export default function SettingsScreen() {
             label="My Profile"
             value="View and manage your account"
             c={c}
-            onPress={() => router.push('/(tabs)/profile' as any)}
+            onPress={() => router.push('/(tabs)/profile')}
           />
           <InfoRow
             icon="bell.badge.fill"
@@ -348,7 +348,7 @@ export default function SettingsScreen() {
             label="Notifications"
             value="View all alerts and messages"
             c={c}
-            onPress={() => router.push('/(tabs)/notifications' as any)}
+            onPress={() => router.push('/(tabs)/notifications')}
           />
         </View>
 

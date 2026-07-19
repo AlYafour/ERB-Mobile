@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
@@ -61,12 +62,12 @@ const PQCard = React.memo(function PQCard({
   onOpen: (id: number) => void;
 }) {
   const itemId       = Number(item.id);
-  const pqNum        = (item as any).quotation_number || `PQ-${itemId}`;
+  const pqNum        = item.quotation_number || `PQ-${itemId}`;
   const supplierName = typeof item.supplier === 'object'
-    ? item.supplier?.name : (item as any).supplier_name || null;
-  const quotDate     = fmtDate((item as any).quotation_date);
-  const validUntil   = fmtDate((item as any).valid_until);
-  const total        = (item as any).total ?? (item as any).total_amount;
+    ? item.supplier?.name : item.supplier_name || null;
+  const quotDate     = fmtDate(item.quotation_date);
+  const validUntil   = fmtDate(item.valid_until);
+  const total        = item.total ?? item.total_amount;
 
   return (
     <AppCard style={styles.itemCard} onPress={() => onOpen(itemId)}>
@@ -188,7 +189,7 @@ function PurchaseQuotationsScreenInner() {
   useRefetchOnFocus(loadQuotations);
 
   const openQuotation = useCallback(
-    (id: number) => router.push(`/purchase-quotations/${id}` as any),
+    (id: number) => router.push(`/purchase-quotations/${id}`),
     [router],
   );
 
@@ -244,7 +245,7 @@ function PurchaseQuotationsScreenInner() {
                 <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item, index) => String(item.id ?? index)}

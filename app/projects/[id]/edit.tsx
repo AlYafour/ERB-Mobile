@@ -50,7 +50,7 @@ function EditProjectScreenInner() {
   const { loading, saving, errors, form, set, handleSubmit } = useEditForm<ProjectEditForm>({
     id,
     load: async () => {
-      const p = await projectsApi.getById(id) as any;
+      const p = await projectsApi.getById(id);
       return {
         code:           p.code || '',
         name:           p.name || '',

@@ -2,13 +2,13 @@ import React from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { IconSymbol } from './icon-symbol';
+import { IconSymbol, IconSymbolName } from './icon-symbol';
 
 export type EmptyVariant = 'empty' | 'error' | 'loading' | 'offline';
 
 export interface AppEmptyStateProps {
   variant?: EmptyVariant;
-  icon?: string;
+  icon?: IconSymbolName;
   title: string;
   message?: string;
   actionLabel?: string;
@@ -17,7 +17,7 @@ export interface AppEmptyStateProps {
   compact?: boolean;
 }
 
-const DEFAULT_ICONS: Record<EmptyVariant, string> = {
+const DEFAULT_ICONS: Record<EmptyVariant, IconSymbolName> = {
   empty: 'tray',
   error: 'exclamationmark.triangle.fill',
   loading: 'arrow.clockwise',
@@ -64,7 +64,7 @@ export function AppEmptyState({
   return (
     <View style={[s.root, { paddingVertical: py }]}>
       <View style={[s.iconWrap, { backgroundColor: iconBg }]}>
-        <IconSymbol name={iconName as any} size={28} color={iconColor} />
+        <IconSymbol name={iconName} size={28} color={iconColor} />
       </View>
 
       <Text style={[s.title, { color: c.textPrimary }]}>{title}</Text>

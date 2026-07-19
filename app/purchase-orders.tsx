@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
@@ -60,16 +61,16 @@ const POCard = React.memo(function POCard({
   const itemId    = Number(item.id);
   const orderNum  = item.order_number || `LPO-${itemId}`;
   const supplier  = typeof item.supplier === 'object'
-    ? (item.supplier as any)?.name
-    : (item as any).supplier_name || null;
-  const project   = typeof (item as any).project === 'object'
-    ? (item as any).project?.name
-    : (item as any).project_name || null;
-  const prCode    = (item as any).purchase_request_number || (item as any).purchase_request_code || null;
-  const orderDate = (item as any).order_date
-    ? new Date((item as any).order_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    ? item.supplier?.name
+    : item.supplier_name || null;
+  const project   = typeof item.project === 'object'
+    ? item.project?.name
+    : item.project_name || null;
+  const prCode    = item.purchase_request_number || item.purchase_request_code || null;
+  const orderDate = item.order_date
+    ? new Date(item.order_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
-  const delivRaw: string | undefined = (item as any).delivery_date;
+  const delivRaw: string | undefined = item.delivery_date;
   const delivDate  = delivRaw ? new Date(delivRaw) : null;
   const delivLabel = delivDate
     ? delivDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -79,7 +80,7 @@ const POCard = React.memo(function POCard({
   const isOverdue  = isActive && dateAccent.overdue;
   const isUrgent   = isActive && dateAccent.urgent;
   const delivColor = isOverdue ? colors.danger : isUrgent ? colors.warning : colors.textPrimary;
-  const total      = (item as any).total_amount ?? (item as any).total ?? null;
+  const total      = item.total_amount ?? item.total ?? null;
   const itemCount  = item.items?.length ?? null;
   const accentColor = isOverdue ? colors.danger : isUrgent ? colors.warning : undefined;
 
@@ -233,7 +234,7 @@ function PurchaseOrdersScreenInner() {
   useRefetchOnFocus(loadOrders);
 
   const openOrder = useCallback(
-    (id: number) => router.push(`/purchase-orders/${id}` as any),
+    (id: number) => router.push(`/purchase-orders/${id}`),
     [router],
   );
 
@@ -253,7 +254,7 @@ function PurchaseOrdersScreenInner() {
           showBack
           right={canCreate ? (
             <AppButton title="New LPO" variant="primary" size="sm"
-              onPress={() => router.push('/purchase-orders/new' as any)} />
+              onPress={() => router.push('/purchase-orders/new')} />
           ) : undefined}
         />
 
@@ -292,7 +293,7 @@ function PurchaseOrdersScreenInner() {
                 <Text style={[styles.reloadText, { color: colors.textMuted }]}>Updating…</Text>
               </View>
             ) : null}
-            <FlatList
+            <FlashList
               data={data?.results ?? []}
               renderItem={renderItem}
               keyExtractor={(item, index) => String(item.id ?? index)}

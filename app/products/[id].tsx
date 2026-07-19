@@ -66,8 +66,7 @@ function ProductDetailScreenInner() {
     </SafeAreaView>
   );
 
-  const p = product as any;
-  const isActive = p.is_active;
+  const isActive = product.is_active;
   const status   = product.status;
 
   const getStatusVariant = (): BadgeVariant => {
@@ -78,7 +77,7 @@ function ProductDetailScreenInner() {
   };
 
   const unitPrice = fmtPrice(product.unit_price);
-  const buyPrice  = fmtPrice(p.buy_price);
+  const buyPrice  = fmtPrice(product.buy_price);
   const discount  = product.discount != null && product.discount > 0
     ? (product.discount_type === 'percentage' ? `${product.discount}%` : fmtPrice(product.discount))
     : null;
@@ -107,8 +106,8 @@ function ProductDetailScreenInner() {
           <AppCardRow label="Name"        value={product.name} />
           <AppCardRow label="Code"        value={product.code} />
           <AppCardRow label="SKU"         value={product.sku} />
-          <AppCardRow label="Barcode"     value={p.barcode} />
-          <AppCardRow label="Brand"       value={p.brand} />
+          <AppCardRow label="Barcode"     value={product.barcode} />
+          <AppCardRow label="Brand"       value={product.brand} />
           <AppCardRow label="Category"    value={product.category} />
           <AppCardRow label="Unit"        value={product.unit} />
           <AppCardRow label="Description" value={product.description} last />
@@ -137,7 +136,7 @@ function ProductDetailScreenInner() {
             title="Edit Product"
             variant="primary"
             size="md"
-            onPress={() => router.push(`/products/${id}/edit` as any)}
+            onPress={() => router.push(`/products/${id}/edit`)}
             style={S.editBtn}
           />
         ) : null}

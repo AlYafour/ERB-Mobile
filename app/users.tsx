@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -70,7 +71,7 @@ function UsersScreenInner() {
 
   const renderItem = ({ item }: { item: User }) => (
     <TouchableOpacity
-      onPress={() => router.push(`/users/${item.id}` as any)}
+      onPress={() => router.push(`/users/${item.id}`)}
       accessibilityRole="button"
       accessibilityLabel={`Open user ${item.first_name || item.email}`}
     >
@@ -132,7 +133,7 @@ function UsersScreenInner() {
           title={search ? 'No users match your search' : 'No users found'}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={users}
           renderItem={renderItem}
           keyExtractor={(item) => String(item.id)}

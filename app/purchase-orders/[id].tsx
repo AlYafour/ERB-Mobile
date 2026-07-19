@@ -71,7 +71,7 @@ function PurchaseOrderDetailScreenInner() {
   const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const handleApprove = async () => {
-    const orderNum = (order as any)?.order_number || `LPO-${id}`;
+    const orderNum = order?.order_number || `LPO-${id}`;
     if (!await confirm(`Approve ${orderNum}?\n\nThis will mark the purchase order as approved.`)) return;
     try {
       setApproving(true);
@@ -155,9 +155,8 @@ function PurchaseOrderDetailScreenInner() {
     </SafeAreaView>
   );
 
-  const o = order as any;
-  const supplierName = typeof order.supplier === 'object' ? (order.supplier as any)?.name : o.supplier_name || null;
-  const projectName  = typeof o.project === 'object' ? o.project?.name : o.project_name || null;
+  const supplierName = typeof order.supplier === 'object' ? order.supplier.name : order.supplier_name || null;
+  const projectName  = typeof order.project === 'object' ? order.project?.name : order.project_name || null;
   const orderNum     = order.order_number || `LPO-${id}`;
 
   const orderDate    = order.order_date ? new Date(order.order_date).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }) : null;
@@ -201,14 +200,14 @@ function PurchaseOrderDetailScreenInner() {
           />
           <AppCardRow label="Payment Terms" value={order.payment_terms} />
           <AppCardRow label="Delivery Terms" value={order.delivery_terms} />
-          {o.purchase_request_number ? (
+          {order.purchase_request_number ? (
             <TouchableOpacity
-              onPress={() => router.push(`/purchase-requests/${o.purchase_request_id}` as any)}
+              onPress={() => router.push(`/purchase-requests/${order.purchase_request_id}`)}
               style={S.linkRow}
             >
               <Text style={[S.linkRowLabel, { color: C.textMuted }]}>Purchase Request</Text>
               <Text style={[S.linkRowValue, { color: C.primary }]}>
-                {o.purchase_request_number} →
+                {order.purchase_request_number} →
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -217,10 +216,10 @@ function PurchaseOrderDetailScreenInner() {
               <Text style={[S.notesText, { color: C.textSecondary }]}>{order.notes}</Text>
             </View>
           ) : null}
-          {o.rejection_reason ? (
+          {order.rejection_reason ? (
             <View style={[S.rejectionBox, { backgroundColor: C.dangerBg, borderColor: C.danger }]}>
               <Text style={[S.rejectionLabel, { color: C.danger }]}>Rejection Reason</Text>
-              <Text style={[S.rejectionText, { color: C.danger }]}>{o.rejection_reason}</Text>
+              <Text style={[S.rejectionText, { color: C.danger }]}>{order.rejection_reason}</Text>
             </View>
           ) : null}
         </AppCard>
@@ -230,8 +229,7 @@ function PurchaseOrderDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Items ({order.items.length})</Text>
             {order.items.map((item, i) => {
-              const it = item as any;
-              const name = typeof item.product === 'object' ? (item.product as any)?.name : it.product_name || 'N/A';
+              const name = typeof item.product === 'object' ? item.product.name : item.product_name || 'N/A';
               const isLast = i === order.items!.length - 1;
               return (
                 <View
@@ -290,7 +288,7 @@ function PurchaseOrderDetailScreenInner() {
         {order.status === 'approved' && hasPermission('goods_receiving', 'create') && (
           <AppCard
             style={[S.card, { backgroundColor: C.successBg }]}
-            onPress={() => router.push(`/goods-receiving/new?purchase_order_id=${id}` as any)}
+            onPress={() => router.push(`/goods-receiving/new?purchase_order_id=${id}`)}
           >
             <View style={S.nextStepRow}>
               <View style={[S.nextStepIcon, { backgroundColor: C.success }]}>
