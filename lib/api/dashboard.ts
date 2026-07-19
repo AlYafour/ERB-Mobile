@@ -4,9 +4,7 @@ import { goodsReceivingApi } from './goods-receiving';
 import { purchaseInvoicesApi } from './purchase-invoices';
 import { suppliersApi } from './suppliers';
 import { productsApi } from './products';
-import { projectsApi } from './projects';
 import { quotationRequestsApi } from './quotation-requests';
-import { usersApi } from './users';
 
 // Suppress non-actionable errors from dashboard console output.
 // ApiError (thrown by unwrap() in lib/api/*.ts) carries the response status,
@@ -104,24 +102,6 @@ export interface DashboardStats {
   };
 }
 
-export interface ProjectAnalytics {
-  id: number;
-  name: string;
-  code: string;
-  totalSpending: number;
-  poCount: number;
-  progress: number;
-}
-
-export interface UserActivity {
-  id: number;
-  username: string;
-  createdPR: number;
-  approvedRequests: number;
-  createdPO: number;
-  createdInvoices: number;
-}
-
 export interface ProcurementCycleMetrics {
   avgPRToPO: number;
   avgPOToGRN: number;
@@ -131,33 +111,6 @@ export interface ProcurementCycleMetrics {
     avgDays: number;
     count: number;
   }>;
-}
-
-export interface ChartData {
-  monthlyProcurement: Array<{
-    month: string;
-    volume: number;
-    count: number;
-  }>;
-  monthlyInvoices: Array<{
-    month: string;
-    count: number;
-    amount: number;
-  }>;
-  projectSpending: Array<{
-    project: string;
-    spending: number;
-  }>;
-  supplierComparison: Array<{
-    supplier: string;
-    poCount: number;
-    totalAmount: number;
-  }>;
-  statusDistribution: {
-    purchaseRequests: { pending: number; approved: number; rejected: number };
-    purchaseOrders: { pending: number; approved: number; rejected: number; completed: number };
-    invoices: { pending: number; approved: number; paid: number };
-  };
 }
 
 export interface RecentActivity {
@@ -247,49 +200,6 @@ export const dashboardApi = {
     };
   },
 
-  getProjectAnalytics: async (): Promise<ProjectAnalytics[]> => {
-    try {
-      const projects = await projectsApi.getAll({ page: 1, page_size: 100 });
-
-      // Hoisted above the per-project loop (was re-fetched for every project before).
-      const allPOs = await fetchAllPages((page, page_size) => purchaseOrdersApi.getAll({ page, page_size }));
-
-      const analytics: ProjectAnalytics[] = [];
-
-      for (const project of projects.results || []) {
-        try {
-          const projectPRs = await fetchAllPages((page, page_size) =>
-            purchaseRequestsApi.getAll({ page, page_size, project: Number(project.id) })
-          );
-
-          const projectPRIds = projectPRs.map(pr => Number(pr.id));
-          const projectPOs = allPOs.filter((po: any) => projectPRIds.includes(Number(po.purchase_request)));
-
-          let totalSpending = 0;
-          for (const po of projectPOs) {
-            totalSpending += (po as any).total || 0;
-          }
-
-          analytics.push({
-            id: Number(project.id),
-            name: project.name,
-            code: (project as any).code || '',
-            totalSpending,
-            poCount: projectPOs.length,
-            progress: 0,
-          });
-        } catch (error: any) {
-          if (__DEV__ && !isSilentError(error)) console.warn(`Error fetching analytics for project ${project.id}:`, error);
-        }
-      }
-
-      return analytics.sort((a, b) => b.totalSpending - a.totalSpending).slice(0, 10);
-    } catch (error: any) {
-      if (__DEV__ && !isSilentError(error)) console.warn('Error fetching project analytics:', error);
-      return [];
-    }
-  },
-
   getRecentActivity: async (): Promise<RecentActivity[]> => {
     try {
       const activities: RecentActivity[] = [];
@@ -351,63 +261,6 @@ export const dashboardApi = {
     } catch (error: any) {
       const errorMessage = error?.message || String(error);
       if (__DEV__ && !isSilentError(error)) console.warn('Error fetching recent activity:', error);
-      return [];
-    }
-  },
-
-  getUserActivity: async (): Promise<UserActivity[]> => {
-    try {
-      const users = await usersApi.getAll({ page: 1, page_size: 100 });
-      const activities: UserActivity[] = [];
-
-      for (const user of users.results || []) {
-        try {
-          const userPRs = await fetchAllPages((page, page_size) =>
-            purchaseRequestsApi.getAll({ page, page_size, created_by: Number(user.id) })
-          );
-
-          const approvedPRs = await fetchAllPages((page, page_size) =>
-            purchaseRequestsApi.getAll({ page, page_size, approved_by: Number(user.id), status: 'approved' })
-          );
-
-          const userPOs = await fetchAllPages((page, page_size) =>
-            purchaseOrdersApi.getAll({ page, page_size, created_by: Number(user.id) })
-          );
-
-          const userInvoices = await fetchAllPages((page, page_size) =>
-            purchaseInvoicesApi.getAll({ page, page_size, created_by: Number(user.id) })
-          );
-
-          const totalActivity =
-            userPRs.length +
-            approvedPRs.length +
-            userPOs.length +
-            userInvoices.length;
-
-          if (totalActivity > 0) {
-            activities.push({
-              id: Number(user.id),
-              username: user.username || '',
-              createdPR: userPRs.length,
-              approvedRequests: approvedPRs.length,
-              createdPO: userPOs.length,
-              createdInvoices: userInvoices.length,
-            });
-          }
-        } catch (error: any) {
-          if (__DEV__ && !isSilentError(error)) console.warn(`Error fetching activity for user ${user.id}:`, error);
-        }
-      }
-
-      return activities
-        .sort((a, b) => {
-          const totalA = a.createdPR + a.approvedRequests + a.createdPO + a.createdInvoices;
-          const totalB = b.createdPR + b.approvedRequests + b.createdPO + b.createdInvoices;
-          return totalB - totalA;
-        })
-        .slice(0, 10);
-    } catch (error: any) {
-      if (__DEV__ && !isSilentError(error)) console.warn('Error fetching user activity:', error);
       return [];
     }
   },
@@ -500,174 +353,6 @@ export const dashboardApi = {
     } catch (error: any) {
       if (__DEV__ && !isSilentError(error)) console.warn('Error fetching procurement cycle metrics:', error);
       return { avgPRToPO: 0, avgPOToGRN: 0, avgGRNToInvoice: 0, bottlenecks: [] };
-    }
-  },
-
-  getChartData: async (): Promise<ChartData> => {
-    try {
-      const [allPRs, allPOs, allInvoices, allProjects, allSuppliers] = await Promise.all([
-        safeGet(() => fetchAllPages((page, page_size) => purchaseRequestsApi.getAll({ page, page_size })), [] as any[]),
-        safeGet(() => fetchAllPages((page, page_size) => purchaseOrdersApi.getAll({ page, page_size })), [] as any[]),
-        safeGet(() => fetchAllPages((page, page_size) => purchaseInvoicesApi.getAll({ page, page_size })), [] as any[]),
-        safeGet(() => projectsApi.getAll({ page: 1, page_size: 100 }), { results: [], count: 0 } as any),
-        safeGet(() => fetchAllPages((page, page_size) => suppliersApi.getAll({ page, page_size })), [] as any[]),
-      ]);
-
-    const monthlyProcurementMap = new Map<string, { volume: number; count: number }>();
-    for (const pr of allPRs) {
-      if ((pr as any).created_at) {
-        const date = new Date((pr as any).created_at);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const current = monthlyProcurementMap.get(monthKey) || { volume: 0, count: 0 };
-        monthlyProcurementMap.set(monthKey, {
-          volume: current.volume + 1,
-          count: current.count + 1,
-        });
-      }
-    }
-
-    const monthlyInvoicesMap = new Map<string, { count: number; amount: number }>();
-    for (const inv of allInvoices) {
-      if ((inv as any).invoice_date) {
-        const date = new Date((inv as any).invoice_date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const current = monthlyInvoicesMap.get(monthKey) || { count: 0, amount: 0 };
-        monthlyInvoicesMap.set(monthKey, {
-          count: current.count + 1,
-          amount: current.amount + ((inv as any).total || 0),
-        });
-      }
-    }
-
-      const projectSpendingMap = new Map<string, number>();
-      for (const project of allProjects.results || []) {
-        try {
-          const projectPRs = await safeGet(() => fetchAllPages((page, page_size) =>
-            purchaseRequestsApi.getAll({ page, page_size, project: Number(project.id) })
-          ), [] as any[]);
-          const projectPRIds = projectPRs.map((pr: any) => Number(pr.id));
-          const projectPOs = allPOs.filter((po: any): po is typeof po =>
-            projectPRIds.includes(Number(po.purchase_request))
-          );
-          let totalSpending = 0;
-          for (const po of projectPOs) {
-            totalSpending += ((po as any).total || 0);
-          }
-          if (totalSpending > 0) {
-            projectSpendingMap.set(project.name, totalSpending);
-          }
-        } catch (error: any) {
-          if (__DEV__ && !isSilentError(error)) console.warn(`Error fetching project spending for ${project.id}:`, error);
-        }
-      }
-
-      const supplierMap = new Map<string, { poCount: number; totalAmount: number }>();
-      for (const supplier of allSuppliers) {
-        const supplierPOs = allPOs.filter((po: any) =>
-          Number(po.supplier) === Number(supplier.id)
-        );
-        let totalAmount = 0;
-        for (const po of supplierPOs) {
-          totalAmount += ((po as any).total || 0);
-        }
-        if (supplierPOs.length > 0) {
-          supplierMap.set(supplier.name, {
-            poCount: supplierPOs.length,
-            totalAmount,
-          });
-        }
-      }
-
-      const [
-        prPending, prApproved, prRejected,
-        poPending, poApproved, poRejected, poCompleted,
-        invPending, invApproved, invPaid,
-      ] = await Promise.all([
-        safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'rejected' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'rejected' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'completed' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
-        safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'paid' }), { results: [], count: 0 } as any),
-      ]);
-
-      const prStatus = {
-        pending: prPending.count || 0,
-        approved: prApproved.count || 0,
-        rejected: prRejected.count || 0,
-      };
-
-      const poStatus = {
-        pending: poPending.count || 0,
-        approved: poApproved.count || 0,
-        rejected: poRejected.count || 0,
-        completed: poCompleted.count || 0,
-      };
-
-      const invStatus = {
-        pending: invPending.count || 0,
-        approved: invApproved.count || 0,
-        paid: invPaid.count || 0,
-      };
-
-      return {
-      monthlyProcurement: Array.from(monthlyProcurementMap.entries())
-        .map(([key, value]) => {
-          const [year, month] = key.split('-');
-          const date = new Date(parseInt(year), parseInt(month) - 1);
-          return {
-            month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-            volume: value.volume,
-            count: value.count,
-          };
-        })
-        .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
-        .slice(-12),
-      monthlyInvoices: Array.from(monthlyInvoicesMap.entries())
-        .map(([key, value]) => {
-          const [year, month] = key.split('-');
-          const date = new Date(parseInt(year), parseInt(month) - 1);
-          return {
-            month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-            count: value.count,
-            amount: value.amount,
-          };
-        })
-        .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
-        .slice(-12),
-      projectSpending: Array.from(projectSpendingMap.entries())
-        .map(([project, spending]) => ({ project, spending }))
-        .sort((a, b) => b.spending - a.spending)
-        .slice(0, 10),
-      supplierComparison: Array.from(supplierMap.entries())
-        .map(([supplier, data]) => ({
-          supplier,
-          poCount: data.poCount,
-          totalAmount: data.totalAmount,
-        }))
-        .sort((a, b) => b.totalAmount - a.totalAmount)
-        .slice(0, 10),
-        statusDistribution: {
-          purchaseRequests: prStatus,
-          purchaseOrders: poStatus,
-          invoices: invStatus,
-        },
-      };
-    } catch (error: any) {
-      if (__DEV__ && !isSilentError(error)) console.warn('Error fetching chart data:', error);
-      return {
-        monthlyProcurement: [], monthlyInvoices: [],
-        projectSpending: [], supplierComparison: [],
-        statusDistribution: {
-          purchaseRequests: { pending: 0, approved: 0, rejected: 0 },
-          purchaseOrders: { pending: 0, approved: 0, rejected: 0, completed: 0 },
-          invoices: { pending: 0, approved: 0, paid: 0 },
-        },
-      };
     }
   },
 };

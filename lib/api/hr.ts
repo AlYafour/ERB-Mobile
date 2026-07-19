@@ -79,17 +79,6 @@ export interface HRPayroll {
   working_days: number;
 }
 
-// ── My Profile ─────────────────────────────────────────────────────────────────
-
-export const hrMeApi = {
-  getMyProfile: async (): Promise<HREmployee | null> => {
-    const res = await apiClient.get<HREmployee[]>(API_ENDPOINTS.HR_EMPLOYEES);
-    if (res.error || !res.data) return null;
-    const arr = Array.isArray(res.data) ? res.data : ((res.data as any).results ?? []);
-    return arr[0] ?? null;
-  },
-};
-
 // ── Attendance ─────────────────────────────────────────────────────────────────
 
 export const hrAttendanceApi = {
