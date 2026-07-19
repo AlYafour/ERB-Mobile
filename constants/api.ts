@@ -25,7 +25,23 @@ export const API_ENDPOINTS = {
   // Users
   USERS: '/api/users/',
   USER_DETAIL: (id: string) => `/api/users/${id}/`,
-  
+  USERS_PENDING: '/api/auth/users/pending/',
+
+  // Permissions
+  PERMISSIONS: '/api/permissions/',
+  PERMISSION_DETAIL: (id: string) => `/api/permissions/${id}/`,
+  PERMISSIONS_BY_CATEGORY: '/api/permissions/by_category/',
+  PERMISSION_SETS: '/api/permission-sets/',
+  PERMISSION_SET_DETAIL: (id: string) => `/api/permission-sets/${id}/`,
+  PERMISSION_SET_ASSIGN_PERMISSIONS: (id: string) => `/api/permission-sets/${id}/assign_permissions/`,
+  USER_PERMISSIONS: '/api/user-permissions/',
+  USER_PERMISSION_DETAIL: (id: string) => `/api/user-permissions/${id}/`,
+  USER_PERMISSION_SUMMARY: (id: string) => `/api/user-permission-summary/${id}/`,
+  USER_PERMISSION_SUMMARY_PERMISSIONS: (id: string) => `/api/user-permission-summary/${id}/permissions/`,
+  USER_PERMISSION_SUMMARY_ASSIGN_SET: (id: string) => `/api/user-permission-summary/${id}/assign_permission_set/`,
+  USER_PERMISSION_SUMMARY_ME: '/api/user-permission-summary/me/',
+  CHECK_PERMISSIONS: '/api/user-permission-summary/check/',
+
   // Suppliers
   SUPPLIERS: '/api/suppliers/',
   SUPPLIER_DETAIL: (id: string) => `/api/suppliers/${id}/`,
@@ -66,6 +82,9 @@ export const API_ENDPOINTS = {
   NOTIFICATIONS: '/api/notifications/',
   NOTIFICATION_DETAIL: (id: string) => `/api/notifications/${id}/`,
   MARK_NOTIFICATION_READ: (id: string) => `/api/notifications/${id}/mark_read/`,
+  NOTIFICATIONS_UNREAD_COUNT: '/api/notifications/unread_count/',
+  NOTIFICATIONS_MARK_ALL_READ: '/api/notifications/mark_all_read/',
+  NOTIFICATIONS_CLEAR_ALL: '/api/notifications/clear_all/',
 
   // HR Module
   HR_EMPLOYEES: '/api/hr/employees/',

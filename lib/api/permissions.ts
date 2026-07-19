@@ -1,4 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
+import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { PaginatedResponse } from '@/types';
 
 export interface Permission {
@@ -51,167 +53,106 @@ export interface UserPermissionSummary {
 export const permissionsApi = {
   getAllPermissions: async (params?: {
     page?: number;
+    page_size?: number;
     search?: string;
     category?: string;
     action?: string;
-  }): Promise<PaginatedResponse<Permission>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
-    const endpoint = `/api/permissions/${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<Permission>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch permissions');
-    }
-    return response.data;
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<Permission>> => {
+    const queryString = buildQueryString(params || {});
+    const endpoint = `${API_ENDPOINTS.PERMISSIONS}${queryString ? `?${queryString}` : ''}`;
+    const response = await apiClient.get<PaginatedResponse<Permission>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch permissions');
   },
 
   getPermissionById: async (id: number): Promise<Permission> => {
-    const response = await apiClient.get<Permission>(`/api/permissions/${id}/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch permission');
-    }
-    return response.data;
+    const response = await apiClient.get<Permission>(API_ENDPOINTS.PERMISSION_DETAIL(String(id)));
+    return unwrap(response, 'Failed to fetch permission');
   },
 
   getPermissionsByCategory: async (): Promise<Record<string, Permission[]>> => {
-    const response = await apiClient.get<Record<string, Permission[]>>('/api/permissions/by_category/');
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch permissions by category');
-    }
-    return response.data;
+    const response = await apiClient.get<Record<string, Permission[]>>(API_ENDPOINTS.PERMISSIONS_BY_CATEGORY);
+    return unwrap(response, 'Failed to fetch permissions by category');
   },
 
   getAllPermissionSets: async (params?: {
     page?: number;
     page_size?: number;
     search?: string;
-  }): Promise<PaginatedResponse<PermissionSet>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
-    const endpoint = `/api/permission-sets/${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<PermissionSet>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch permission sets');
-    }
-    return response.data;
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<PermissionSet>> => {
+    const queryString = buildQueryString(params || {});
+    const endpoint = `${API_ENDPOINTS.PERMISSION_SETS}${queryString ? `?${queryString}` : ''}`;
+    const response = await apiClient.get<PaginatedResponse<PermissionSet>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch permission sets');
   },
 
   getPermissionSetById: async (id: number): Promise<PermissionSet> => {
-    const response = await apiClient.get<PermissionSet>(`/api/permission-sets/${id}/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch permission set');
-    }
-    return response.data;
+    const response = await apiClient.get<PermissionSet>(API_ENDPOINTS.PERMISSION_SET_DETAIL(String(id)));
+    return unwrap(response, 'Failed to fetch permission set');
   },
 
   createPermissionSet: async (data: Partial<PermissionSet>): Promise<PermissionSet> => {
-    const response = await apiClient.post<PermissionSet>('/api/permission-sets/', data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create permission set');
-    }
-    return response.data;
+    const response = await apiClient.post<PermissionSet>(API_ENDPOINTS.PERMISSION_SETS, data);
+    return unwrap(response, 'Failed to create permission set');
   },
 
   updatePermissionSet: async (id: number, data: Partial<PermissionSet>): Promise<PermissionSet> => {
-    const response = await apiClient.patch<PermissionSet>(`/api/permission-sets/${id}/`, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update permission set');
-    }
-    return response.data;
+    const response = await apiClient.patch<PermissionSet>(API_ENDPOINTS.PERMISSION_SET_DETAIL(String(id)), data);
+    return unwrap(response, 'Failed to update permission set');
   },
 
   deletePermissionSet: async (id: number): Promise<void> => {
-    const response = await apiClient.delete(`/api/permission-sets/${id}/`);
+    const response = await apiClient.delete(API_ENDPOINTS.PERMISSION_SET_DETAIL(String(id)));
     if (response.error) {
       throw new Error(response.error || 'Failed to delete permission set');
     }
   },
 
   assignPermissionsToSet: async (id: number, permissionIds: number[]): Promise<PermissionSet> => {
-    const response = await apiClient.post<PermissionSet>(`/api/permission-sets/${id}/assign_permissions/`, {
+    const response = await apiClient.post<PermissionSet>(API_ENDPOINTS.PERMISSION_SET_ASSIGN_PERMISSIONS(String(id)), {
       permission_ids: permissionIds,
     });
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to assign permissions');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to assign permissions');
   },
 
   getAllUserPermissions: async (params?: {
     page?: number;
+    page_size?: number;
     search?: string;
     user?: number;
-  }): Promise<PaginatedResponse<UserPermission>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
-    const endpoint = `/api/user-permissions/${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<UserPermission>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch user permissions');
-    }
-    return response.data;
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<UserPermission>> => {
+    const queryString = buildQueryString(params || {});
+    const endpoint = `${API_ENDPOINTS.USER_PERMISSIONS}${queryString ? `?${queryString}` : ''}`;
+    const response = await apiClient.get<PaginatedResponse<UserPermission>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch user permissions');
   },
 
   createUserPermission: async (data: Partial<UserPermission>): Promise<UserPermission> => {
-    const response = await apiClient.post<UserPermission>('/api/user-permissions/', data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create user permission');
-    }
-    return response.data;
+    const response = await apiClient.post<UserPermission>(API_ENDPOINTS.USER_PERMISSIONS, data);
+    return unwrap(response, 'Failed to create user permission');
   },
 
   deleteUserPermission: async (id: number): Promise<void> => {
-    const response = await apiClient.delete(`/api/user-permissions/${id}/`);
+    const response = await apiClient.delete(API_ENDPOINTS.USER_PERMISSION_DETAIL(String(id)));
     if (response.error) {
       throw new Error(response.error || 'Failed to delete user permission');
     }
   },
 
   getUserPermissionSummary: async (userId: number): Promise<UserPermissionSummary> => {
-    const response = await apiClient.get<UserPermissionSummary>(`/api/user-permission-summary/${userId}/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch user permission summary');
-    }
-    return response.data;
+    const response = await apiClient.get<UserPermissionSummary>(API_ENDPOINTS.USER_PERMISSION_SUMMARY(String(userId)));
+    return unwrap(response, 'Failed to fetch user permission summary');
   },
 
   getUserPermissions: async (userId: number): Promise<{ permissions: Array<{ category: string; action: string }> }> => {
-    const response = await apiClient.get<{ permissions: Array<{ category: string; action: string }> }>(`/api/user-permission-summary/${userId}/permissions/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch user permissions');
-    }
-    return response.data;
+    const response = await apiClient.get<{ permissions: Array<{ category: string; action: string }> }>(API_ENDPOINTS.USER_PERMISSION_SUMMARY_PERMISSIONS(String(userId)));
+    return unwrap(response, 'Failed to fetch user permissions');
   },
 
   assignPermissionSetToUser: async (userId: number, permissionSetId: number | null): Promise<UserPermissionSummary> => {
-    const response = await apiClient.post<UserPermissionSummary>(`/api/user-permission-summary/${userId}/assign_permission_set/`, {
+    const response = await apiClient.post<UserPermissionSummary>(API_ENDPOINTS.USER_PERMISSION_SUMMARY_ASSIGN_SET(String(userId)), {
       permission_set_id: permissionSetId,
     });
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to assign permission set');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to assign permission set');
   },
 
   getMyPermissions: async (): Promise<{
@@ -225,11 +166,8 @@ export const permissionsApi = {
       username: string;
       permission_set?: PermissionSet;
       permissions: Array<{ category: string; action: string }>;
-    }>('/api/user-permission-summary/me/');
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch my permissions');
-    }
-    return response.data;
+    }>(API_ENDPOINTS.USER_PERMISSION_SUMMARY_ME);
+    return unwrap(response, 'Failed to fetch my permissions');
   },
 
   checkPermissions: async (checks: Array<{ category: string; action: string }>): Promise<{
@@ -237,11 +175,7 @@ export const permissionsApi = {
   }> => {
     const response = await apiClient.post<{
       results: Array<{ category: string; action: string; has_permission: boolean }>;
-    }>('/api/user-permission-summary/check/', { checks });
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to check permissions');
-    }
-    return response.data;
+    }>(API_ENDPOINTS.CHECK_PERMISSIONS, { checks });
+    return unwrap(response, 'Failed to check permissions');
   },
 };
-

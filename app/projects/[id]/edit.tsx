@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
 import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { projectsApi } from '@/lib/api/projects';
-import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
-import { AppButton } from '@/components/ui/AppButton';
-import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
+import { FormBottomBar } from '@/components/ui/FormBottomBar';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { useEditForm } from '@/lib/hooks/use-edit-form';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -23,37 +23,35 @@ const STATUS_OPTIONS = [
   { value: 'inactive',  label: 'Inactive' },
 ];
 
+interface ProjectEditForm {
+  code: string;
+  name: string;
+  description: string;
+  location: string;
+  sector: string;
+  plot: string;
+  consultant: string;
+  contact_person: string;
+  mobile_number: string;
+  start_date: string;
+  end_date: string;
+  project_status: string;
+  is_active: boolean;
+}
+
 function EditProjectScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
-  const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const S = makeStyles(C);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({
-    code: '',
-    name: '',
-    description: '',
-    location: '',
-    sector: '',
-    plot: '',
-    consultant: '',
-    contact_person: '',
-    mobile_number: '',
-    start_date: '',
-    end_date: '',
-    project_status: 'active',
-    is_active: true,
-  });
-
-  useEffect(() => {
-    projectsApi.getById(id).then((p: any) => {
-      setForm({
+  const { loading, saving, errors, form, set, handleSubmit } = useEditForm<ProjectEditForm>({
+    id,
+    load: async () => {
+      const p = await projectsApi.getById(id) as any;
+      return {
         code:           p.code || '',
         name:           p.name || '',
         description:    p.description || '',
@@ -67,42 +65,24 @@ function EditProjectScreenInner() {
         end_date:       p.end_date ? p.end_date.split('T')[0] : '',
         project_status: p.project_status || p.status || 'active',
         is_active:      p.is_active ?? true,
-      });
-    }).catch((err: any) => {
-      toast(err.message || 'Failed to load project', 'error');
-      router.back();
-    }).finally(() => setLoading(false));
-  }, [id]);
+      };
+    },
+    validate: (f) => {
+      const e: Record<string, string> = {};
+      if (!f.code.trim()) e.code = 'Project code is required';
+      if (!f.name.trim()) e.name = 'Project name is required';
+      return e;
+    },
+    submit: (f) => projectsApi.update(id, f),
+    loadErrorMessage: 'Failed to load project',
+    successMessage: 'Project updated successfully',
+    submitErrorMessage: 'Failed to update project',
+  });
 
-  const set = (key: keyof typeof form) => (val: any) =>
-    setForm((f) => ({ ...f, [key]: val }));
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.code.trim()) e.code = 'Project code is required';
-    if (!form.name.trim()) e.name = 'Project name is required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    try {
-      setSaving(true);
-      await projectsApi.update(id, form);
-      toast('Project updated successfully', 'success');
-      router.back();
-    } catch (err: any) {
-      toast(err.message || 'Failed to update project', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return (
+  if (loading || !form) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Edit Project" showBack />
-      <View style={S.center}><AppEmptyState variant="loading" title="Loading project..." /></View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
@@ -161,36 +141,25 @@ function EditProjectScreenInner() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
-          disabled={saving} style={S.barBtn} />
-        <AppButton title="Save Changes" variant="primary" size="md" onPress={handleSubmit}
-          loading={saving} disabled={saving} style={S.barBtn} />
-      </View>
+      <FormBottomBar
+        onCancel={() => router.back()}
+        submitLabel="Save Changes"
+        onSubmit={handleSubmit}
+        loading={saving}
+      />
     </SafeAreaView>
   );
 }
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content:   { padding: 16, paddingBottom: 8 },
-    card:      { marginBottom: 12 },
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    ...baseDetailStyles(C),
+    content: { padding: 16, paddingBottom: 8 },
     switchRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingVertical: 10, marginTop: 4,
     },
     switchLabel: { fontSize: 14, fontWeight: '500' },
-    bottomBar: {
-      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
-      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
-    },
-    barBtn: { flex: 1 },
   });
 }
 

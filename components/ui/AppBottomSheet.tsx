@@ -73,6 +73,8 @@ export function AppBottomSheet({
         }),
       ]).start();
     }
+    // translateY/backdropOpacity are refs — stable identity, safe to omit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const sheetH = snapHeight

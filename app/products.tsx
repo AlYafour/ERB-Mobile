@@ -1,30 +1,102 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useCancellableFetch } from '@/lib/hooks/use-cancellable-fetch';
 import { productsApi } from '@/lib/api/products';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
-import { Input } from '@/components/ui/Input';
-import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
+import { ListSearchBar } from '@/components/ui/ListSearchBar';
+import { FilterField } from '@/components/ui/FilterPanel';
 import FilterTags from '@/components/ui/FilterTags';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
 import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { AppPagination } from '@/components/ui/AppPagination';
 import { Product, PaginatedResponse } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Spacing, Typography } from '@/constants/spacing';
+import { Spacing } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
 
-type AppColors = typeof Colors.light | typeof Colors.dark;
+/**
+ * Memoized list row — re-renders only when its item or theme changes, not on
+ * every parent state change (pagination, filters, loading flags).
+ */
+const ProductCard = React.memo(function ProductCard({
+  item,
+  colors,
+  onOpen,
+}: {
+  item: Product;
+  colors: typeof Colors.light | typeof Colors.dark;
+  onOpen: (id: number) => void;
+}) {
+  const itemId   = Number(item.id);
+  const isActive = (item as any).is_active;
+  const code     = (item as any).code || item.sku || null;
+  const category = item.category || null;
+  const unit     = item.unit || null;
+  const price    = item.unit_price != null ? `AED ${Number(item.unit_price).toFixed(2)}` : null;
+  const stock    = (item as any).stock_balance != null
+    ? `${(item as any).stock_balance} ${unit || ''}`.trim()
+    : null;
+  const trackStock = (item as any).track_stock ?? false;
+
+  return (
+    <AppCard style={styles.itemCard} onPress={() => onOpen(itemId)}>
+      {/* Icon + name + active badge */}
+      <View style={styles.topRow}>
+        <DocumentIconTile type="product" />
+        <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>{item.name || 'Unnamed Product'}</Text>
+        {isActive !== undefined ? (
+          <AppBadge variant={isActive ? 'success' : 'danger'}>
+            {isActive ? 'Active' : 'Inactive'}
+          </AppBadge>
+        ) : null}
+      </View>
+
+      {/* Meta rows */}
+      {code ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>{item.sku ? 'SKU' : 'Code'}</Text>
+          <Text style={[styles.metaValue, { color: colors.primary }]}>{code}</Text>
+        </View>
+      ) : null}
+      {category ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Category</Text>
+          <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>{category}</Text>
+        </View>
+      ) : null}
+      {unit ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Unit</Text>
+          <Text style={[styles.metaValue, { color: colors.textSecondary }]}>{unit}</Text>
+        </View>
+      ) : null}
+      {price ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Unit Price</Text>
+          <Text style={[styles.metaValue, { color: colors.success, fontWeight: '600' }]}>{price}</Text>
+        </View>
+      ) : null}
+      {trackStock && stock ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Stock</Text>
+          <Text style={[styles.metaValue, { color: colors.textSecondary }]}>{stock}</Text>
+        </View>
+      ) : null}
+    </AppCard>
+  );
+});
 
 function ProductsScreenInner() {
   const router = useRouter();
@@ -38,12 +110,20 @@ function ProductsScreenInner() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [data, setData] = useState<PaginatedResponse<Product> | null>(null);
-  const [loading, setLoading] = useState(true);
+  // initialLoading fills the screen once; listLoading (pagination / filter /
+  // search reloads) keeps the list AND its pagination footer mounted.
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isSuperuser = user?.is_superuser ?? false;
   const canCreate = isSuperuser || (hasPermission('product', 'create') ?? false);
+
+  // Stale-response guard: an older response never overwrites a newer one,
+  // and nothing sets state after unmount.
+  const { nextSignal, isCurrent, mountedRef } = useCancellableFetch();
+  const hasLoadedOnce = useRef(false);
 
   // Debounce search 400ms
   useEffect(() => {
@@ -54,27 +134,34 @@ function ProductsScreenInner() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => { loadProducts(); }, [page, debouncedSearch, filters]);
-
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
+    const { seq } = nextSignal();
+    setError(null);
+    if (hasLoadedOnce.current) setListLoading(true);
     try {
-      setError(null);
-      setLoading(true);
       const response = await productsApi.getAll({
         page,
         page_size: 50,
         search: debouncedSearch,
         ...filters,
       });
+      if (!isCurrent(seq) || !mountedRef.current) return;
       setData(response);
+      hasLoadedOnce.current = true;
     } catch (err: any) {
+      if (!isCurrent(seq) || !mountedRef.current) return;
       setError(err.message || 'Failed to load products');
       toast(err.message || 'Failed to load products', 'error');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent(seq) && mountedRef.current) {
+        setInitialLoading(false);
+        setListLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [page, debouncedSearch, filters, nextSignal, isCurrent, mountedRef]);
+
+  useEffect(() => { loadProducts(); }, [loadProducts]);
 
   const onRefresh = () => { setRefreshing(true); loadProducts(); };
 
@@ -98,73 +185,24 @@ function ProductsScreenInner() {
     const f = { ...filters }; delete f[key]; setFilters(f); setPage(1);
   };
 
-  const S = makeStyles(C);
-
-  const renderItem = ({ item }: { item: Product }) => {
-    const itemId   = Number(item.id);
-    const isActive = (item as any).is_active;
-    const code     = (item as any).code || item.sku || null;
-    const category = item.category || null;
-    const unit     = item.unit || null;
-    const price    = item.unit_price != null ? `AED ${Number(item.unit_price).toFixed(2)}` : null;
-    const stock    = (item as any).stock_balance != null
-      ? `${(item as any).stock_balance} ${unit || ''}`.trim()
-      : null;
-    const trackStock = (item as any).track_stock ?? false;
-
-    return (
-      <AppCard style={S.itemCard} onPress={() => router.push(`/products/${itemId}` as any)}>
-        {/* Icon + name + active badge */}
-        <View style={S.topRow}>
-          <DocumentIconTile type="product" />
-          <Text style={[S.itemName, { color: C.textPrimary }]} numberOfLines={2}>{item.name || 'Unnamed Product'}</Text>
-          {isActive !== undefined ? (
-            <AppBadge variant={isActive ? 'success' : 'danger'}>
-              {isActive ? 'Active' : 'Inactive'}
-            </AppBadge>
-          ) : null}
-        </View>
-
-        {/* Meta rows */}
-        {code ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>{item.sku ? 'SKU' : 'Code'}</Text>
-            <Text style={[S.metaValue, { color: C.primary }]}>{code}</Text>
-          </View>
-        ) : null}
-        {category ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Category</Text>
-            <Text style={[S.metaValue, { color: C.textPrimary }]} numberOfLines={1}>{category}</Text>
-          </View>
-        ) : null}
-        {unit ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Unit</Text>
-            <Text style={[S.metaValue, { color: C.textSecondary }]}>{unit}</Text>
-          </View>
-        ) : null}
-        {price ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Unit Price</Text>
-            <Text style={[S.metaValue, { color: C.success, fontWeight: '600' }]}>{price}</Text>
-          </View>
-        ) : null}
-        {trackStock && stock ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Stock</Text>
-            <Text style={[S.metaValue, { color: C.textSecondary }]}>{stock}</Text>
-          </View>
-        ) : null}
-      </AppCard>
-    );
-  };
   // Stale-list fix: refetch when the screen regains focus (create/detail flows)
   useRefetchOnFocus(loadProducts);
 
+  const openProduct = useCallback(
+    (id: number) => router.push(`/products/${id}` as any),
+    [router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: Product }) => (
+      <ProductCard item={item} colors={C} onOpen={openProduct} />
+    ),
+    [C, openProduct],
+  );
+
   return (
-    <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
-      <View style={S.inner}>
+    <SafeAreaView style={[styles.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
+      <View style={styles.inner}>
         <AppHeader
           title="Products"
           subtitle={data?.count != null ? `${data.count} product${data.count !== 1 ? 's' : ''}` : undefined}
@@ -180,28 +218,16 @@ function ProductsScreenInner() {
         />
 
         {/* Search + filter */}
-        <View style={S.searchContainer}>
-          <View style={S.searchRow}>
-            <View style={S.searchInputWrapper}>
-              <Input
-                placeholder="Search products..."
-                value={search}
-                onChangeText={setSearch}
-                containerStyle={S.searchInput}
-                leftIcon={<IconSymbol name="magnifyingglass" size={20} color={C.textMuted} />}
-              />
-            </View>
-            <View style={S.filterBtnWrapper}>
-              <FilterPanel
-                fields={filterFields}
-                filters={filters}
-                onFilterChange={handleFilterChange}
-                onReset={handleFilterReset}
-                saveKey="products"
-              />
-            </View>
-          </View>
-        </View>
+        <ListSearchBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search products..."
+          filterFields={filterFields}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onFilterReset={handleFilterReset}
+          filterSaveKey="products"
+        />
 
         {Object.keys(filters).length > 0 && (
           <FilterTags
@@ -212,92 +238,87 @@ function ProductsScreenInner() {
           />
         )}
 
-        {loading && !refreshing ? (
+        {initialLoading ? (
           <AppEmptyState variant="loading" title="Loading products..." />
         ) : error && !data?.results?.length ? (
-          <AppEmptyState variant="error" title="Failed to load" message={error} actionLabel="Try Again" onAction={loadProducts} />
-        ) : !data?.results?.length ? (
+          <AppErrorState title="Failed to load" message={error} onRetry={loadProducts} />
+        ) : !data?.results?.length && !listLoading ? (
           <AppEmptyState variant="empty" icon="cube.box" title="No products" message="No products found matching your criteria." />
         ) : (
-          <FlatList
-            data={data.results}
-            renderItem={renderItem}
-            keyExtractor={(item, index) => String(item.id ?? index)}
-            contentContainerStyle={S.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primary]} />
-            }
-            ListFooterComponent={
-              data && data.count > 50 ? (
-                <View style={[S.pagination, { backgroundColor: C.surfaceSoft, borderTopColor: C.border }]}>
-                  <AppButton title="Previous" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!data.previous || page === 1} style={S.paginationBtn} />
-                  <Text style={[S.paginationText, { color: C.textMuted }]}>
-                    {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
-                  </Text>
-                  <AppButton title="Next" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => p + 1)}
-                    disabled={!data.next} style={S.paginationBtn} />
-                </View>
-              ) : null
-            }
-          />
+          <View style={{ flex: 1 }}>
+            {/* Slim reload bar — the list and its pagination stay mounted */}
+            {listLoading && !refreshing ? (
+              <View style={[styles.reloadBar, { backgroundColor: C.surfaceSoft }]}>
+                <ActivityIndicator size="small" color={C.primary} />
+                <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
+              </View>
+            ) : null}
+            <FlatList
+              data={data?.results ?? []}
+              renderItem={renderItem}
+              keyExtractor={(item, index) => String(item.id ?? index)}
+              contentContainerStyle={styles.listContent}
+              style={listLoading ? { opacity: 0.6 } : undefined}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primary]} />
+              }
+              ListFooterComponent={
+                data && data.count > 50 ? (
+                  <AppPagination
+                    page={page}
+                    pageSize={50}
+                    totalCount={data.count}
+                    hasPrevious={!!data.previous}
+                    hasNext={!!data.next}
+                    onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+                    onNext={() => setPage((p) => p + 1)}
+                    loading={listLoading}
+                  />
+                ) : null
+              }
+            />
+          </View>
         )}
       </View>
     </SafeAreaView>
   );
 }
 
-function makeStyles(C: AppColors) {
-  return StyleSheet.create({
-    container: { flex: 1 },
-    inner:     { flex: 1 },
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  inner:     { flex: 1 },
 
-    searchContainer: {
-      paddingHorizontal: Layout.screenPadding,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.sm,
-    },
-    searchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    searchInputWrapper: { flex: 1 },
-    searchInput: { marginBottom: 0 },
-    filterBtnWrapper: { alignSelf: 'flex-start' },
+  listContent: {
+    padding: Layout.screenPadding,
+    paddingTop: Spacing.md,
+    paddingBottom: 120,
+  },
 
-    listContent: {
-      padding: Layout.screenPadding,
-      paddingTop: Spacing.md,
-      paddingBottom: 120,
-    },
+  itemCard: { marginBottom: Spacing.sm },
 
-    itemCard: { marginBottom: Spacing.sm },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  itemName: { fontSize: 14, fontWeight: '600', flex: 1, lineHeight: 20 },
 
-    topRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Spacing.sm,
-      marginBottom: Spacing.sm,
-    },
-    itemName: { fontSize: 14, fontWeight: '600', flex: 1, lineHeight: 20 },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: 3,
+  },
+  metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 72, flexShrink: 0 },
+  metaValue: { fontSize: 13, flex: 1 },
 
-    metaRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.sm,
-      paddingVertical: 3,
-    },
-    metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 72, flexShrink: 0 },
-    metaValue: { fontSize: 13, flex: 1 },
-
-    pagination: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
-      gap: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    paginationBtn: { minWidth: 80 },
-    paginationText: { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
-  });
-}
+  reloadBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, paddingVertical: 6,
+  },
+  reloadText: { fontSize: 12, fontWeight: '500' },
+});
 
 
 export default function ProductsScreen() {

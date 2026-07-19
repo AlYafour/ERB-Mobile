@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,19 +15,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { AppButton } from '@/components/ui/AppButton';
 import { Logo } from '@/components/ui/Logo';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const NAVY = '#0B1629';
-const NAVY_CARD = '#1A2740';
-const BORDER = '#2A3A52';
-const TEXT_PRIMARY = '#F0F4F8';
-const TEXT_MUTED = '#64748B';
-const TEXT_SECONDARY = '#94A3B8';
-const LINK = '#93C5FD';
-const ERROR_BG = 'rgba(239,68,68,0.10)';
-const ERROR_BORDER = 'rgba(239,68,68,0.30)';
-const ERROR_TEXT = '#FCA5A5';
+type Palette = typeof Colors.light | typeof Colors.dark;
 
 export default function RegisterScreen() {
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+  const s = useMemo(() => makeStyles(C), [C]);
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -42,6 +39,7 @@ export default function RegisterScreen() {
   const { register, branding } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const brandColor = branding?.primary_color || C.primary;
 
   const update = (key: keyof typeof formData) => (text: string) =>
     setFormData((prev) => ({ ...prev, [key]: text }));
@@ -55,8 +53,8 @@ export default function RegisterScreen() {
       setError('Passwords do not match');
       return;
     }
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
 
@@ -85,7 +83,7 @@ export default function RegisterScreen() {
   if (registered) {
     return (
       <View style={[s.root, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}>
-        <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+        <StatusBar barStyle={cs === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={C.background} />
         <View style={s.logoRing}>
           <Logo size={60} logoUrl={branding?.logo_url || undefined} />
         </View>
@@ -97,7 +95,7 @@ export default function RegisterScreen() {
             Your account has been created successfully and is awaiting administrator approval. You will be notified once your account is activated.
           </Text>
           <TouchableOpacity onPress={() => router.replace('/login')} style={{ marginTop: 24 }}>
-            <Text style={{ color: LINK, fontSize: 15, fontWeight: '600' }}>Back to Sign In</Text>
+            <Text style={{ color: brandColor, fontSize: 15, fontWeight: '600' }}>Back to Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -106,10 +104,10 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={s.root}
     >
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+      <StatusBar barStyle={cs === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={C.background} />
       <ScrollView
         contentContainerStyle={[
           s.scroll,
@@ -185,8 +183,9 @@ export default function RegisterScreen() {
             label="Password *"
             value={formData.password}
             onChangeText={update('password')}
-            placeholder="Min. 6 characters"
+            placeholder="Min. 8 characters"
             secureTextEntry
+            secureToggle
             autoCapitalize="none"
             autoComplete="new-password"
             returnKeyType="next"
@@ -198,6 +197,7 @@ export default function RegisterScreen() {
             onChangeText={update('confirmPassword')}
             placeholder="Repeat your password"
             secureTextEntry
+            secureToggle
             autoCapitalize="none"
             returnKeyType="done"
             onSubmitEditing={handleRegister}
@@ -216,7 +216,7 @@ export default function RegisterScreen() {
           <View style={s.footer}>
             <Text style={s.footerText}>Already have an account?</Text>
             <TouchableOpacity onPress={() => router.push('/login')}>
-              <Text style={s.footerLink}> Sign In</Text>
+              <Text style={[s.footerLink, { color: brandColor }]}> Sign In</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -225,8 +225,8 @@ export default function RegisterScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: NAVY },
+const makeStyles = (C: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.background },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -238,7 +238,7 @@ const s = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -251,44 +251,44 @@ const s = StyleSheet.create({
   appName: {
     fontSize: 22,
     fontWeight: '700',
-    color: TEXT_PRIMARY,
+    color: C.textPrimary,
     letterSpacing: -0.4,
   },
   tagline: {
     fontSize: 13,
-    color: TEXT_SECONDARY,
+    color: C.textSecondary,
     marginTop: 4,
   },
 
   card: {
-    backgroundColor: NAVY_CARD,
+    backgroundColor: C.surface,
     borderRadius: 20,
     padding: 28,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: C.border,
   },
   cardTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: TEXT_PRIMARY,
+    color: C.textPrimary,
     marginBottom: 4,
   },
   cardSubtitle: {
     fontSize: 14,
-    color: TEXT_MUTED,
+    color: C.textMuted,
     marginBottom: 22,
   },
 
   errorBox: {
-    backgroundColor: ERROR_BG,
+    backgroundColor: C.dangerBg,
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: ERROR_BORDER,
+    borderColor: `${C.danger}47`,
   },
   errorText: {
-    color: ERROR_TEXT,
+    color: C.errorText,
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
@@ -305,6 +305,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
   },
-  footerText: { color: TEXT_MUTED, fontSize: 14 },
-  footerLink: { color: LINK, fontSize: 14, fontWeight: '600' },
+  footerText: { color: C.textMuted, fontSize: 14 },
+  footerLink: { fontSize: 14, fontWeight: '600' },
 });

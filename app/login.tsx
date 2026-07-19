@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -20,7 +20,9 @@ import { useAuth, Branding, LoginResult } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Logo } from '@/components/ui/Logo';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { API_BASE_URL } from '@/constants/api';
+import { apiClient } from '@/lib/api';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { authenticateBiometric, getBiometricCapabilities } from '@/lib/app-lock';
 import {
   isBiometricLoginEnabled,
@@ -30,25 +32,32 @@ import {
 
 const BRANDING_KEY = '@branding';
 
+type Palette = typeof Colors.light | typeof Colors.dark;
+
 async function fetchPublicBranding(): Promise<Branding | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/public/branding/`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data && (data.logo_url || data.company_legal_name)) {
-      await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(data));
-      return data as Branding;
+    const res = await apiClient.get<Branding>('/api/public/branding/');
+    if (res.error) {
+      if (__DEV__) console.error('fetchPublicBranding failed:', res.error);
+      return null;
     }
-  } catch {}
+    if (res.data && (res.data.logo_url || res.data.company_legal_name)) {
+      await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(res.data));
+      return res.data;
+    }
+  } catch (error) {
+    if (__DEV__) console.error('fetchPublicBranding failed:', error);
+  }
   return null;
 }
 
 export default function LoginScreen() {
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+  const s = useMemo(() => makeStyles(C), [C]);
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, branding: contextBranding } = useAuth();
@@ -64,14 +73,17 @@ export default function LoginScreen() {
   const [bioBusy, setBioBusy] = useState(false);
 
   useEffect(() => {
+    let live = true;
     (async () => {
       const [caps, enabled] = await Promise.all([
         getBiometricCapabilities(),
         isBiometricLoginEnabled(),
       ]);
+      if (!live) return;
       setBioLabel(caps.label);
       setBioReady(caps.hasHardware && caps.enrolled && enabled);
     })();
+    return () => { live = false; };
   }, []);
 
   useEffect(() => {
@@ -82,13 +94,14 @@ export default function LoginScreen() {
     // Only apply fetched branding when it actually CHANGED — unconditionally
     // setting identical data re-rendered the whole screen on every mount
     // (part of the "login page keeps reloading" report).
+    let live = true;
     fetchPublicBranding().then(b => {
-      if (b) {
-        setBranding(prev =>
-          prev && JSON.stringify(prev) === JSON.stringify(b) ? prev : b
-        );
-      }
+      if (!live || !b) return;
+      setBranding(prev =>
+        prev && JSON.stringify(prev) === JSON.stringify(b) ? prev : b
+      );
     });
+    return () => { live = false; };
   }, []);
 
   /** Shared by manual submit and Face ID — same result shape either way. */
@@ -189,7 +202,7 @@ export default function LoginScreen() {
   const loginBg    = branding?.login_bg_url;
   const companyName = branding?.company_legal_name || 'Al Yafour ERP';
   const logoUrl    = branding?.logo_url || undefined;
-  const brandColor = branding?.primary_color || '#C9943A';
+  const brandColor = branding?.primary_color || C.primary;
 
   const body = (
     <KeyboardAvoidingView
@@ -271,22 +284,13 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             placeholder="Enter your password"
-            secureTextEntry={!showPassword}
+            secureTextEntry
+            secureToggle
             autoCapitalize="none"
             autoComplete="password"
             returnKeyType="done"
             onSubmitEditing={handleLogin}
             containerStyle={s.field}
-            rightIcon={
-              <TouchableOpacity
-                onPress={() => setShowPassword(v => !v)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-              >
-                <IconSymbol name={showPassword ? 'eye.slash.fill' : 'eye.fill'} size={19} color="#64748B" />
-              </TouchableOpacity>
-            }
           />
 
           <TouchableOpacity
@@ -296,7 +300,7 @@ export default function LoginScreen() {
             accessibilityLabel="Forgot password"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={[s.forgotText, { color: loginBg ? '#E0B86D' : brandColor }]}>Forgot password?</Text>
+            <Text style={[s.forgotText, { color: loginBg ? C.primaryHover : brandColor }]}>Forgot password?</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -309,7 +313,7 @@ export default function LoginScreen() {
             accessibilityState={{ disabled: loading, busy: loading }}
           >
             {loading
-              ? <ActivityIndicator color="#FFFFFF" size="small" />
+              ? <ActivityIndicator color={C.primaryText} size="small" />
               : <Text style={s.btnText}>Sign In</Text>
             }
           </TouchableOpacity>
@@ -322,7 +326,7 @@ export default function LoginScreen() {
               accessibilityLabel="Sign up for a new account"
               hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
             >
-              <Text style={[s.footerLink, { color: loginBg ? '#E0B86D' : brandColor }]}>
+              <Text style={[s.footerLink, { color: loginBg ? C.primaryHover : brandColor }]}>
                 {' '}Sign Up
               </Text>
             </TouchableOpacity>
@@ -337,8 +341,8 @@ export default function LoginScreen() {
   // branding fetch resolved — a full remount that read as a page "reload"
   // on every visit. Now the background image is just a layer that fades in.
   return (
-    <View style={[{ flex: 1 }, { backgroundColor: '#07111F' }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#07111F" />
+    <View style={[{ flex: 1 }, { backgroundColor: C.background }]}>
+      <StatusBar barStyle={cs === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={C.background} />
       {loginBg ? (
         <>
           <Image
@@ -350,7 +354,7 @@ export default function LoginScreen() {
           {/* Gradient scrim: lighter at the top (image visible), darker
               behind the form — reads premium and keeps text contrast. */}
           <LinearGradient
-            colors={['rgba(7,17,31,0.55)', 'rgba(7,17,31,0.80)', 'rgba(7,17,31,0.94)']}
+            colors={[`${C.background}8C`, `${C.background}CC`, `${C.background}F0`]}
             style={StyleSheet.absoluteFill}
           />
         </>
@@ -360,7 +364,7 @@ export default function LoginScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -381,7 +385,7 @@ const s = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
@@ -394,7 +398,7 @@ const s = StyleSheet.create({
   companyName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: C.textPrimary,
     textAlign: 'center',
     letterSpacing: 0.2,
     maxWidth: 280,
@@ -403,20 +407,20 @@ const s = StyleSheet.create({
   },
   tagline: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.55)',
+    color: C.textMuted,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
 
   // Card — solid (no bg image)
   cardSolid: {
-    backgroundColor: '#0D1B2A',
-    borderColor: '#1E3349',
+    backgroundColor: C.surface,
+    borderColor: C.border,
     borderWidth: 1,
   },
   // Card — glass (has bg image)
   cardGlass: {
-    backgroundColor: 'rgba(13,27,42,0.82)',
+    backgroundColor: `${C.surface}D1`,
     borderColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
   },
@@ -427,26 +431,26 @@ const s = StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: C.textPrimary,
     marginBottom: 4,
   },
   cardSub: {
     fontSize: 13,
-    color: '#64748B',
+    color: C.textMuted,
     marginBottom: 22,
   },
 
   // Error
   errorBox: {
-    backgroundColor: 'rgba(239,68,68,0.10)',
+    backgroundColor: C.dangerBg,
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.28)',
+    borderColor: `${C.danger}47`,
   },
   errorText: {
-    color: '#FCA5A5',
+    color: C.errorText,
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
@@ -473,8 +477,8 @@ const s = StyleSheet.create({
     gap: 10,
     marginBottom: 18,
   },
-  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: '#1E3349' },
-  dividerText: { fontSize: 11.5, color: '#475569', letterSpacing: 0.2 },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: C.border },
+  dividerText: { fontSize: 11.5, color: C.textMuted, letterSpacing: 0.2 },
 
   // Forgot password
   forgotLink: { alignSelf: 'flex-end', marginTop: -6, marginBottom: 16, minHeight: 32, justifyContent: 'center' },
@@ -495,7 +499,7 @@ const s = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.55 },
   btnText: {
-    color: '#FFFFFF',
+    color: C.primaryText,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
@@ -508,6 +512,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
   },
-  footerLabel: { color: '#64748B', fontSize: 14 },
+  footerLabel: { color: C.textMuted, fontSize: 14 },
   footerLink: { fontSize: 14, fontWeight: '600' },
 });

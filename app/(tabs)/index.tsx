@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, StatusBar,
@@ -9,12 +9,14 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { Colors, CARD_SHADOW } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { notificationsApi } from '@/lib/api/notifications';
 import { Logo } from '@/components/ui/Logo';
 import { AppSkeleton } from '@/components/ui/AppSkeleton';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 
 const H_PAD = 20;
 
@@ -106,33 +108,36 @@ export default function HomeScreen() {
 
   const brandPrimary = branding?.primary_color || '#0B1F33';
 
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setStatsLoading(true);
-      try {
-        const [prRes, notifRes] = await Promise.allSettled([
-          hasProcurement
-            ? apiClient.get(API_ENDPOINTS.PURCHASE_REQUESTS + '?status=pending&page_size=1')
-            : Promise.resolve({ data: null }),
-          apiClient.get<{ results: any[] }>(API_ENDPOINTS.NOTIFICATIONS + '?page_size=50'),
-        ]);
-        if (cancelled) return;
-        const prData = prRes.status === 'fulfilled' ? (prRes.value.data as any) : null;
-        setPendingPRs(prData?.count != null ? prData.count : '—');
-        const notifs =
-          notifRes.status === 'fulfilled' && notifRes.value.data?.results
-            ? notifRes.value.data.results : [];
-        setUnreadCount(notifs.filter((n: any) => !n.is_read).length);
-      } catch {
-        // non-fatal
-      } finally {
-        if (!cancelled) setStatsLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const [prRes, notifRes] = await Promise.allSettled([
+        hasProcurement
+          ? apiClient.get(API_ENDPOINTS.PURCHASE_REQUESTS + '?status=pending&page_size=1')
+          : Promise.resolve({ data: null }),
+        notificationsApi.getUnreadCount(),
+      ]);
+      if (!mountedRef.current) return;
+      const prData = prRes.status === 'fulfilled' ? (prRes.value.data as any) : null;
+      setPendingPRs(prData?.count != null ? prData.count : '—');
+      setUnreadCount(notifRes.status === 'fulfilled' ? (notifRes.value.count ?? 0) : 0);
+    } catch {
+      // non-fatal
+    } finally {
+      if (mountedRef.current) setStatsLoading(false);
+    }
   }, [hasProcurement]);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+  // Tab screens stay mounted — refresh the stats row whenever the user
+  // switches back to the Home tab.
+  useRefetchOnFocus(loadStats);
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.background }]} edges={['top']}>
@@ -296,7 +301,9 @@ export default function HomeScreen() {
         )}
 
         {/* ── Analytics ── */}
-        {hasProcurement && (
+        {/* /dashboard is admin-only (AppPermissionGate adminOnly) — gate the
+            CTA on isAdmin alone, not the broader procurement-view permission. */}
+        {isAdmin && (
           <Animated.View
             entering={FadeIn.delay(460).duration(280)}
             style={{ paddingHorizontal: H_PAD, marginTop: 10 }}
@@ -410,11 +417,7 @@ const s = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    ...CARD_SHADOW,
   },
   statIcon: {
     width: 34, height: 34, borderRadius: 9,
@@ -449,11 +452,7 @@ const s = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 18,
     gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...CARD_SHADOW,
   },
   moduleIcon: {
     width: 56, height: 56, borderRadius: 16,
@@ -480,11 +479,7 @@ const s = StyleSheet.create({
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    ...CARD_SHADOW,
   },
   quickRow: {
     flexDirection: 'row',
@@ -509,11 +504,7 @@ const s = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    ...CARD_SHADOW,
   },
   analyticsIcon: {
     width: 42, height: 42, borderRadius: 12,

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { View, Text, Switch, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { suppliersApi } from '@/lib/api/suppliers';
 import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
-import { AppButton } from '@/components/ui/AppButton';
+import { AppSectionHeader } from '@/components/ui/AppScreen';
+import { FormBottomBar } from '@/components/ui/FormBottomBar';
 import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import { Colors } from '@/constants/theme';
@@ -33,7 +34,6 @@ const COUNTRIES = [
 
 function NewSupplierScreenInner() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const S = makeStyles(C);
@@ -99,8 +99,8 @@ function NewSupplierScreenInner() {
       <ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Business Information */}
+        <AppSectionHeader title="Business Information" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Business Information</Text>
           <Input label="Business Name" value={form.business_name} onChangeText={set('business_name')}
             placeholder="Enter business name"
             error={errors.business_name} />
@@ -113,8 +113,8 @@ function NewSupplierScreenInner() {
         </AppCard>
 
         {/* Contact Information */}
+        <AppSectionHeader title="Contact Information" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Contact Information</Text>
           <Input label="First Name" value={form.first_name} onChangeText={set('first_name')}
             placeholder="Enter first name" />
           <Input label="Last Name" value={form.last_name} onChangeText={set('last_name')}
@@ -132,8 +132,8 @@ function NewSupplierScreenInner() {
         </AppCard>
 
         {/* Address Information */}
+        <AppSectionHeader title="Address" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Address</Text>
           <Input label="Street Address 1" value={form.street_address_1} onChangeText={set('street_address_1')}
             placeholder="Enter street address" />
           <Input label="Street Address 2" value={form.street_address_2} onChangeText={set('street_address_2')}
@@ -147,8 +147,8 @@ function NewSupplierScreenInner() {
         </AppCard>
 
         {/* Bank Information */}
+        <AppSectionHeader title="Bank Information" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Bank Information</Text>
           <Input label="Bank Name" value={form.bank_name} onChangeText={set('bank_name')}
             placeholder="Enter bank name" />
           <Input label="Bank Account" value={form.bank_account} onChangeText={set('bank_account')}
@@ -156,8 +156,8 @@ function NewSupplierScreenInner() {
         </AppCard>
 
         {/* Additional */}
+        <AppSectionHeader title="Additional" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Additional</Text>
           <Input label="Notes" value={form.notes} onChangeText={set('notes')}
             placeholder="Enter notes" multiline numberOfLines={4} />
           <View style={S.switchRow}>
@@ -173,12 +173,13 @@ function NewSupplierScreenInner() {
       </KeyboardAvoidingView>
 
       {/* Fixed bottom bar */}
-      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
-          disabled={saving} style={S.barBtn} />
-        <AppButton title="Create Supplier" variant="primary" size="md" onPress={handleSubmit}
-          loading={saving} disabled={saving} style={S.barBtn} />
-      </View>
+      <FormBottomBar
+        onCancel={() => router.back()}
+        cancelDisabled={saving}
+        submitLabel="Create Supplier"
+        onSubmit={handleSubmit}
+        loading={saving}
+      />
     </SafeAreaView>
   );
 }
@@ -188,20 +189,12 @@ function makeStyles(C: AppColors) {
     container: { flex: 1, backgroundColor: C.background },
     content:   { padding: 16, paddingBottom: 8 },
     card:      { marginBottom: 12 },
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    sectionHeaderOverride: { paddingHorizontal: 4 },
     switchRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingVertical: 10, marginTop: 4,
     },
     switchLabel: { fontSize: 14, fontWeight: '500' },
-    bottomBar: {
-      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
-      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
-    },
-    barBtn: { flex: 1 },
   });
 }
 

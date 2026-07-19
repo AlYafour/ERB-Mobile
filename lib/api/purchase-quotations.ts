@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { PurchaseQuotation, PurchaseQuotationItem, PaginatedResponse } from '@/types';
 
 export const purchaseQuotationsApi = {
@@ -24,30 +25,16 @@ export const purchaseQuotationsApi = {
     valid_until_before?: string;
     created_at_after?: string;
     created_at_before?: string;
-  }): Promise<PaginatedResponse<PurchaseQuotation>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<PurchaseQuotation>> => {
+    const queryString = buildQueryString(params || {});
     const endpoint = `${API_ENDPOINTS.PURCHASE_QUOTATIONS}${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<PurchaseQuotation>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch purchase quotations');
-    }
-    return response.data;
+    const response = await apiClient.get<PaginatedResponse<PurchaseQuotation>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch purchase quotations');
   },
 
   getById: async (id: number | string): Promise<PurchaseQuotation> => {
     const response = await apiClient.get<PurchaseQuotation>(API_ENDPOINTS.PURCHASE_QUOTATION_DETAIL(String(id)));
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch purchase quotation');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch purchase quotation');
   },
 
   create: async (data: {
@@ -65,18 +52,12 @@ export const purchaseQuotationsApi = {
     items: Omit<PurchaseQuotationItem, 'product' | 'total' | 'created_at'>[];
   }): Promise<PurchaseQuotation> => {
     const response = await apiClient.post<PurchaseQuotation>(API_ENDPOINTS.PURCHASE_QUOTATIONS, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create purchase quotation');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to create purchase quotation');
   },
 
   update: async (id: number | string, data: Partial<PurchaseQuotation>): Promise<PurchaseQuotation> => {
     const response = await apiClient.patch<PurchaseQuotation>(API_ENDPOINTS.PURCHASE_QUOTATION_DETAIL(String(id)), data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update purchase quotation');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to update purchase quotation');
   },
 
   delete: async (id: number | string): Promise<void> => {
@@ -88,18 +69,14 @@ export const purchaseQuotationsApi = {
 
   award: async (id: number | string): Promise<PurchaseQuotation> => {
     const response = await apiClient.post<PurchaseQuotation>(`${API_ENDPOINTS.PURCHASE_QUOTATION_DETAIL(String(id))}award/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to award purchase quotation');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to award purchase quotation');
   },
 
-  reject: async (id: number | string): Promise<PurchaseQuotation> => {
-    const response = await apiClient.post<PurchaseQuotation>(`${API_ENDPOINTS.PURCHASE_QUOTATION_DETAIL(String(id))}reject/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to reject purchase quotation');
-    }
-    return response.data;
+  reject: async (id: number | string, reason?: string): Promise<PurchaseQuotation> => {
+    const response = await apiClient.post<PurchaseQuotation>(
+      `${API_ENDPOINTS.PURCHASE_QUOTATION_DETAIL(String(id))}reject/`,
+      reason ? { rejection_reason: reason } : undefined,
+    );
+    return unwrap(response, 'Failed to reject purchase quotation');
   },
 };
-

@@ -1,15 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors } from '@/constants/theme';
 import { IconSymbol } from './icon-symbol';
+import { FilterField, isActiveFilterValue } from './filter-types';
 
-export interface FilterField {
-  name: string;
-  label: string;
-  type: 'text' | 'number' | 'select' | 'date' | 'boolean' | 'range';
-  options?: { value: string | number; label: string }[];
-  group?: string;
-}
+export type { FilterField };
 
 interface FilterTagsProps {
   filters: Record<string, any>;
@@ -20,10 +17,10 @@ interface FilterTagsProps {
 
 export default function FilterTags({ filters, fields, onRemoveFilter, onClearAll }: FilterTagsProps) {
   const textColor = useThemeColor({}, 'text');
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
 
-  const activeFilters = Object.entries(filters).filter(([key, value]) => {
-    return value !== '' && value !== null && value !== undefined;
-  });
+  const activeFilters = Object.entries(filters).filter(([, value]) => isActiveFilterValue(value));
 
   if (activeFilters.length === 0) return null;
 
@@ -74,7 +71,7 @@ export default function FilterTags({ filters, fields, onRemoveFilter, onClearAll
       const baseName = key.replace(/_min$|_max$/, '');
       const min = filters[`${baseName}_min`];
       const max = filters[`${baseName}_max`];
-      
+
       if (min || max) {
         processedKeys.add(`${baseName}_min`);
         processedKeys.add(`${baseName}_max`);
@@ -96,8 +93,8 @@ export default function FilterTags({ filters, fields, onRemoveFilter, onClearAll
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {tags.map((tag) => (
-          <View key={tag.key} style={styles.tag}>
-            <Text style={styles.tagText}>{tag.label}</Text>
+          <View key={tag.key} style={[styles.tag, { backgroundColor: C.tintSubtle, borderColor: C.accentBorder }]}>
+            <Text style={[styles.tagText, { color: C.tint }]}>{tag.label}</Text>
             <TouchableOpacity
               onPress={() => {
                 const field = fields.find(f => f.name === tag.key);
@@ -109,7 +106,7 @@ export default function FilterTags({ filters, fields, onRemoveFilter, onClearAll
                 }
               }}
               style={styles.tagClose}>
-              <IconSymbol name="xmark" size={12} color="#0D1B2A" />
+              <IconSymbol name="xmark" size={12} color={C.tint} />
             </TouchableOpacity>
           </View>
         ))}
@@ -139,15 +136,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: 'rgba(13, 27, 42, 0.07)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(13, 27, 42, 0.18)',
   },
   tagText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#0D1B2A',
   },
   tagClose: {
     padding: 2,
@@ -161,4 +155,3 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 });
-

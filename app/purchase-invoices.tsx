@@ -1,28 +1,28 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useCancellableFetch } from '@/lib/hooks/use-cancellable-fetch';
 import { purchaseInvoicesApi } from '@/lib/api/purchase-invoices';
 import { toast } from '@/lib/hooks/use-toast';
-import { Input } from '@/components/ui/Input';
-import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
+import { ListSearchBar } from '@/components/ui/ListSearchBar';
+import { FilterField } from '@/components/ui/FilterPanel';
 import FilterTags from '@/components/ui/FilterTags';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
 import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
-import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { AppPagination } from '@/components/ui/AppPagination';
 import { PurchaseInvoice, PaginatedResponse } from '@/types';
+import { getDateAccent } from '@/lib/utils/list-helpers';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Spacing, Typography } from '@/constants/spacing';
+import { Spacing } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-
-type AppColors = typeof Colors.light | typeof Colors.dark;
 
 const statusLabels: Record<string, string> = {
   draft:     'Draft',
@@ -50,6 +50,85 @@ function fmtDate(d?: string | null) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/**
+ * Memoized list row — re-renders only when its item or theme changes, not on
+ * every parent state change (pagination, filters, loading flags).
+ */
+const InvoiceCard = React.memo(function InvoiceCard({
+  item,
+  colors,
+  onOpen,
+}: {
+  item: PurchaseInvoice;
+  colors: typeof Colors.light | typeof Colors.dark;
+  onOpen: (id: number) => void;
+}) {
+  const itemId      = Number(item.id);
+  const invoiceNum  = item.invoice_number || `INV-${itemId}`;
+  const supplier    = typeof item.supplier === 'object'
+    ? (item.supplier as any)?.name
+    : (item as any).supplier_name || null;
+  const poNumber    = typeof item.purchase_order === 'object'
+    ? (item.purchase_order as any)?.order_number
+    : (item as any).purchase_order_number || null;
+  const invoiceDate = fmtDate((item as any).invoice_date);
+  const dueRaw: string | undefined = (item as any).due_date;
+  const dueDate     = fmtDate(dueRaw);
+  const totalAmt    = (item as any).total ?? item.total_amount;
+  const total       = totalAmt != null ? `AED ${Number(totalAmt).toFixed(2)}` : null;
+
+  const isOverdue = item.status !== 'paid' && getDateAccent(dueRaw).overdue;
+
+  return (
+    <AppCard
+      style={[styles.itemCard, isOverdue && { borderLeftWidth: 3, borderLeftColor: colors.danger }]}
+      onPress={() => onOpen(itemId)}
+    >
+      {/* Icon + number/supplier + status badge */}
+      <View style={styles.topRow}>
+        <DocumentIconTile type="purchase_invoice" />
+        <View style={styles.titleCol}>
+          <Text style={[styles.invoiceNum, { color: colors.primary }]} numberOfLines={1}>{invoiceNum}</Text>
+          {supplier ? (
+            <Text style={[styles.supplierText, { color: colors.textSecondary }]} numberOfLines={1}>{supplier}</Text>
+          ) : null}
+        </View>
+        <AppBadge variant={getStatusVariant(item.status)}>
+          {statusLabels[item.status || ''] || item.status || 'Unknown'}
+        </AppBadge>
+      </View>
+
+      {/* Meta rows */}
+      {poNumber ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>LPO</Text>
+          <Text style={[styles.metaValue, { color: colors.textSecondary }]}>{poNumber}</Text>
+        </View>
+      ) : null}
+      {invoiceDate ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Invoice Date</Text>
+          <Text style={[styles.metaValue, { color: colors.textSecondary }]}>{invoiceDate}</Text>
+        </View>
+      ) : null}
+      {dueDate ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Due Date</Text>
+          <Text style={[styles.metaValue, { color: isOverdue ? colors.danger : colors.textSecondary, fontWeight: isOverdue ? '600' : '400' }]}>
+            {dueDate}{isOverdue ? ' · Overdue' : ''}
+          </Text>
+        </View>
+      ) : null}
+      {total ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Total</Text>
+          <Text style={[styles.metaValue, { color: colors.success, fontWeight: '700' }]}>{total}</Text>
+        </View>
+      ) : null}
+    </AppCard>
+  );
+});
+
 function PurchaseInvoicesScreenInner() {
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
@@ -60,9 +139,17 @@ function PurchaseInvoicesScreenInner() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [data, setData] = useState<PaginatedResponse<PurchaseInvoice> | null>(null);
-  const [loading, setLoading] = useState(true);
+  // initialLoading fills the screen once; listLoading (pagination / filter /
+  // search reloads) keeps the list AND its pagination footer mounted.
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Stale-response guard: an older response never overwrites a newer one,
+  // and nothing sets state after unmount.
+  const { nextSignal, isCurrent, mountedRef } = useCancellableFetch();
+  const hasLoadedOnce = useRef(false);
 
   // 400ms debounce
   useEffect(() => {
@@ -70,21 +157,31 @@ function PurchaseInvoicesScreenInner() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => { loadInvoices(); }, [page, debouncedSearch, filters]);
-
-  const loadInvoices = async () => {
+  const loadInvoices = useCallback(async () => {
+    const { seq } = nextSignal();
+    setError(null);
+    if (hasLoadedOnce.current) setListLoading(true);
     try {
-      setError(null);
-      setLoading(true);
-      setData(await purchaseInvoicesApi.getAll({ page, page_size: 50, search: debouncedSearch, ...filters }));
+      const response = await purchaseInvoicesApi.getAll({ page, page_size: 50, search: debouncedSearch, ...filters });
+      if (!isCurrent(seq) || !mountedRef.current) return;
+      setData(response);
+      hasLoadedOnce.current = true;
     } catch (err: any) {
+      if (!isCurrent(seq) || !mountedRef.current) return;
       setError(err.message || 'Failed to load purchase invoices');
       toast(err.message || 'Failed to load purchase invoices', 'error');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent(seq) && mountedRef.current) {
+        setInitialLoading(false);
+        setListLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [page, debouncedSearch, filters, nextSignal, isCurrent, mountedRef]);
+
+  useEffect(() => { loadInvoices(); }, [loadInvoices]);
+
+  const onRefresh = () => { setRefreshing(true); loadInvoices(); };
 
   const filterFields: FilterField[] = [
     { name: 'invoice_number', label: 'Invoice Number', type: 'text',   group: 'Invoice Info' },
@@ -109,80 +206,24 @@ function PurchaseInvoicesScreenInner() {
     const f = { ...filters }; delete f[key]; setFilters(f); setPage(1);
   };
 
-  const S = makeStyles(C);
-
-  const renderItem = ({ item }: { item: PurchaseInvoice }) => {
-    const itemId      = Number(item.id);
-    const invoiceNum  = item.invoice_number || `INV-${itemId}`;
-    const supplier    = typeof item.supplier === 'object'
-      ? (item.supplier as any)?.name
-      : (item as any).supplier_name || null;
-    const poNumber    = typeof item.purchase_order === 'object'
-      ? (item.purchase_order as any)?.order_number
-      : (item as any).purchase_order_number || null;
-    const invoiceDate = fmtDate((item as any).invoice_date);
-    const dueDate     = fmtDate((item as any).due_date);
-    const totalAmt    = (item as any).total ?? item.total_amount;
-    const total       = totalAmt != null ? `AED ${Number(totalAmt).toFixed(2)}` : null;
-
-    const isOverdue = dueDate && (item as any).due_date && item.status !== 'paid'
-      && new Date((item as any).due_date) < new Date();
-
-    return (
-      <AppCard
-        style={[S.itemCard, isOverdue && { borderLeftWidth: 3, borderLeftColor: C.danger }]}
-        onPress={() => router.push(`/purchase-invoices/${itemId}` as any)}
-      >
-        {/* Icon + number/supplier + status badge */}
-        <View style={S.topRow}>
-          <DocumentIconTile type="purchase_invoice" />
-          <View style={S.titleCol}>
-            <Text style={[S.invoiceNum, { color: C.primary }]} numberOfLines={1}>{invoiceNum}</Text>
-            {supplier ? (
-              <Text style={[S.supplierText, { color: C.textSecondary }]} numberOfLines={1}>{supplier}</Text>
-            ) : null}
-          </View>
-          <AppBadge variant={getStatusVariant(item.status)}>
-            {statusLabels[item.status || ''] || item.status || 'Unknown'}
-          </AppBadge>
-        </View>
-
-        {/* Meta rows */}
-        {poNumber ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>LPO</Text>
-            <Text style={[S.metaValue, { color: C.textSecondary }]}>{poNumber}</Text>
-          </View>
-        ) : null}
-        {invoiceDate ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Invoice Date</Text>
-            <Text style={[S.metaValue, { color: C.textSecondary }]}>{invoiceDate}</Text>
-          </View>
-        ) : null}
-        {dueDate ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Due Date</Text>
-            <Text style={[S.metaValue, { color: isOverdue ? C.danger : C.textSecondary, fontWeight: isOverdue ? '600' : '400' }]}>
-              {dueDate}{isOverdue ? ' · Overdue' : ''}
-            </Text>
-          </View>
-        ) : null}
-        {total ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Total</Text>
-            <Text style={[S.metaValue, { color: C.success, fontWeight: '700' }]}>{total}</Text>
-          </View>
-        ) : null}
-      </AppCard>
-    );
-  };
   // Stale-list fix: refetch when the screen regains focus (create/detail flows)
   useRefetchOnFocus(loadInvoices);
 
+  const openInvoice = useCallback(
+    (id: number) => router.push(`/purchase-invoices/${id}` as any),
+    [router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: PurchaseInvoice }) => (
+      <InvoiceCard item={item} colors={C} onOpen={openInvoice} />
+    ),
+    [C, openInvoice],
+  );
+
   return (
-    <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
-      <View style={S.inner}>
+    <SafeAreaView style={[styles.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
+      <View style={styles.inner}>
         {/* No "New" button: invoices are created from a GRN's "Create Invoice"
             card (needs a purchase_order_id) — the old button opened the form
             without one and it loaded nothing (getById(NaN)). */}
@@ -192,20 +233,16 @@ function PurchaseInvoicesScreenInner() {
           showBack
         />
 
-        <View style={S.searchContainer}>
-          <View style={S.searchRow}>
-            <View style={S.searchInputWrapper}>
-              <Input placeholder="Search invoices..." value={search} onChangeText={setSearch}
-                containerStyle={S.searchInput}
-                leftIcon={<IconSymbol name="magnifyingglass" size={20} color={C.textMuted} />} />
-            </View>
-            <View style={S.filterBtnWrapper}>
-              <FilterPanel fields={filterFields} filters={filters}
-                onFilterChange={handleFilterChange} onReset={handleFilterReset}
-                saveKey="purchase-invoices" />
-            </View>
-          </View>
-        </View>
+        <ListSearchBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search invoices..."
+          filterFields={filterFields}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onFilterReset={handleFilterReset}
+          filterSaveKey="purchase-invoices"
+        />
 
         {Object.keys(filters).length > 0 && (
           <FilterTags filters={filters} fields={filterFields}
@@ -213,92 +250,86 @@ function PurchaseInvoicesScreenInner() {
             onClearAll={() => { setFilters({}); setPage(1); }} />
         )}
 
-        {loading && !refreshing ? (
+        {initialLoading ? (
           <AppEmptyState variant="loading" title="Loading invoices..." />
         ) : error && !data?.results?.length ? (
-          <AppEmptyState variant="error" title="Failed to load" message={error}
-            actionLabel="Try Again" onAction={loadInvoices} />
-        ) : !data?.results?.length ? (
+          <AppErrorState title="Failed to load" message={error} onRetry={loadInvoices} />
+        ) : !data?.results?.length && !listLoading ? (
           <AppEmptyState variant="empty" icon="doc.text" title="No invoices"
             message="No purchase invoices found matching your criteria." />
         ) : (
-          <FlatList
-            data={data.results}
-            renderItem={renderItem}
-            keyExtractor={(item, index) => String(item.id ?? index)}
-            contentContainerStyle={S.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadInvoices(); }}
-                tintColor={C.primary} colors={[C.primary]} />
-            }
-            ListFooterComponent={
-              data && data.count > 50 ? (
-                <View style={[S.pagination, { backgroundColor: C.surfaceSoft, borderTopColor: C.border }]}>
-                  <AppButton title="Previous" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!data.previous || page === 1} style={S.paginationBtn} />
-                  <Text style={[S.paginationText, { color: C.textMuted }]}>
-                    {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
-                  </Text>
-                  <AppButton title="Next" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => p + 1)}
-                    disabled={!data.next} style={S.paginationBtn} />
-                </View>
-              ) : null
-            }
-          />
+          <View style={{ flex: 1 }}>
+            {/* Slim reload bar — the list and its pagination stay mounted */}
+            {listLoading && !refreshing ? (
+              <View style={[styles.reloadBar, { backgroundColor: C.surfaceSoft }]}>
+                <ActivityIndicator size="small" color={C.primary} />
+                <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
+              </View>
+            ) : null}
+            <FlatList
+              data={data?.results ?? []}
+              renderItem={renderItem}
+              keyExtractor={(item, index) => String(item.id ?? index)}
+              contentContainerStyle={styles.listContent}
+              style={listLoading ? { opacity: 0.6 } : undefined}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
+                  tintColor={C.primary} colors={[C.primary]} />
+              }
+              ListFooterComponent={
+                data && data.count > 50 ? (
+                  <AppPagination
+                    page={page}
+                    pageSize={50}
+                    totalCount={data.count}
+                    hasPrevious={!!data.previous}
+                    hasNext={!!data.next}
+                    onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+                    onNext={() => setPage((p) => p + 1)}
+                    loading={listLoading}
+                  />
+                ) : null
+              }
+            />
+          </View>
         )}
       </View>
     </SafeAreaView>
   );
 }
 
-function makeStyles(C: AppColors) {
-  return StyleSheet.create({
-    container: { flex: 1 },
-    inner:     { flex: 1 },
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  inner:     { flex: 1 },
 
-    searchContainer: {
-      paddingHorizontal: Layout.screenPadding,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.sm,
-    },
-    searchRow:        { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    searchInputWrapper:{ flex: 1 },
-    searchInput:      { marginBottom: 0 },
-    filterBtnWrapper: { alignSelf: 'flex-start' },
+  listContent: {
+    padding: Layout.screenPadding,
+    paddingTop: Spacing.md,
+    paddingBottom: 120,
+  },
+  itemCard: { marginBottom: Spacing.sm },
 
-    listContent: {
-      padding: Layout.screenPadding,
-      paddingTop: Spacing.md,
-      paddingBottom: 120,
-    },
-    itemCard: { marginBottom: Spacing.sm },
+  topRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: Spacing.sm, marginBottom: Spacing.md,
+  },
+  titleCol: { flex: 1, gap: 2 },
+  invoiceNum: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
+  supplierText: { fontSize: 13, lineHeight: 18 },
 
-    topRow: {
-      flexDirection: 'row', alignItems: 'center',
-      gap: Spacing.sm, marginBottom: Spacing.md,
-    },
-    titleCol: { flex: 1, gap: 2 },
-    invoiceNum: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
-    supplierText: { fontSize: 13, lineHeight: 18 },
+  metaRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: Spacing.sm, paddingVertical: 3,
+  },
+  metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 88, flexShrink: 0 },
+  metaValue: { fontSize: 13, flex: 1 },
 
-    metaRow: {
-      flexDirection: 'row', alignItems: 'center',
-      gap: Spacing.sm, paddingVertical: 3,
-    },
-    metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 88, flexShrink: 0 },
-    metaValue: { fontSize: 13, flex: 1 },
-
-    pagination: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
-      gap: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    paginationBtn:  { minWidth: 80 },
-    paginationText: { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
-  });
-}
+  reloadBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, paddingVertical: 6,
+  },
+  reloadText: { fontSize: 12, fontWeight: '500' },
+});
 
 
 export default function PurchaseInvoicesScreen() {

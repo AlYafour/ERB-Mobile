@@ -15,6 +15,29 @@ export interface ApiResponse<T> {
   status: number;
 }
 
+/** Error thrown by `unwrap()` — carries the response status so callers can branch on it instead of string-matching the message. */
+export class ApiError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+/**
+ * Shared unwrap for the `if (response.error || response.data == null) throw; return response.data;`
+ * pattern copy-pasted across lib/api/*.ts. Throws an ApiError carrying response.status so callers
+ * can branch on status rather than string-matching the error message.
+ */
+export function unwrap<T>(response: ApiResponse<T>, fallbackMsg: string): T {
+  if (response.error || response.data == null) {
+    throw new ApiError(response.error || fallbackMsg, response.status);
+  }
+  return response.data;
+}
+
 type AuthClearedCallback = () => void;
 // 'ok' = new token stored, 'invalid' = refresh token expired (logout), 'network' = server unreachable (don't logout)
 type RefreshResult = 'ok' | 'invalid' | 'network';

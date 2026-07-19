@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,8 +15,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/ui/Logo';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const CODE_LENGTH = 6;
+
+type Palette = typeof Colors.light | typeof Colors.dark;
 
 // Fallback only for a cached bundle talking to a backend from before
 // accounts a3e00769a (which always sends expires_in now) — mirrors the
@@ -31,6 +35,10 @@ const DEFAULT_EXPIRES_IN = 300;
  * The temp token is single-use and short-lived — on expiry the user must sign in again.
  */
 export default function TwoFactorScreen() {
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+  const s = useMemo(() => makeStyles(C), [C]);
+
   const { tempToken, expiresIn: expiresInParam } = useLocalSearchParams<{ tempToken: string; expiresIn?: string }>();
   const { verifyTwoFactor, branding } = useAuth();
   const router = useRouter();
@@ -65,7 +73,7 @@ export default function TwoFactorScreen() {
     return () => clearInterval(id);
   }, [expired]);
 
-  const brandColor = branding?.primary_color || '#C9943A';
+  const brandColor = branding?.primary_color || C.primary;
   const timeLow = secondsLeft <= 30 && secondsLeft > 0;
   const timeLabel = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
   // Both the timer running out and a spent attempt end the session the same
@@ -100,7 +108,7 @@ export default function TwoFactorScreen() {
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#07111F" />
+      <StatusBar barStyle={cs === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={C.background} />
       <KeyboardAvoidingView
         // Android: rely on the window's adjustResize — 'height' visibly
         // re-lays-out the whole screen on every keyboard open/close.
@@ -127,7 +135,7 @@ export default function TwoFactorScreen() {
 
             {expired ? (
               <View style={s.expiredBox}>
-                <IconSymbol name="clock.badge.questionmark" size={20} color="#FCA5A5" />
+                <IconSymbol name="clock.badge.questionmark" size={20} color={C.errorText} />
                 <Text style={s.expiredText}>
                   This session has expired. Please sign in again to get a new code.
                 </Text>
@@ -185,7 +193,7 @@ export default function TwoFactorScreen() {
                     accessibilityLabel="Delete last digit"
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <IconSymbol name="delete.left" size={18} color="#94A3B8" />
+                    <IconSymbol name="delete.left" size={18} color={C.textMuted} />
                     <Text style={s.editBtnText}>Delete</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -196,7 +204,7 @@ export default function TwoFactorScreen() {
                     accessibilityLabel="Clear code"
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <IconSymbol name="xmark.circle.fill" size={18} color="#94A3B8" />
+                    <IconSymbol name="xmark.circle.fill" size={18} color={C.textMuted} />
                     <Text style={s.editBtnText}>Clear</Text>
                   </TouchableOpacity>
                 </View>
@@ -215,7 +223,7 @@ export default function TwoFactorScreen() {
                   accessibilityState={{ disabled: loading || code.length !== CODE_LENGTH, busy: loading }}
                 >
                   {loading
-                    ? <ActivityIndicator color="#FFFFFF" size="small" />
+                    ? <ActivityIndicator color={C.primaryText} size="small" />
                     : <Text style={s.btnText}>Verify</Text>
                   }
                 </TouchableOpacity>
@@ -252,14 +260,14 @@ export default function TwoFactorScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#07111F' },
+const makeStyles = (C: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.background },
   content: { flex: 1, paddingHorizontal: 24, alignItems: 'stretch' },
   logoWrap: { alignItems: 'center', marginBottom: 28 },
 
   card: {
-    backgroundColor: '#0D1B2A',
-    borderColor: '#1E3349',
+    backgroundColor: C.surface,
+    borderColor: C.border,
     borderWidth: 1,
     borderRadius: 22,
     padding: 28,
@@ -270,46 +278,46 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#F8FAFC' },
-  sub: { fontSize: 13, color: '#64748B', marginBottom: 22 },
+  title: { fontSize: 20, fontWeight: '700', color: C.textPrimary },
+  sub: { fontSize: 13, color: C.textMuted, marginBottom: 22 },
 
   timerPill: {
-    backgroundColor: 'rgba(148,163,184,0.12)',
+    backgroundColor: C.surfaceMuted,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  timerPillLow: { backgroundColor: 'rgba(239,68,68,0.14)' },
+  timerPillLow: { backgroundColor: C.dangerBg },
   timerText: {
-    color: '#94A3B8',
+    color: C.textMuted,
     fontSize: 12,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  timerTextLow: { color: '#FCA5A5' },
+  timerTextLow: { color: C.errorText },
 
   errorBox: {
-    backgroundColor: 'rgba(239,68,68,0.10)',
+    backgroundColor: C.dangerBg,
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.28)',
+    borderColor: `${C.danger}47`,
   },
-  errorText: { color: '#FCA5A5', fontSize: 13, fontWeight: '500', textAlign: 'center' },
+  errorText: { color: C.errorText, fontSize: 13, fontWeight: '500', textAlign: 'center' },
 
   expiredBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: 'rgba(239,68,68,0.10)',
+    backgroundColor: C.dangerBg,
     borderRadius: 10,
     padding: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.28)',
+    borderColor: `${C.danger}47`,
   },
-  expiredText: { flex: 1, color: '#FCA5A5', fontSize: 13, fontWeight: '500', lineHeight: 19 },
+  expiredText: { flex: 1, color: C.errorText, fontSize: 13, fontWeight: '500', lineHeight: 19 },
 
   codeArea: { position: 'relative', marginBottom: 10 },
   digitsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
@@ -318,14 +326,14 @@ const s = StyleSheet.create({
     aspectRatio: 0.82,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#1E3349',
-    backgroundColor: '#0A1624',
+    borderColor: C.border,
+    backgroundColor: C.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  digit: { fontSize: 24, fontWeight: '700', color: '#F8FAFC' },
+  digit: { fontSize: 24, fontWeight: '700', color: C.textPrimary },
   digitBoxExpired: { opacity: 0.4 },
-  digitExpired: { color: '#64748B' },
+  digitExpired: { color: C.textMuted },
   overlayInput: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0.02,
@@ -345,7 +353,7 @@ const s = StyleSheet.create({
     minHeight: 40,
     paddingHorizontal: 10,
   },
-  editBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
+  editBtnText: { color: C.textMuted, fontSize: 13, fontWeight: '600' },
 
   btn: {
     borderRadius: 12,
@@ -355,15 +363,15 @@ const s = StyleSheet.create({
     minHeight: 48,
   },
   btnDisabled: { opacity: 0.55 },
-  btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
-  btnOutline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#1E3349' },
-  btnOutlineText: { color: '#F8FAFC', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  btnText: { color: C.primaryText, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  btnOutline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: C.border },
+  btnOutlineText: { color: C.textPrimary, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 
   backLink: { alignItems: 'center', marginTop: 18, minHeight: 44, justifyContent: 'center' },
-  backText: { color: '#94A3B8', fontSize: 14, fontWeight: '600' },
+  backText: { color: C.textMuted, fontSize: 14, fontWeight: '600' },
 
   hint: {
-    color: '#475569',
+    color: C.textMuted,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 20,

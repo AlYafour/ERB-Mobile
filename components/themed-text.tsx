@@ -18,17 +18,6 @@ export function ThemedText({
 }: ThemedTextProps) {
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
 
-  // Use system fonts with better weights
-  const getFontFamily = (weight: string) => {
-    // For now, we use system fonts. When custom fonts are loaded, use them here
-    // Example: return Typography.families.inter[weight] || 'System';
-    return Platform.select({
-      ios: 'System',
-      android: 'Roboto',
-      default: 'System',
-    });
-  };
-
   return (
     <Text
       style={[

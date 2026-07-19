@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseInvoicesApi } from '@/lib/api/purchase-invoices';
@@ -9,14 +9,17 @@ import { toast, confirm } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
-import { PurchaseInvoice } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useDetailFetch } from '@/lib/hooks/use-detail-fetch';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
+import { formatMoney } from '@/lib/utils/format';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -25,16 +28,17 @@ const statusLabels: Record<string, string> = {
   rejected: 'Rejected', paid: 'Paid', cancelled: 'Cancelled',
 };
 
-function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info' | 'default' {
-  switch (s) {
-    case 'approved': return 'success';
-    case 'paid':     return 'success';
-    case 'rejected': return 'danger';
-    case 'cancelled':return 'danger';
-    case 'pending':  return 'warning';
-    case 'draft':    return 'info';
-    default:         return 'default';
-  }
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  approved: 'success',
+  paid: 'success',
+  rejected: 'danger',
+  cancelled: 'danger',
+  pending: 'warning',
+  draft: 'info',
+};
+
+function getStatusVariant(s?: string): BadgeVariant {
+  return STATUS_VARIANTS[s || ''] ?? 'default';
 }
 
 function fmtDate(d?: string | null) {
@@ -52,9 +56,6 @@ function PurchaseInvoiceDetailScreenInner() {
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
-  const [invoice, setInvoice] = useState<PurchaseInvoice | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -65,23 +66,10 @@ function PurchaseInvoiceDetailScreenInner() {
   const canReject   = su || (hasPermission('purchase_invoice', 'reject')   ?? false);
   const canMarkPaid = su || (hasPermission('purchase_invoice', 'mark_paid') ?? false);
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      setInvoice(await purchaseInvoicesApi.getById(id));
-    } catch (err: any) {
-      toast(err.message || 'Failed to load invoice', 'error');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [id]);
-  // Stale-detail fix: refetch when the screen regains focus (a child
-  // flow - create QR/PO/GRN/invoice, approve, edit - can change this
-  // document's state while this screen stays mounted underneath).
-  useRefetchOnFocus(load);
+  const { data: invoice, loading, refreshing, reload, onRefresh } = useDetailFetch(
+    (invId: number) => purchaseInvoicesApi.getById(invId), id, 'Failed to load invoice'
+  );
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const handleApprove = async () => {
     if (!await confirm('Approve this invoice?')) return;
@@ -89,7 +77,7 @@ function PurchaseInvoiceDetailScreenInner() {
       setApproving(true);
       await purchaseInvoicesApi.approve(id);
       toast('Invoice approved', 'success');
-      load();
+      reload();
     } catch (err: any) {
       toast(err.message || 'Failed to approve', 'error');
     } finally {
@@ -103,7 +91,7 @@ function PurchaseInvoiceDetailScreenInner() {
       await purchaseInvoicesApi.reject(id, reason);
       toast('Invoice rejected', 'info');
       setRejectOpen(false);
-      load();
+      reload();
     } catch (err: any) {
       toast(err.message || 'Failed to reject', 'error');
     } finally {
@@ -111,36 +99,27 @@ function PurchaseInvoiceDetailScreenInner() {
     }
   };
 
-  const handleMarkPaid = async () => {
-    if (!await confirm('Mark this invoice as paid?')) return;
-    try {
-      setMarkingPaid(true);
-      await purchaseInvoicesApi.markPaid(id, {
-        paid_amount: invoice?.total_amount,
-        payment_date: new Date().toISOString().split('T')[0],
-      });
-      toast('Invoice marked as paid', 'success');
-      load();
-    } catch (err: any) {
-      toast(err.message || 'Failed to mark as paid', 'error');
-    } finally {
-      setMarkingPaid(false);
-    }
-  };
-
   const S = makeStyles(C);
 
-  if (loading) return (
+  if (loading && !invoice) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Purchase Invoice" showBack />
-      <View style={S.center}><AppEmptyState variant="loading" title="Loading invoice..." /></View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
   if (!invoice) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Purchase Invoice" showBack />
-      <View style={S.center}><AppEmptyState variant="empty" title="Invoice not found" /></View>
+      <View style={S.center}>
+        <AppEmptyState
+          variant="error"
+          title="Failed to load"
+          message="Could not load the purchase invoice."
+          actionLabel="Try Again"
+          onAction={reload}
+        />
+      </View>
     </SafeAreaView>
   );
 
@@ -154,12 +133,38 @@ function PurchaseInvoiceDetailScreenInner() {
   const grnId       = typeof inv.goods_receiving === 'object' ? inv.goods_receiving?.id : null;
 
   const paidAmt     = inv.paid_amount != null ? Number(inv.paid_amount) : null;
-  const totalAmt    = invoice.total_amount != null ? Number(invoice.total_amount) : null;
+  // The backend field for the grand total is inconsistently named `total` vs
+  // `total_amount` depending on endpoint/serializer (see the same fallback in
+  // app/purchase-invoices.tsx, app/purchase-orders.tsx, app/purchase-quotations.tsx
+  // list screens) — read both so this doesn't silently show/compute a blank total.
+  const totalRaw    = inv.total ?? invoice.total_amount;
+  const totalAmt    = totalRaw != null ? Number(totalRaw) : null;
   const outstanding = totalAmt != null && paidAmt != null && totalAmt > paidAmt
     ? totalAmt - paidAmt : null;
+  // Amount due to post to markPaid by default — the remaining balance, not
+  // the full invoice total (which would overwrite any partial payment already
+  // recorded). Falls back to the full total when nothing has been paid yet.
+  const amountDue   = totalAmt != null ? totalAmt - (paidAmt ?? 0) : undefined;
 
   const dueDate     = inv.due_date;
   const isOverdue   = dueDate && status !== 'paid' && new Date(dueDate) < new Date();
+
+  const handleMarkPaid = async () => {
+    if (!await confirm('Mark this invoice as paid?')) return;
+    try {
+      setMarkingPaid(true);
+      await purchaseInvoicesApi.markPaid(id, {
+        paid_amount: amountDue,
+        payment_date: new Date().toISOString().split('T')[0],
+      });
+      toast('Invoice marked as paid', 'success');
+      reload();
+    } catch (err: any) {
+      toast(err.message || 'Failed to mark as paid', 'error');
+    } finally {
+      setMarkingPaid(false);
+    }
+  };
 
   // Which bottom bar to show
   const showApproveReject = status === 'pending' && (canApprove || canReject);
@@ -177,10 +182,7 @@ function PurchaseInvoiceDetailScreenInner() {
 
       <ScrollView
         contentContainerStyle={[S.content, { paddingBottom: hasActions ? 100 : 24 }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={C.primary} colors={[C.primary]} />
-        }
+        refreshControl={pullToRefresh}
         showsVerticalScrollIndicator={false}
       >
         {/* Invoice Information */}
@@ -252,14 +254,14 @@ function PurchaseInvoiceDetailScreenInner() {
                       {item.unit_price ? (
                         <View style={[S.chip, { backgroundColor: C.surfaceSoft }]}>
                           <Text style={[S.chipText, { color: C.textMuted }]}>
-                            AED {Number(item.unit_price).toFixed(2)}
+                            {formatMoney(item.unit_price)}
                           </Text>
                         </View>
                       ) : null}
                     </View>
                   </View>
                   {lineTotal != null ? (
-                    <Text style={[S.itemTotal, { color: C.textPrimary }]}>AED {lineTotal.toFixed(2)}</Text>
+                    <Text style={[S.itemTotal, { color: C.textPrimary }]}>{formatMoney(lineTotal)}</Text>
                   ) : null}
                 </View>
               );
@@ -271,23 +273,23 @@ function PurchaseInvoiceDetailScreenInner() {
         <AppCard style={S.card}>
           <Text style={S.sectionTitle}>Payment Summary</Text>
           {invoice.subtotal !== undefined ? (
-            <AppCardRow label="Subtotal" value={`AED ${Number(invoice.subtotal).toFixed(2)}`} />
+            <AppCardRow label="Subtotal" value={formatMoney(invoice.subtotal)} />
           ) : null}
           {inv.tax_amount !== undefined && inv.tax_amount > 0 ? (
             <AppCardRow label={`Tax ${inv.tax_rate ? `(${inv.tax_rate}%)` : ''}`}
-              value={`AED ${Number(inv.tax_amount).toFixed(2)}`} />
+              value={formatMoney(inv.tax_amount)} />
           ) : null}
           {totalAmt != null ? (
             <View style={[S.totalRow, { borderTopColor: C.primary }]}>
               <Text style={[S.totalLabel, { color: C.textPrimary }]}>Total</Text>
-              <Text style={[S.totalValue, { color: C.primary }]}>AED {totalAmt.toFixed(2)}</Text>
+              <Text style={[S.totalValue, { color: C.primary }]}>{formatMoney(totalAmt)}</Text>
             </View>
           ) : null}
           {paidAmt != null && paidAmt > 0 ? (
-            <AppCardRow label="Paid" value={`AED ${paidAmt.toFixed(2)}`} valueColor={C.success} />
+            <AppCardRow label="Paid" value={formatMoney(paidAmt)} valueColor={C.success} />
           ) : null}
           {outstanding != null && outstanding > 0 ? (
-            <AppCardRow label="Outstanding" value={`AED ${outstanding.toFixed(2)}`}
+            <AppCardRow label="Outstanding" value={formatMoney(outstanding)}
               valueColor={C.danger} last />
           ) : null}
         </AppCard>
@@ -330,11 +332,8 @@ function PurchaseInvoiceDetailScreenInner() {
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container:    { flex: 1, backgroundColor: C.background },
-    center:       { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    ...baseDetailStyles(C),
     content:      { padding: 16 },
-    card:         { marginBottom: 12 },
-    sectionTitle: { fontSize: 15, fontWeight: '700', color: C.textPrimary, marginBottom: 14, letterSpacing: -0.2 },
 
     notesBox:     { marginTop: 10, padding: 12, borderRadius: 8 },
     notesText:    { fontSize: 13, lineHeight: 20 },

@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { PurchaseRequest, PurchaseRequestItem, PaginatedResponse } from '@/types';
 
 export const purchaseRequestsApi = {
@@ -22,29 +23,15 @@ export const purchaseRequestsApi = {
     created_at_after?: string;
     created_at_before?: string;
   }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<PurchaseRequest>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
+    const queryString = buildQueryString(params || {});
     const endpoint = `${API_ENDPOINTS.PURCHASE_REQUESTS}${queryString ? `?${queryString}` : ''}`;
     const response = await apiClient.get<PaginatedResponse<PurchaseRequest>>(endpoint, options);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch purchase requests');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch purchase requests');
   },
 
   getById: async (id: number | string): Promise<PurchaseRequest> => {
     const response = await apiClient.get<PurchaseRequest>(API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id)));
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch purchase request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch purchase request');
   },
 
   create: async (data: {
@@ -56,18 +43,12 @@ export const purchaseRequestsApi = {
     items: Omit<PurchaseRequestItem, 'product' | 'created_at'>[];
   }): Promise<PurchaseRequest> => {
     const response = await apiClient.post<PurchaseRequest>(API_ENDPOINTS.PURCHASE_REQUESTS, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create purchase request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to create purchase request');
   },
 
   update: async (id: number | string, data: Partial<PurchaseRequest>): Promise<PurchaseRequest> => {
     const response = await apiClient.patch<PurchaseRequest>(API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id)), data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update purchase request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to update purchase request');
   },
 
   delete: async (id: number | string): Promise<void> => {
@@ -79,28 +60,19 @@ export const purchaseRequestsApi = {
 
   approve: async (id: number | string): Promise<PurchaseRequest> => {
     const response = await apiClient.post<PurchaseRequest>(`${API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id))}approve/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to approve purchase request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to approve purchase request');
   },
 
   reject: async (id: number | string, rejection_reason: string): Promise<PurchaseRequest> => {
     const response = await apiClient.post<PurchaseRequest>(`${API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id))}reject/`, {
       rejection_reason,
     });
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to reject purchase request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to reject purchase request');
   },
 
   undoApproval: async (id: number | string): Promise<PurchaseRequest> => {
     const response = await apiClient.post<PurchaseRequest>(`${API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id))}undo_approval/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to undo approval');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to undo approval');
   },
 
   resubmit: async (id: number | string, comment?: string): Promise<PurchaseRequest> => {
@@ -108,10 +80,7 @@ export const purchaseRequestsApi = {
       `${API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id))}resubmit/`,
       comment ? { resubmit_comment: comment } : undefined,
     );
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to resubmit purchase request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to resubmit purchase request');
   },
 
   getTrackingTimeline: async (id: number | string): Promise<{
@@ -142,10 +111,6 @@ export const purchaseRequestsApi = {
     total_duration: string | null;
   }> => {
     const response = await apiClient.get<any>(`${API_ENDPOINTS.PURCHASE_REQUEST_DETAIL(String(id))}tracking_timeline/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch tracking timeline');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch tracking timeline');
   },
 };
-

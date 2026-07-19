@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { QuotationRequest, PaginatedResponse } from '@/types';
 
 export const quotationRequestsApi = {
@@ -14,30 +15,16 @@ export const quotationRequestsApi = {
     status?: string;
     created_at_after?: string;
     created_at_before?: string;
-  }): Promise<PaginatedResponse<QuotationRequest>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<QuotationRequest>> => {
+    const queryString = buildQueryString(params || {});
     const endpoint = `${API_ENDPOINTS.QUOTATION_REQUESTS}${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<QuotationRequest>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch quotation requests');
-    }
-    return response.data;
+    const response = await apiClient.get<PaginatedResponse<QuotationRequest>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch quotation requests');
   },
 
   getById: async (id: number | string): Promise<QuotationRequest> => {
     const response = await apiClient.get<QuotationRequest>(API_ENDPOINTS.QUOTATION_REQUEST_DETAIL(String(id)));
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch quotation request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch quotation request');
   },
 
   create: async (data: {
@@ -52,18 +39,12 @@ export const quotationRequestsApi = {
     }>;
   }): Promise<QuotationRequest> => {
     const response = await apiClient.post<QuotationRequest>(API_ENDPOINTS.QUOTATION_REQUESTS, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create quotation request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to create quotation request');
   },
 
   update: async (id: number | string, data: Partial<QuotationRequest>): Promise<QuotationRequest> => {
     const response = await apiClient.patch<QuotationRequest>(API_ENDPOINTS.QUOTATION_REQUEST_DETAIL(String(id)), data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update quotation request');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to update quotation request');
   },
 
   delete: async (id: number | string): Promise<void> => {
@@ -73,4 +54,3 @@ export const quotationRequestsApi = {
     }
   },
 };
-

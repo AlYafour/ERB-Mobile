@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { PaginatedResponse } from '@/types';
 
 export interface HREmployee {
@@ -92,53 +93,42 @@ export const hrMeApi = {
 // ── Attendance ─────────────────────────────────────────────────────────────────
 
 export const hrAttendanceApi = {
-  getAll: async (params?: { employee?: number; page?: number }): Promise<PaginatedResponse<HRAttendance>> => {
-    const q = new URLSearchParams();
-    if (params?.employee) q.append('employee', String(params.employee));
-    if (params?.page) q.append('page', String(params.page));
-    const url = API_ENDPOINTS.HR_ATTENDANCE + (q.toString() ? `?${q}` : '');
-    const res = await apiClient.get<PaginatedResponse<HRAttendance>>(url);
-    if (res.error || !res.data) throw new Error(res.error || 'Failed');
-    return res.data;
+  getAll: async (params?: { employee?: number; page?: number }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<HRAttendance>> => {
+    const queryString = buildQueryString(params || {});
+    const url = API_ENDPOINTS.HR_ATTENDANCE + (queryString ? `?${queryString}` : '');
+    const res = await apiClient.get<PaginatedResponse<HRAttendance>>(url, options);
+    return unwrap(res, 'Failed');
   },
 
   checkIn: async (data?: { latitude?: number; longitude?: number; address?: string }): Promise<HRAttendance> => {
     const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_CHECK_IN, data ?? {});
-    if (res.error || !res.data) throw new Error(res.error || 'Check-in failed');
-    return res.data;
+    return unwrap(res, 'Check-in failed');
   },
 
   checkOut: async (data?: { latitude?: number; longitude?: number }): Promise<HRAttendance> => {
     const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_CHECK_OUT, data ?? {});
-    if (res.error || !res.data) throw new Error(res.error || 'Check-out failed');
-    return res.data;
+    return unwrap(res, 'Check-out failed');
   },
 
   breakOut: async (): Promise<HRAttendance> => {
     const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_BREAK_OUT, {});
-    if (res.error || !res.data) throw new Error(res.error || 'Break start failed');
-    return res.data;
+    return unwrap(res, 'Break start failed');
   },
 
   breakIn: async (): Promise<HRAttendance> => {
     const res = await apiClient.post<HRAttendance>(API_ENDPOINTS.HR_ATTENDANCE_BREAK_IN, {});
-    if (res.error || !res.data) throw new Error(res.error || 'Break end failed');
-    return res.data;
+    return unwrap(res, 'Break end failed');
   },
 };
 
 // ── Requests ───────────────────────────────────────────────────────────────────
 
 export const hrRequestsApi = {
-  getAll: async (params?: { employee?: number; status?: string; page?: number }): Promise<PaginatedResponse<HRRequest>> => {
-    const q = new URLSearchParams();
-    if (params?.employee) q.append('employee', String(params.employee));
-    if (params?.status) q.append('status', params.status);
-    if (params?.page) q.append('page', String(params.page));
-    const url = API_ENDPOINTS.HR_REQUESTS + (q.toString() ? `?${q}` : '');
-    const res = await apiClient.get<PaginatedResponse<HRRequest>>(url);
-    if (res.error || !res.data) throw new Error(res.error || 'Failed');
-    return res.data;
+  getAll: async (params?: { employee?: number; status?: string; page?: number }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<HRRequest>> => {
+    const queryString = buildQueryString(params || {});
+    const url = API_ENDPOINTS.HR_REQUESTS + (queryString ? `?${queryString}` : '');
+    const res = await apiClient.get<PaginatedResponse<HRRequest>>(url, options);
+    return unwrap(res, 'Failed');
   },
 
   create: async (data: {
@@ -150,20 +140,17 @@ export const hrRequestsApi = {
     reason?: string;
   }): Promise<HRRequest> => {
     const res = await apiClient.post<HRRequest>(API_ENDPOINTS.HR_REQUESTS, data);
-    if (res.error || !res.data) throw new Error(res.error || 'Failed to submit request');
-    return res.data;
+    return unwrap(res, 'Failed to submit request');
   },
 
   approve: async (id: number): Promise<HRRequest> => {
     const res = await apiClient.post<HRRequest>(API_ENDPOINTS.HR_REQUEST_APPROVE(String(id)), {});
-    if (res.error || !res.data) throw new Error(res.error || 'Failed');
-    return res.data;
+    return unwrap(res, 'Failed');
   },
 
   reject: async (id: number, reject_reason: string): Promise<HRRequest> => {
     const res = await apiClient.post<HRRequest>(API_ENDPOINTS.HR_REQUEST_REJECT(String(id)), { reject_reason });
-    if (res.error || !res.data) throw new Error(res.error || 'Failed');
-    return res.data;
+    return unwrap(res, 'Failed');
   },
 
   getLeaveBalances: async (employee: number, year: number): Promise<HRLeaveBalance[]> => {
@@ -177,14 +164,10 @@ export const hrRequestsApi = {
 // ── Payroll ────────────────────────────────────────────────────────────────────
 
 export const hrPayrollApi = {
-  getAll: async (params?: { employee?: number; year?: number; page?: number }): Promise<PaginatedResponse<HRPayroll>> => {
-    const q = new URLSearchParams();
-    if (params?.employee) q.append('employee', String(params.employee));
-    if (params?.year) q.append('year', String(params.year));
-    if (params?.page) q.append('page', String(params.page));
-    const url = API_ENDPOINTS.HR_PAYROLL + (q.toString() ? `?${q}` : '');
-    const res = await apiClient.get<PaginatedResponse<HRPayroll>>(url);
-    if (res.error || !res.data) throw new Error(res.error || 'Failed');
-    return res.data;
+  getAll: async (params?: { employee?: number; year?: number; page?: number }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<HRPayroll>> => {
+    const queryString = buildQueryString(params || {});
+    const url = API_ENDPOINTS.HR_PAYROLL + (queryString ? `?${queryString}` : '');
+    const res = await apiClient.get<PaginatedResponse<HRPayroll>>(url, options);
+    return unwrap(res, 'Failed');
   },
 };

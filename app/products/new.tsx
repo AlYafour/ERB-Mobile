@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Switch, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { productsApi } from '@/lib/api/products';
 import { suppliersApi } from '@/lib/api/suppliers';
@@ -8,26 +8,17 @@ import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
+import { AppSectionHeader } from '@/components/ui/AppScreen';
+import { FormBottomBar } from '@/components/ui/FormBottomBar';
 import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import { Supplier } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { UNITS } from '@/constants/units';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
-
-const UNITS = [
-  { value: 'piece', label: 'Piece' },
-  { value: 'kg', label: 'Kilogram' },
-  { value: 'g', label: 'Gram' },
-  { value: 'liter', label: 'Liter' },
-  { value: 'ml', label: 'Milliliter' },
-  { value: 'meter', label: 'Meter' },
-  { value: 'cm', label: 'Centimeter' },
-  { value: 'box', label: 'Box' },
-  { value: 'pack', label: 'Pack' },
-];
 
 const DISCOUNT_TYPES = [
   { value: 'percentage', label: 'Percentage (%)' },
@@ -36,13 +27,13 @@ const DISCOUNT_TYPES = [
 
 function NewProductScreenInner() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const S = makeStyles(C);
 
   const [saving, setSaving] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [suppliersError, setSuppliersError] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     name: '',
@@ -65,8 +56,18 @@ function NewProductScreenInner() {
   });
 
   useEffect(() => {
-    suppliersApi.getAll({ page_size: 100 }).then((r) => setSuppliers(r.results || [])).catch(() => {});
+    loadSuppliers();
   }, []);
+
+  const loadSuppliers = async () => {
+    try {
+      setSuppliersError(false);
+      const list = await suppliersApi.getAllActive();
+      setSuppliers(list);
+    } catch {
+      setSuppliersError(true);
+    }
+  };
 
   const set = (key: keyof typeof form) => (val: any) =>
     setForm((f) => ({ ...f, [key]: val }));
@@ -112,8 +113,8 @@ function NewProductScreenInner() {
       <ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Basic Information */}
+        <AppSectionHeader title="Basic Information" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Basic Information</Text>
           <Input label="Product Name *" value={form.name} onChangeText={set('name')}
             placeholder="Enter product name" error={errors.name} />
           <Input label="Product Code" value={form.code} onChangeText={set('code')}
@@ -126,9 +127,14 @@ function NewProductScreenInner() {
           <Input label="Brand" value={form.brand} onChangeText={set('brand')} placeholder="Enter brand" />
           <Input label="Category" value={form.category} onChangeText={set('category')}
             placeholder="Enter category" />
-          <SearchableDropdown label="Unit" options={UNITS} value={form.unit}
+          <SearchableDropdown label="Unit" options={UNITS as unknown as { value: string; label: string }[]} value={form.unit}
             onChange={(v) => set('unit')(v as string)} placeholder="Select unit" />
-          {supplierOptions.length > 0 ? (
+          {suppliersError ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text style={{ fontSize: 13, color: C.danger, flex: 1 }}>Failed to load suppliers.</Text>
+              <AppButton title="Retry" variant="outline" size="sm" onPress={loadSuppliers} />
+            </View>
+          ) : supplierOptions.length > 0 ? (
             <SearchableDropdown label="Supplier" options={supplierOptions} value={form.supplier}
               onChange={(v) => set('supplier')(v as number | undefined)}
               placeholder="Select supplier" allowClear />
@@ -136,8 +142,8 @@ function NewProductScreenInner() {
         </AppCard>
 
         {/* Pricing */}
+        <AppSectionHeader title="Pricing (AED)" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Pricing (AED)</Text>
           <Input label="Unit Price" value={form.unit_price} onChangeText={set('unit_price')}
             placeholder="0.00" keyboardType="numeric" />
           <Input label="Buy Price" value={form.buy_price} onChangeText={set('buy_price')}
@@ -149,8 +155,8 @@ function NewProductScreenInner() {
         </AppCard>
 
         {/* Stock */}
+        <AppSectionHeader title="Stock" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Stock</Text>
           <View style={S.switchRow}>
             <Text style={[S.switchLabel, { color: C.textPrimary }]}>Track Stock</Text>
             <Switch value={form.track_stock} onValueChange={set('track_stock')}
@@ -167,8 +173,8 @@ function NewProductScreenInner() {
         </AppCard>
 
         {/* Status */}
+        <AppSectionHeader title="Status" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Status</Text>
           <View style={S.switchRow}>
             <Text style={[S.switchLabel, { color: C.textPrimary }]}>Active</Text>
             <Switch value={form.is_active} onValueChange={set('is_active')}
@@ -180,12 +186,13 @@ function NewProductScreenInner() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
-          disabled={saving} style={S.barBtn} />
-        <AppButton title="Create Product" variant="primary" size="md" onPress={handleSubmit}
-          loading={saving} disabled={saving} style={S.barBtn} />
-      </View>
+      <FormBottomBar
+        onCancel={() => router.back()}
+        cancelDisabled={saving}
+        submitLabel="Create Product"
+        onSubmit={handleSubmit}
+        loading={saving}
+      />
     </SafeAreaView>
   );
 }
@@ -195,20 +202,12 @@ function makeStyles(C: AppColors) {
     container: { flex: 1, backgroundColor: C.background },
     content:   { padding: 16, paddingBottom: 8 },
     card:      { marginBottom: 12 },
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    sectionHeaderOverride: { paddingHorizontal: 4 },
     switchRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingVertical: 10, marginTop: 4,
     },
     switchLabel: { fontSize: 14, fontWeight: '500' },
-    bottomBar: {
-      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
-      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
-    },
-    barBtn: { flex: 1 },
   });
 }
 

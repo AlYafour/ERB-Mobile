@@ -30,13 +30,12 @@ export default function ProfileScreen() {
     .toUpperCase()
     .slice(0, 2);
 
-  const roleLabel: Record<string, string> = {
-    super_admin: 'Super Admin',
-    procurement_manager: 'Procurement Manager',
-    procurement_officer: 'Procurement Officer',
-    finance_manager: 'Finance Manager',
-    site_engineer: 'Site Engineer',
-  };
+  // Generic Title-Case formatter (matches app/(tabs)/index.tsx) — the old
+  // 5-entry whitelist silently fell back to the raw snake_case value for any
+  // role not in the list, including 'admin'.
+  const roleLabel = user?.role
+    ?.replace(/_/g, ' ')
+    ?.replace(/\b\w/g, (ch: string) => ch.toUpperCase()) ?? '';
 
   const menuItems = [
     { icon: 'gearshape.fill', label: 'Settings', route: '/settings' },
@@ -46,7 +45,7 @@ export default function ProfileScreen() {
   const infoRows = [
     { label: 'Username', value: user?.username },
     { label: 'Email', value: user?.email },
-    { label: 'Role', value: user?.role ? (roleLabel[user.role] ?? user.role) : user?.is_staff ? 'Staff' : 'User' },
+    { label: 'Role', value: user?.role ? roleLabel : user?.is_staff ? 'Staff' : 'User' },
     { label: 'Status', value: user?.is_active ? 'Active' : 'Inactive' },
     {
       label: 'Member Since',
@@ -68,22 +67,22 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}>
 
         {/* Avatar Card */}
-        <View style={[styles.avatarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.avatarCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.avatar, { backgroundColor: colorScheme === 'dark' ? '#1E2D45' : '#0F172A' }]}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
-          <Text style={[styles.name, { color: colors.text }]}>{displayName}</Text>
+          <Text style={[styles.name, { color: colors.textPrimary }]}>{displayName}</Text>
           {user?.role && (
-            <View style={[styles.rolePill, { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }]}>
+            <View style={[styles.rolePill, { backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border }]}>
               <Text style={[styles.roleText, { color: colors.textSecondary }]}>
-                {roleLabel[user.role] ?? user.role}
+                {roleLabel}
               </Text>
             </View>
           )}
         </View>
 
         {/* Quick Links */}
-        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {menuItems.map((item, i) => (
             <TouchableOpacity
               key={item.route}
@@ -91,29 +90,29 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               style={[
                 styles.menuRow,
-                i < menuItems.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+                i < menuItems.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.divider },
               ]}>
-              <View style={[styles.menuIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
+              <View style={[styles.menuIconWrap, { backgroundColor: colors.surfaceMuted }]}>
                 <IconSymbol name={item.icon as any} size={18} color={colors.textSecondary} />
               </View>
-              <Text style={[styles.menuLabel, { color: colors.text }]}>{item.label}</Text>
-              <IconSymbol name="chevron.right" size={16} color={colors.textTertiary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{item.label}</Text>
+              <IconSymbol name="chevron.right" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Account Info */}
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Account Information</Text>
-        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {infoRows.map((row, i) => (
             <View
               key={row.label}
               style={[
                 styles.infoRow,
-                i < infoRows.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+                i < infoRows.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.divider },
               ]}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{row.label}</Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>{row.value}</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{row.value}</Text>
             </View>
           ))}
         </View>
@@ -122,9 +121,9 @@ export default function ProfileScreen() {
         <TouchableOpacity
           onPress={handleLogout}
           activeOpacity={0.8}
-          style={[styles.logoutBtn, { backgroundColor: colors.errorLight, borderColor: colors.error + '30' }]}>
-          <IconSymbol name="rectangle.portrait.and.arrow.right" size={18} color={colors.error} />
-          <Text style={[styles.logoutText, { color: colors.error }]}>Sign Out</Text>
+          style={[styles.logoutBtn, { backgroundColor: colors.dangerBg, borderColor: colors.danger + '30' }]}>
+          <IconSymbol name="rectangle.portrait.and.arrow.right" size={18} color={colors.danger} />
+          <Text style={[styles.logoutText, { color: colors.danger }]}>Sign Out</Text>
         </TouchableOpacity>
 
         <View style={{ height: 32 }} />

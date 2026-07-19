@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
 import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { suppliersApi } from '@/lib/api/suppliers';
-import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
-import { AppButton } from '@/components/ui/AppButton';
-import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
+import { FormBottomBar } from '@/components/ui/FormBottomBar';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { useEditForm } from '@/lib/hooks/use-edit-form';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -32,46 +32,44 @@ const COUNTRIES = [
   { value: 'Other', label: 'Other' },
 ];
 
+interface SupplierEditForm {
+  business_name: string;
+  supplier_number: string;
+  first_name: string;
+  last_name: string;
+  contact_person: string;
+  email: string;
+  telephone: string;
+  phone: string;
+  mobile: string;
+  street_address_1: string;
+  street_address_2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  tax_id: string;
+  trn: string;
+  currency: string;
+  bank_name: string;
+  bank_account: string;
+  notes: string;
+  is_active: boolean;
+}
+
 function EditSupplierScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
-  const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const S = makeStyles(C);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({
-    business_name: '',
-    supplier_number: '',
-    first_name: '',
-    last_name: '',
-    contact_person: '',
-    email: '',
-    telephone: '',
-    phone: '',
-    mobile: '',
-    street_address_1: '',
-    street_address_2: '',
-    city: '',
-    state: '',
-    postal_code: '',
-    country: 'United Arab Emirates',
-    tax_id: '',
-    trn: '',
-    currency: 'AED',
-    bank_name: '',
-    bank_account: '',
-    notes: '',
-    is_active: true,
-  });
-
-  useEffect(() => {
-    suppliersApi.getById(id).then((s: any) => {
-      setForm({
+  const { loading, saving, errors, form, set, handleSubmit } = useEditForm<SupplierEditForm>({
+    id,
+    load: async () => {
+      const s = await suppliersApi.getById(id) as any;
+      return {
         business_name:    s.business_name || s.name || '',
         supplier_number:  s.supplier_number || '',
         first_name:       s.first_name || '',
@@ -94,43 +92,25 @@ function EditSupplierScreenInner() {
         bank_account:     s.bank_account || '',
         notes:            s.notes || '',
         is_active:        s.is_active ?? true,
-      });
-    }).catch((err: any) => {
-      toast(err.message || 'Failed to load supplier', 'error');
-      router.back();
-    }).finally(() => setLoading(false));
-  }, [id]);
+      };
+    },
+    validate: (f) => {
+      const e: Record<string, string> = {};
+      if (!f.business_name.trim() && !f.first_name.trim()) {
+        e.business_name = 'Business name or first name is required';
+      }
+      return e;
+    },
+    submit: (f) => suppliersApi.update(id, f),
+    loadErrorMessage: 'Failed to load supplier',
+    successMessage: 'Supplier updated successfully',
+    submitErrorMessage: 'Failed to update supplier',
+  });
 
-  const set = (key: keyof typeof form) => (val: any) =>
-    setForm((f) => ({ ...f, [key]: val }));
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.business_name.trim() && !form.first_name.trim()) {
-      e.business_name = 'Business name or first name is required';
-    }
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    try {
-      setSaving(true);
-      await suppliersApi.update(id, form);
-      toast('Supplier updated successfully', 'success');
-      router.back();
-    } catch (err: any) {
-      toast(err.message || 'Failed to update supplier', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return (
+  if (loading || !form) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Edit Supplier" showBack />
-      <View style={S.center}><AppEmptyState variant="loading" title="Loading supplier..." /></View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
@@ -206,36 +186,25 @@ function EditSupplierScreenInner() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
-          disabled={saving} style={S.barBtn} />
-        <AppButton title="Save Changes" variant="primary" size="md" onPress={handleSubmit}
-          loading={saving} disabled={saving} style={S.barBtn} />
-      </View>
+      <FormBottomBar
+        onCancel={() => router.back()}
+        submitLabel="Save Changes"
+        onSubmit={handleSubmit}
+        loading={saving}
+      />
     </SafeAreaView>
   );
 }
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content:   { padding: 16, paddingBottom: 8 },
-    card:      { marginBottom: 12 },
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    ...baseDetailStyles(C),
+    content: { padding: 16, paddingBottom: 8 },
     switchRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingVertical: 10, marginTop: 4,
     },
     switchLabel: { fontSize: 14, fontWeight: '500' },
-    bottomBar: {
-      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
-      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
-    },
-    barBtn: { flex: 1 },
   });
 }
 

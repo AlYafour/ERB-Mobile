@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Platform } from 'react-native';
 import { useToast, Toast as ToastType } from '@/lib/hooks/use-toast';
 import { IconSymbol } from './icon-symbol';
-import { Colors } from '@/constants/theme';
 
 const isWeb = Platform.OS === 'web' || (typeof window !== 'undefined' && window.document);
 
@@ -19,8 +18,8 @@ export function ToastContainer() {
 }
 
 function ToastItem({ toast, onRemove }: { toast: ToastType; onRemove: (id: string) => void }) {
-  const opacity = new Animated.Value(0);
-  const translateY = new Animated.Value(-20);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -54,6 +53,10 @@ function ToastItem({ toast, onRemove }: { toast: ToastType; onRemove: (id: strin
     }, 5000);
 
     return () => clearTimeout(timer);
+    // Intentionally mount-once: each ToastItem is remounted via key={toast.id} when the
+    // toast changes, so toast.id/onRemove are stable for this instance's lifetime, and
+    // opacity/translateY are refs (their .current identity never changes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getToastStyle = () => {
@@ -126,11 +129,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     minWidth: '90%',
     maxWidth: '100%',
-    ...(Platform.OS === 'web'
-      ? {
-          boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
-        }
-      : {
     ...(isWeb
       ? {
           boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
@@ -144,7 +142,6 @@ const styles = StyleSheet.create({
           shadowOpacity: 0.25,
           shadowRadius: 3.84,
           elevation: 5,
-        }),
         }),
   },
   toastText: {

@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, FlatList,
-  StyleSheet, Modal, Pressable, Platform,
+  StyleSheet, Platform,
 } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { IconSymbol } from './icon-symbol';
+import { AppBottomSheet } from './AppBottomSheet';
 
-const C = Colors.light;
+type Palette = typeof Colors.light | typeof Colors.dark;
 
 export interface DropdownOption {
   value: string | number;
@@ -41,6 +43,8 @@ export default function SearchableDropdown({
   allowClear = false,
   filterFunction,
 }: Props) {
+  const C = Colors[useColorScheme() ?? 'light'];
+  const S = useMemo(() => makeStyles(C), [C]);
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -96,112 +100,87 @@ export default function SearchableDropdown({
               onPress={(e) => { e.stopPropagation(); onChange(null); }}
               hitSlop={10}
               style={S.clearBtn}>
-              <MaterialIcons name="cancel" size={17} color={C.textTertiary} />
+              <IconSymbol name="xmark.circle.fill" size={17} color={C.textTertiary} />
             </TouchableOpacity>
           )}
-          <MaterialIcons
-            name={isOpen ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+          <IconSymbol
+            name={isOpen ? 'chevron.up' : 'chevron.down'}
             size={22}
             color={isOpen ? C.tint : C.textTertiary}
           />
         </View>
       </TouchableOpacity>
 
-      <Modal
-        visible={isOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={close}
-        statusBarTranslucent>
-        <View style={S.overlay}>
-          {/* Backdrop — tap to close */}
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} />
-
-          <View style={S.sheet}>
-            {/* Drag handle */}
-            <View style={S.handle} />
-
-            {/* Header */}
-            <View style={S.sheetHeader}>
-              <Text style={S.sheetTitle} numberOfLines={1}>
-                {label || 'Select Option'}
-              </Text>
-              <TouchableOpacity onPress={close} hitSlop={10} style={S.closeIconBtn}>
-                <MaterialIcons name="close" size={20} color={C.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Search */}
-            <View style={S.searchWrap}>
-              <MaterialIcons name="search" size={20} color={C.textTertiary} style={S.searchIcon} />
-              <TextInput
-                style={S.searchInput}
-                placeholder={searchPlaceholder}
-                placeholderTextColor={C.textTertiary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                returnKeyType="search"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-                  <MaterialIcons name="close" size={18} color={C.textTertiary} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Count pill */}
-            {filteredOptions.length > 0 && searchQuery.length > 0 && (
-              <View style={S.countWrap}>
-                <Text style={S.countText}>{filteredOptions.length} result{filteredOptions.length !== 1 ? 's' : ''}</Text>
-              </View>
-            )}
-
-            {/* Options list */}
-            <FlatList
-              data={filteredOptions}
-              keyExtractor={(item) => String(item.value)}
-              keyboardShouldPersistTaps="always"
-              showsVerticalScrollIndicator={false}
-              style={S.list}
-              renderItem={({ item, index }) => {
-                const selected = selectedOption?.value === item.value;
-                return (
-                  <TouchableOpacity
-                    style={[
-                      S.optionRow,
-                      index === filteredOptions.length - 1 && S.optionRowLast,
-                      selected && S.optionRowSelected,
-                    ]}
-                    onPress={() => handleSelect(item)}
-                    activeOpacity={0.55}>
-                    <Text
-                      style={[S.optionLabel, selected && S.optionLabelSelected]}
-                      numberOfLines={2}>
-                      {item.label}
-                    </Text>
-                    {selected && (
-                      <MaterialIcons name="check-circle" size={20} color={C.tint} />
-                    )}
-                  </TouchableOpacity>
-                );
-              }}
-              ListEmptyComponent={
-                <View style={S.empty}>
-                  <MaterialIcons name="search-off" size={36} color={C.textTertiary} />
-                  <Text style={S.emptyText}>{emptyMessage}</Text>
-                </View>
-              }
-            />
-          </View>
+      <AppBottomSheet visible={isOpen} onClose={close} title={label || 'Select Option'} snapHeight={0.78}>
+        {/* Search */}
+        <View style={S.searchWrap}>
+          <IconSymbol name="magnifyingglass" size={20} color={C.textTertiary} style={S.searchIcon} />
+          <TextInput
+            style={S.searchInput}
+            placeholder={searchPlaceholder}
+            placeholderTextColor={C.textTertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+              <IconSymbol name="xmark" size={18} color={C.textTertiary} />
+            </TouchableOpacity>
+          )}
         </View>
-      </Modal>
+
+        {/* Count pill */}
+        {filteredOptions.length > 0 && searchQuery.length > 0 && (
+          <View style={S.countWrap}>
+            <Text style={S.countText}>{filteredOptions.length} result{filteredOptions.length !== 1 ? 's' : ''}</Text>
+          </View>
+        )}
+
+        {/* Options list */}
+        <FlatList
+          data={filteredOptions}
+          keyExtractor={(item) => String(item.value)}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+          style={S.list}
+          renderItem={({ item, index }) => {
+            const selected = selectedOption?.value === item.value;
+            return (
+              <TouchableOpacity
+                style={[
+                  S.optionRow,
+                  index === filteredOptions.length - 1 && S.optionRowLast,
+                  selected && S.optionRowSelected,
+                ]}
+                onPress={() => handleSelect(item)}
+                activeOpacity={0.55}>
+                <Text
+                  style={[S.optionLabel, selected && S.optionLabelSelected]}
+                  numberOfLines={2}>
+                  {item.label}
+                </Text>
+                {selected && (
+                  <IconSymbol name="checkmark.circle.fill" size={20} color={C.tint} />
+                )}
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={S.empty}>
+              <IconSymbol name="magnifyingglass" size={36} color={C.textTertiary} />
+              <Text style={S.emptyText}>{emptyMessage}</Text>
+            </View>
+          }
+        />
+      </AppBottomSheet>
     </View>
   );
 }
 
-const S = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
   wrapper: { marginBottom: 14 },
 
   label: { fontSize: 13, fontWeight: '600', color: C.textSecondary, marginBottom: 6 },
@@ -222,35 +201,6 @@ const S = StyleSheet.create({
   triggerIcons: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   clearBtn: { paddingHorizontal: 2 },
 
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    maxHeight: '78%',
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.12, shadowRadius: 20, elevation: 24,
-  },
-
-  handle: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: C.borderDark,
-    alignSelf: 'center',
-    marginTop: 10, marginBottom: 2,
-  },
-
-  sheetHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: C.borderLight,
-  },
-  sheetTitle: { fontSize: 16, fontWeight: '700', color: C.text, flex: 1 },
-  closeIconBtn: { padding: 4, marginLeft: 8 },
-
   searchWrap: {
     flexDirection: 'row', alignItems: 'center',
     margin: 12,
@@ -268,15 +218,15 @@ const S = StyleSheet.create({
   countWrap: { paddingHorizontal: 16, paddingBottom: 4 },
   countText: { fontSize: 12, color: C.textTertiary, fontWeight: '500' },
 
-  list: {},
+  list: { flex: 1 },
   optionRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 18, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: C.borderLight,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.surface,
   },
   optionRowLast: { borderBottomWidth: 0 },
-  optionRowSelected: { backgroundColor: 'rgba(249,115,22,0.06)' },
+  optionRowSelected: { backgroundColor: C.tintSubtle },
   optionLabel: { flex: 1, fontSize: 15, color: C.text, marginRight: 10 },
   optionLabelSelected: { color: C.tint, fontWeight: '600' },
 

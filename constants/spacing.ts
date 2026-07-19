@@ -16,6 +16,14 @@ export const Spacing = {
   '6xl': 80,
 } as const;
 
+/**
+ * Single source for the card corner-radius (20) and padding (18) — referenced
+ * below by BorderRadius.card, CardSpec, ComponentSizes.card, and by
+ * constants/layout.ts's Layout.cardPadding.
+ */
+export const CARD_PADDING = 18;
+const CARD_RADIUS = 20;
+
 export const BorderRadius = {
   none:  0,
   sm:    10,
@@ -26,7 +34,7 @@ export const BorderRadius = {
   '3xl': 40,
   full:  9999,
   pill:  9999,
-  card:  20,
+  card:  CARD_RADIUS,
 } as const;
 
 /** Type scale per spec */
@@ -77,8 +85,8 @@ export const Typography = {
 
 /** Card spec: radius 20, padding 18 */
 export const CardSpec = {
-  borderRadius: 20,
-  padding:      18,
+  borderRadius: CARD_RADIUS,
+  padding:      CARD_PADDING,
   borderWidth:  1,
   shadowOpacity: 0.08,
   shadowRadius: 12,
@@ -97,13 +105,7 @@ export const ComponentSizes = {
     medium: { height: 48 },
     large:  { height: 56 },
   },
-  card: { padding: 18 },
-} as const;
-
-export const Layout = {
-  screenPadding: 16,
-  cardPadding:   18,
-  sectionPadding: 20,
+  card: { padding: CARD_PADDING },
 } as const;
 
 /**

@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseInvoicesApi } from '@/lib/api/purchase-invoices';
 import { purchaseOrdersApi } from '@/lib/api/purchase-orders';
 import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
-import { AppButton } from '@/components/ui/AppButton';
-import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSectionHeader } from '@/components/ui/AppScreen';
+import { FormBottomBar } from '@/components/ui/FormBottomBar';
+import { ParentRecordLoadingGate } from '@/components/ui/ParentRecordLoadingGate';
+import { Input } from '@/components/ui/Input';
 import DatePickerInput from '@/components/ui/DatePickerInput';
+import { normalizeProductRef, computeInvoiceTotals, navigateAfterCreate } from '@/lib/utils/list-helpers';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
@@ -27,7 +30,6 @@ interface InvItem {
 function NewPurchaseInvoiceScreenInner() {
   const params = useLocalSearchParams<{ purchase_order_id?: string; goods_receiving_id?: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
@@ -40,21 +42,25 @@ function NewPurchaseInvoiceScreenInner() {
   const [taxRate, setTaxRate]         = useState('5');
   const [notes, setNotes]             = useState('');
   const [items, setItems]             = useState<InvItem[]>([]);
+  const [itemErrors, setItemErrors]   = useState<Record<number, { quantity?: string; unit_price?: string }>>({});
   const [loading, setLoading]         = useState(true);
   const [submitting, setSubmitting]   = useState(false);
 
   useEffect(() => {
+    let live = true;
     purchaseOrdersApi.getById(poId).then((data: any) => {
+      if (!live) return;
       setPo(data);
       setItems((data.items || []).map((it: any) => ({
-        product_id:   typeof it.product === 'object' ? it.product.id : it.product,
+        product_id:   normalizeProductRef(it)!,
         product_name: typeof it.product === 'object' ? it.product.name : it.product_name || 'Product',
         quantity:     String(it.quantity || 1),
         unit:         it.unit || '',
         unit_price:   it.unit_price ? String(it.unit_price) : '',
       })));
-    }).catch((e: any) => toast(e.message || 'Failed to load LPO', 'error'))
-      .finally(() => setLoading(false));
+    }).catch((e: any) => { if (live) toast(e.message || 'Failed to load LPO', 'error'); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
   }, [poId]);
 
   const updateItem = (i: number, field: keyof InvItem, value: string) => {
@@ -63,17 +69,21 @@ function NewPurchaseInvoiceScreenInner() {
     setItems(n);
   };
 
-  const getTotal = () => {
-    const sub = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
-    const tax = sub * ((Number(taxRate) || 0) / 100);
-    return { sub, tax, total: sub + tax };
+  const validate = () => {
+    const e: Record<number, { quantity?: string; unit_price?: string }> = {};
+    items.forEach((it, i) => {
+      const rowErr: { quantity?: string; unit_price?: string } = {};
+      if (!(Number(it.quantity) > 0)) rowErr.quantity = 'Quantity must be greater than 0';
+      if (!it.unit_price || Number(it.unit_price) <= 0) rowErr.unit_price = 'Unit price is required';
+      if (Object.keys(rowErr).length) e[i] = rowErr;
+    });
+    setItemErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async () => {
     if (!invoiceDate) { toast('Invoice date is required', 'error'); return; }
-    if (items.some((it) => !it.unit_price || Number(it.unit_price) <= 0)) {
-      toast('All items need a unit price', 'error'); return;
-    }
+    if (!validate()) return;
     try {
       setSubmitting(true);
       const result = await purchaseInvoicesApi.create({
@@ -92,15 +102,7 @@ function NewPurchaseInvoiceScreenInner() {
         })),
       });
       toast('Invoice created successfully', 'success');
-      if (result.id == null) {
-        // Defense-in-depth: the backend create response is now guaranteed
-        // to include 'id' (fixed server-side), but if it's ever missing again
-        // (bad response, network shim, etc.) fall back to the list instead of
-        // a broken "Not found" detail screen.
-        router.replace('/purchase-invoices' as any);
-        return;
-      }
-      router.replace(`/purchase-invoices/${result.id}` as any);
+      navigateAfterCreate(router, result as any, '/purchase-invoices', (id) => `/purchase-invoices/${id}`);
     } catch (err: any) {
       toast(err.message || 'Failed to create invoice', 'error');
     } finally {
@@ -110,16 +112,11 @@ function NewPurchaseInvoiceScreenInner() {
 
   const S = makeStyles(C);
 
-  if (loading) return (
-    <SafeAreaView style={S.container} edges={['top', 'bottom']}>
-      <AppHeader title="Create Invoice" showBack />
-      <View style={S.center}><AppEmptyState variant="loading" title="Loading LPO..." /></View>
-    </SafeAreaView>
-  );
+  if (loading) return <ParentRecordLoadingGate title="Create Invoice" loadingTitle="Loading LPO..." />;
 
   const poNum        = po?.order_number || `LPO-${poId}`;
   const supplierName = po?.supplier && typeof po.supplier === 'object' ? po.supplier.name : '';
-  const { sub, tax, total } = getTotal();
+  const { sub, tax, total } = computeInvoiceTotals(items, Number(taxRate));
 
   return (
     <SafeAreaView style={S.container} edges={['top']}>
@@ -131,16 +128,16 @@ function NewPurchaseInvoiceScreenInner() {
           keyboardDismissMode="on-drag">
 
           {/* LPO Reference */}
+          <AppSectionHeader title="Invoice Reference" style={S.sectionHeaderOverride} />
           <AppCard style={S.card}>
-            <Text style={S.sectionTitle}>Invoice Reference</Text>
             <Text style={[S.refNum, { color: C.primary }]}>{poNum}</Text>
             {supplierName ? <Text style={[S.refSub, { color: C.textSecondary }]}>Supplier: {supplierName}</Text> : null}
             {grnId ? <Text style={[S.refSub, { color: C.textSecondary }]}>GRN-{grnId} attached</Text> : null}
           </AppCard>
 
           {/* Dates */}
+          <AppSectionHeader title="Invoice Dates" style={S.sectionHeaderOverride} />
           <AppCard style={S.card}>
-            <Text style={S.sectionTitle}>Invoice Dates</Text>
             <View style={S.twoCol}>
               <View style={{ flex: 1 }}>
                 <DatePickerInput label="Invoice Date *" value={invoiceDate}
@@ -155,8 +152,8 @@ function NewPurchaseInvoiceScreenInner() {
           </AppCard>
 
           {/* Items */}
+          <AppSectionHeader title={`Invoice Items (${items.length})`} style={S.sectionHeaderOverride} />
           <AppCard style={S.card}>
-            <Text style={S.sectionTitle}>Invoice Items ({items.length})</Text>
             {items.map((item, i) => (
               <View key={i} style={[S.itemCard, { backgroundColor: C.surfaceSoft, borderColor: C.border },
                 i < items.length - 1 && { marginBottom: 12 }]}>
@@ -168,26 +165,33 @@ function NewPurchaseInvoiceScreenInner() {
                 </View>
                 <View style={S.threeCol}>
                   <View style={{ flex: 1.2 }}>
-                    <Text style={[S.fieldLabel, { color: C.textMuted }]}>QTY *</Text>
-                    <TextInput value={item.quantity}
+                    <Input
+                      label="Qty *"
+                      value={item.quantity}
                       onChangeText={(v) => updateItem(i, 'quantity', v)}
                       keyboardType="decimal-pad"
-                      style={[S.input, { borderColor: C.border, color: C.textPrimary, backgroundColor: C.surface }]} />
+                      error={itemErrors[i]?.quantity}
+                      containerStyle={{ marginBottom: 0 }}
+                    />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[S.fieldLabel, { color: C.textMuted }]}>UNIT</Text>
-                    <TextInput value={item.unit}
+                    <Input
+                      label="Unit"
+                      value={item.unit}
                       onChangeText={(v) => updateItem(i, 'unit', v)}
-                      placeholder="pcs" placeholderTextColor={C.textMuted}
-                      style={[S.input, { borderColor: C.border, color: C.textPrimary, backgroundColor: C.surface }]} />
+                      placeholder="pcs"
+                      containerStyle={{ marginBottom: 0 }}
+                    />
                   </View>
                   <View style={{ flex: 1.5 }}>
-                    <Text style={[S.fieldLabel, { color: C.textMuted }]}>PRICE (AED) *</Text>
-                    <TextInput value={item.unit_price}
+                    <Input
+                      label="Price (AED) *"
+                      value={item.unit_price}
                       onChangeText={(v) => updateItem(i, 'unit_price', v)}
                       keyboardType="decimal-pad" placeholder="0.00"
-                      placeholderTextColor={C.textMuted}
-                      style={[S.input, { borderColor: C.border, color: C.textPrimary, backgroundColor: C.surface }]} />
+                      error={itemErrors[i]?.unit_price}
+                      containerStyle={{ marginBottom: 0 }}
+                    />
                   </View>
                 </View>
                 {item.quantity && item.unit_price ? (
@@ -200,15 +204,16 @@ function NewPurchaseInvoiceScreenInner() {
           </AppCard>
 
           {/* Tax & Summary */}
+          <AppSectionHeader title="Summary" style={S.sectionHeaderOverride} />
           <AppCard style={S.card}>
-            <Text style={S.sectionTitle}>Summary</Text>
             <View style={S.summaryRow}>
               <Text style={[S.summaryLabel, { color: C.textSecondary }]}>Tax Rate (%)</Text>
               <View style={{ width: 100 }}>
-                <TextInput value={taxRate} onChangeText={setTaxRate}
+                <Input
+                  value={taxRate} onChangeText={setTaxRate}
                   keyboardType="decimal-pad" placeholder="5"
-                  placeholderTextColor={C.textMuted}
-                  style={[S.input, { borderColor: C.border, color: C.textPrimary, backgroundColor: C.surface }]} />
+                  containerStyle={{ marginBottom: 0 }}
+                />
               </View>
             </View>
             <View style={[S.summaryRow, { marginTop: 8 }]}>
@@ -226,25 +231,26 @@ function NewPurchaseInvoiceScreenInner() {
           </AppCard>
 
           {/* Notes */}
+          <AppSectionHeader title="Notes" style={S.sectionHeaderOverride} />
           <AppCard style={S.card}>
-            <Text style={S.sectionTitle}>Notes</Text>
-            <TextInput value={notes} onChangeText={setNotes}
-              placeholder="Any invoice notes..." placeholderTextColor={C.textMuted}
-              multiline
-              style={[S.input, S.inputMulti, { borderColor: C.border, color: C.textPrimary, backgroundColor: C.surface }]} />
+            <Input
+              value={notes} onChangeText={setNotes}
+              placeholder="Any invoice notes..."
+              multiline numberOfLines={3}
+            />
           </AppCard>
 
         </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Fixed bottom bar */}
-      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
-          disabled={submitting} style={S.barBtn} />
-        <AppButton title={`Create Invoice — AED ${total.toFixed(2)}`}
-          variant="primary" size="md" onPress={handleSubmit}
-          loading={submitting} disabled={submitting} style={S.barBtnWide} />
-      </View>
+      <FormBottomBar
+        onCancel={() => router.back()}
+        cancelDisabled={submitting}
+        submitLabel={`Create Invoice — AED ${total.toFixed(2)}`}
+        onSubmit={handleSubmit}
+        loading={submitting}
+      />
     </SafeAreaView>
   );
 }
@@ -252,22 +258,14 @@ function NewPurchaseInvoiceScreenInner() {
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: C.background },
-    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
     content:   { padding: 16 },
     card:      { marginBottom: 12 },
-    sectionTitle: { fontSize: 15, fontWeight: '700', color: C.textPrimary, marginBottom: 14, letterSpacing: -0.2 },
+    sectionHeaderOverride: { paddingHorizontal: 4 },
     refNum:    { fontSize: 15, fontWeight: '700', marginBottom: 2 },
     refSub:    { fontSize: 13, marginTop: 2 },
 
     twoCol:    { flexDirection: 'row', gap: 10 },
     threeCol:  { flexDirection: 'row', gap: 8 },
-
-    fieldLabel:{ fontSize: 11, fontWeight: '600', marginBottom: 6, marginTop: 10, textTransform: 'uppercase', letterSpacing: 0.4 },
-    input: {
-      borderWidth: 1.5, borderRadius: 10, padding: 12,
-      fontSize: 14, minHeight: 44,
-    },
-    inputMulti:{ minHeight: 80, textAlignVertical: 'top' },
 
     itemCard:  { borderRadius: 10, padding: 12, borderWidth: 1 },
     itemHeader:{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
@@ -281,13 +279,6 @@ function makeStyles(C: AppColors) {
     summaryTotal:{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 2, paddingTop: 10, marginTop: 4 },
     totalLabel:  { fontSize: 15, fontWeight: '700' },
     totalValue:  { fontSize: 16, fontWeight: '800' },
-
-    bottomBar: {
-      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
-      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
-    },
-    barBtn:     { width: 90 },
-    barBtnWide: { flex: 1 },
   });
 }
 

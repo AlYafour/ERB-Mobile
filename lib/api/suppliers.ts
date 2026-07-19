@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { Supplier, PaginatedResponse } from '@/types';
 
 export const suppliersApi = {
@@ -26,22 +27,11 @@ export const suppliersApi = {
     is_active?: boolean;
     created_at_after?: string;
     created_at_before?: string;
-  }): Promise<PaginatedResponse<Supplier>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<Supplier>> => {
+    const queryString = buildQueryString(params || {});
     const endpoint = `${API_ENDPOINTS.SUPPLIERS}${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<Supplier>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch suppliers');
-    }
-    return response.data;
+    const response = await apiClient.get<PaginatedResponse<Supplier>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch suppliers');
   },
 
   getAllActive: async (): Promise<Supplier[]> => {
@@ -50,12 +40,12 @@ export const suppliersApi = {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await suppliersApi.getAll({ 
-        page, 
+      const response = await suppliersApi.getAll({
+        page,
         page_size: 100,
-        is_active: true 
+        is_active: true
       });
-      
+
       if (response.results && response.results.length > 0) {
         allSuppliers.push(...response.results);
         hasMore = !!response.next;
@@ -70,26 +60,17 @@ export const suppliersApi = {
 
   getById: async (id: number | string): Promise<Supplier> => {
     const response = await apiClient.get<Supplier>(API_ENDPOINTS.SUPPLIER_DETAIL(String(id)));
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch supplier');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch supplier');
   },
 
   create: async (data: Partial<Supplier>): Promise<Supplier> => {
     const response = await apiClient.post<Supplier>(API_ENDPOINTS.SUPPLIERS, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create supplier');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to create supplier');
   },
 
   update: async (id: number | string, data: Partial<Supplier>): Promise<Supplier> => {
     const response = await apiClient.patch<Supplier>(API_ENDPOINTS.SUPPLIER_DETAIL(String(id)), data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update supplier');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to update supplier');
   },
 
   delete: async (id: number | string): Promise<void> => {
@@ -99,4 +80,3 @@ export const suppliersApi = {
     }
   },
 };
-

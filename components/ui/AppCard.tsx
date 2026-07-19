@@ -27,7 +27,7 @@ export function AppCard({
     {
       backgroundColor: c.surface,
       borderColor: c.border,
-      ...(shadow && cs === 'light' && {
+      ...(shadow && {
         shadowColor: c.shadow,
         elevation: 2,
       }),

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { purchaseRequestsApi } from '@/lib/api/purchase-requests';
 import { productsApi } from '@/lib/api/products';
@@ -19,29 +19,20 @@ import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppSectionHeader } from '@/components/ui/AppScreen';
+import { FormBottomBar } from '@/components/ui/FormBottomBar';
 import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
 import DatePickerInput from '@/components/ui/DatePickerInput';
 import AIProcurementChat, { AIFormUpdate } from '@/components/ui/AIProcurementChat';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { navigateAfterCreate } from '@/lib/utils/list-helpers';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Product, Project, PurchaseRequestItem } from '@/types';
+import { Product, Project } from '@/types';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { UNITS } from '@/constants/units';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
-
-const units = [
-  { value: 'piece', label: 'Piece' },
-  { value: 'kg', label: 'Kilogram' },
-  { value: 'g', label: 'Gram' },
-  { value: 'liter', label: 'Liter' },
-  { value: 'ml', label: 'Milliliter' },
-  { value: 'meter', label: 'Meter' },
-  { value: 'cm', label: 'Centimeter' },
-  { value: 'box', label: 'Box' },
-  { value: 'pack', label: 'Pack' },
-];
 
 interface PurchaseRequestItemForm {
   product_id: number;
@@ -51,25 +42,6 @@ interface PurchaseRequestItemForm {
   project_site: string;
   reason: string;
   notes: string;
-}
-
-function SectionTitle({ children, colors }: { children: string; colors: AppColors }) {
-  return (
-    <Text
-      style={{
-        fontSize: 13,
-        fontWeight: '700',
-        color: colors.textSecondary,
-        letterSpacing: 0.5,
-        textTransform: 'uppercase',
-        marginBottom: 8,
-        marginTop: 20,
-        paddingHorizontal: 4,
-      }}
-    >
-      {children}
-    </Text>
-  );
 }
 
 function FieldLabel({
@@ -100,7 +72,6 @@ function NewPurchaseRequestScreenInner() {
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
   const c = Colors[cs];
-  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -116,18 +87,29 @@ function NewPurchaseRequestScreenInner() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [currentItem, setCurrentItem] = useState({
-    quantity: 1,
+    quantity: '1',
     unit: '',
     project_site: '',
     reason: '',
     notes: '',
   });
+  // Raw per-item quantity text kept separate from the committed numeric
+  // `items[].quantity` so clearing the field mid-edit doesn't snap back to
+  // '1' (parseInt('') || 1) before the user finishes typing. Keyed by
+  // product_id (stable across re-renders / item removal), not index.
+  const [qtyDraft, setQtyDraft] = useState<Record<number, string>>({});
   const [projectsData, setProjectsData] = useState<{ results: Project[] } | null>(null);
   const [productsData, setProductsData] = useState<{ results: Product[] } | null>(null);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [projectsError, setProjectsError] = useState(false);
   const [productsError, setProductsError] = useState(false);
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Access control lives in the AppPermissionGate wrapper below — the old
   // inline check ran during the permissions fetch (hasPermission === false
@@ -143,9 +125,10 @@ function NewPurchaseRequestScreenInner() {
       setLoadingProjects(true);
       setProjectsError(false);
       const response = await projectsApi.getAll({ page: 1, page_size: 1000, is_active: true });
+      if (!mountedRef.current) return;
       setProjectsData(response);
-    } catch { setProjectsError(true); }
-    finally { setLoadingProjects(false); }
+    } catch { if (mountedRef.current) setProjectsError(true); }
+    finally { if (mountedRef.current) setLoadingProjects(false); }
   };
 
   const loadProducts = async () => {
@@ -153,9 +136,10 @@ function NewPurchaseRequestScreenInner() {
       setLoadingProducts(true);
       setProductsError(false);
       const response = await productsApi.getAll({ page: 1, page_size: 1000 });
+      if (!mountedRef.current) return;
       setProductsData(response);
-    } catch { setProductsError(true); }
-    finally { setLoadingProducts(false); }
+    } catch { if (mountedRef.current) setProductsError(true); }
+    finally { if (mountedRef.current) setLoadingProducts(false); }
   };
 
   const handleProjectChange = (projectId: number | null | undefined) => {
@@ -188,21 +172,22 @@ function NewPurchaseRequestScreenInner() {
       toast(`${selectedProduct.name} is already added — edit its quantity below.`, 'warning');
       return;
     }
-    if (currentItem.quantity <= 0 || !Number.isInteger(currentItem.quantity)) {
+    const qty = Number(currentItem.quantity);
+    if (!Number.isInteger(qty) || qty <= 0) {
       toast('Please enter a valid whole number quantity', 'warning');
       return;
     }
     setItems([...items, {
       product_id: Number(selectedProduct.id),
       product: selectedProduct,
-      quantity: Math.floor(currentItem.quantity),
+      quantity: qty,
       unit: currentItem.unit || selectedProduct.unit || '',
       project_site: currentItem.project_site || '',
       reason: currentItem.reason,
       notes: currentItem.notes,
     }]);
     setSelectedProduct(null);
-    setCurrentItem({ quantity: 1, unit: '', project_site: '', reason: '', notes: '' });
+    setCurrentItem({ quantity: '1', unit: '', project_site: '', reason: '', notes: '' });
     toast('Product added', 'success');
   };
 
@@ -265,15 +250,7 @@ function NewPurchaseRequestScreenInner() {
         })),
       });
       toast('Purchase request created successfully', 'success');
-      if (result.id == null) {
-        // Defense-in-depth: the backend create response is now guaranteed
-        // to include 'id' (fixed server-side), but if it's ever missing again
-        // (bad response, network shim, etc.) fall back to the list instead of
-        // a broken "Not found" detail screen.
-        router.replace('/purchase-requests' as any);
-        return;
-      }
-      router.replace(`/purchase-requests/${result.id}` as any);
+      navigateAfterCreate(router, result as any, '/purchase-requests', (id) => `/purchase-requests/${id}`);
     } catch (error: any) {
       toast(error.message || 'Failed to create purchase request', 'error');
     } finally {
@@ -457,15 +434,15 @@ function NewPurchaseRequestScreenInner() {
                     <FieldLabel required colors={c}>Quantity</FieldLabel>
                     <Input
                       placeholder="1"
-                      value={String(currentItem.quantity)}
-                      onChangeText={(t) => setCurrentItem({ ...currentItem, quantity: parseInt(t) || 1 })}
+                      value={currentItem.quantity}
+                      onChangeText={(t) => setCurrentItem({ ...currentItem, quantity: t })}
                       keyboardType="numeric"
                     />
                   </View>
                   <View style={{ flex: 1 }}>
                     <FieldLabel colors={c}>Unit</FieldLabel>
                     <SearchableDropdown
-                      options={units}
+                      options={UNITS as unknown as { value: string; label: string }[]}
                       value={currentItem.unit}
                       onChange={(val) => setCurrentItem({ ...currentItem, unit: String(val || '') })}
                       placeholder="Select unit"
@@ -580,8 +557,14 @@ function NewPurchaseRequestScreenInner() {
                         <View style={{ flex: 1, marginRight: 8 }}>
                           <Input
                             label="Qty"
-                            value={String(item.quantity)}
-                            onChangeText={(t) => handleUpdateItem(index, 'quantity', parseInt(t) || 1)}
+                            value={qtyDraft[item.product_id] ?? String(item.quantity)}
+                            onChangeText={(t) => {
+                              setQtyDraft((d) => ({ ...d, [item.product_id]: t }));
+                              const n = Number(t);
+                              if (t.trim() !== '' && Number.isFinite(n)) {
+                                handleUpdateItem(index, 'quantity', n);
+                              }
+                            }}
                             keyboardType="numeric"
                             containerStyle={{ marginBottom: 0 }}
                           />
@@ -589,7 +572,7 @@ function NewPurchaseRequestScreenInner() {
                         <View style={{ flex: 2 }}>
                           <Text style={[styles.miniLabel, { color: c.textSecondary }]}>Unit</Text>
                           <SearchableDropdown
-                            options={units}
+                            options={UNITS as unknown as { value: string; label: string }[]}
                             value={item.unit}
                             onChange={(val) => handleUpdateItem(index, 'unit', String(val || ''))}
                             placeholder="Unit"
@@ -609,33 +592,12 @@ function NewPurchaseRequestScreenInner() {
       </KeyboardAvoidingView>
 
       {/* Sticky submit bar */}
-      <View
-        style={[
-          styles.submitBar,
-          {
-            borderTopColor: c.border,
-            backgroundColor: c.surface,
-            paddingBottom: Math.max(insets.bottom, 12),
-          },
-        ]}
-      >
-        <AppButton
-          title={loading ? 'Saving...' : `Submit Request${items.length > 0 ? ` (${items.length} items)` : ''}`}
-          variant="primary"
-          size="lg"
-          fullWidth
-          onPress={handleSubmit}
-          disabled={loading || items.length === 0}
-          loading={loading}
-        />
-        <AppButton
-          title="Cancel"
-          variant="secondary"
-          size="md"
-          fullWidth
-          onPress={() => router.back()}
-        />
-      </View>
+      <FormBottomBar
+        onCancel={() => router.back()}
+        submitLabel={loading ? 'Saving...' : `Submit Request${items.length > 0 ? ` (${items.length} items)` : ''}`}
+        onSubmit={handleSubmit}
+        loading={loading}
+      />
     </SafeAreaView>
   );
 }
@@ -742,12 +704,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     marginBottom: 6,
-  },
-  submitBar: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 10,
   },
 });
 

@@ -3,12 +3,13 @@ import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { apiClient } from '@/lib/api';
-import { API_ENDPOINTS } from '@/constants/api';
+import { usersApi } from '@/lib/api/users';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppErrorState } from '@/components/ui/AppErrorState';
+import { AppPagination } from '@/components/ui/AppPagination';
 import { Input } from '@/components/ui/Input';
 import { User, PaginatedResponse } from '@/types';
 import { Colors } from '@/constants/theme';
@@ -22,23 +23,30 @@ function UsersScreenInner() {
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
-  const [users, setUsers] = useState<User[]>([]);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [data, setData] = useState<PaginatedResponse<User> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+
+  // Debounce search 400ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const loadUsers = async () => {
     try {
       setError(null);
-      const response = await apiClient.get<PaginatedResponse<User>>(API_ENDPOINTS.USERS);
-      if (response.data) {
-        setUsers(response.data.results || []);
-      } else if (response.error) {
-        setError(response.error);
-      }
-    } catch {
-      setError('Could not load users. Check your connection and try again.');
+      const response = await usersApi.getAll({ page, page_size: 50, search: debouncedSearch });
+      setData(response);
+    } catch (err: any) {
+      setError(err.message || 'Could not load users. Check your connection and try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -48,7 +56,7 @@ function UsersScreenInner() {
   useEffect(() => {
     loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, debouncedSearch]);
 
   // Stale-list fix: refetch when the screen regains focus
   useRefetchOnFocus(loadUsers);
@@ -58,14 +66,7 @@ function UsersScreenInner() {
     loadUsers();
   };
 
-  const q = searchQuery.toLowerCase();
-  const filteredUsers = users.filter(
-    (user) =>
-      user.email?.toLowerCase().includes(q) ||
-      user.first_name?.toLowerCase().includes(q) ||
-      user.last_name?.toLowerCase().includes(q) ||
-      user.username?.toLowerCase().includes(q)
-  );
+  const users = data?.results ?? [];
 
   const renderItem = ({ item }: { item: User }) => (
     <TouchableOpacity
@@ -75,6 +76,9 @@ function UsersScreenInner() {
     >
       <AppCard style={styles.userCard}>
         <View style={styles.userInfo}>
+          {/* Avatar-with-initial is a deliberate exception to the shared
+              DocumentIconTile used across procurement list screens — these
+              rows represent people, not documents. */}
           <View style={[styles.avatar, { backgroundColor: C.tint }]}>
             <Text style={[styles.avatarText, { color: C.primaryText }]}>
               {(item.first_name?.[0] || item.email?.[0] || 'U').toUpperCase()}
@@ -112,8 +116,8 @@ function UsersScreenInner() {
       <View style={[styles.searchContainer, { borderBottomColor: C.divider }]}>
         <Input
           placeholder="Search users..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          value={search}
+          onChangeText={setSearch}
           containerStyle={styles.searchInput}
         />
       </View>
@@ -121,19 +125,32 @@ function UsersScreenInner() {
       {loading ? (
         <AppEmptyState variant="loading" title="Loading users..." />
       ) : error ? (
-        <AppEmptyState variant="error" title="Could not load users" message={error ?? undefined} actionLabel="Retry" onAction={loadUsers} />
-      ) : filteredUsers.length === 0 ? (
+        <AppErrorState title="Could not load users" message={error} onRetry={loadUsers} retryLabel="Retry" />
+      ) : users.length === 0 ? (
         <AppEmptyState
           variant="empty"
-          title={searchQuery ? 'No users match your search' : 'No users found'}
+          title={search ? 'No users match your search' : 'No users found'}
         />
       ) : (
         <FlatList
-          data={filteredUsers}
+          data={users}
           renderItem={renderItem}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListFooterComponent={
+            data && data.count > 50 ? (
+              <AppPagination
+                page={page}
+                pageSize={50}
+                totalCount={data.count}
+                hasPrevious={!!data.previous}
+                hasNext={!!data.next}
+                onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => p + 1)}
+              />
+            ) : null
+          }
         />
       )}
     </SafeAreaView>

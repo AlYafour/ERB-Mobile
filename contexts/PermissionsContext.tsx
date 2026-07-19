@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, ReactNode } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
@@ -79,6 +80,18 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, queryClient]);
 
+  // staleTime/gcTime are Infinity, so a revoked/changed permission set would
+  // otherwise persist for the whole session. Refetch whenever the app returns
+  // to the foreground (same AppState idiom as app/(tabs)/notifications.tsx).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active' && userId) {
+        query.refetch();
+      }
+    });
+    return () => sub.remove();
+  }, [userId, query.refetch]);
+
   const value = useMemo<PermissionsContextType>(() => {
     const data = query.data;
 
@@ -88,7 +101,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const userIsAdmin = !!(
       user?.is_superuser ||
       user?.role === 'admin' ||
-      ((user as any)?.permission_set?.level ?? 0) >= 100
+      (user?.permission_set?.level ?? 0) >= 100
     );
     const isAdmin = userIsAdmin || !!data?.all_permissions;
 

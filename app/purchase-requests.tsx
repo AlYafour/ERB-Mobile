@@ -17,11 +17,11 @@ import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { AppPagination } from '@/components/ui/AppPagination';
 import { AppCard } from '@/components/ui/AppCard';
 import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
-import { Input } from '@/components/ui/Input';
-import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
+import { ListSearchBar } from '@/components/ui/ListSearchBar';
+import { FilterField } from '@/components/ui/FilterPanel';
 import FilterTags from '@/components/ui/FilterTags';
 import { PurchaseRequest, Project, PaginatedResponse } from '@/types';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { getDateAccent } from '@/lib/utils/list-helpers';
 import { Colors } from '@/constants/theme';
 import { Spacing } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
@@ -65,10 +65,7 @@ const PRCard = React.memo(function PRCard({
   const reqByRaw: string | undefined = (item as any).required_by;
   const reqByDate  = reqByRaw ? new Date(reqByRaw) : null;
   const reqBy      = reqByDate ? reqByDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
-  const now        = new Date();
-  const twoDaysOut = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
-  const isOverdue  = reqByDate ? reqByDate < now : false;
-  const isUrgent   = reqByDate ? reqByDate < twoDaysOut : false;
+  const { overdue: isOverdue, urgent: isUrgent } = getDateAccent(reqByRaw);
   const reqByColor = isOverdue ? colors.danger : isUrgent ? colors.warning : colors.textPrimary;
   const itemCount  = item.items?.length ?? null;
   const accentColor = isOverdue ? colors.danger : isUrgent ? colors.warning : undefined;
@@ -276,28 +273,16 @@ function PurchaseRequestsScreenInner() {
           ) : undefined}
         />
 
-        <View style={styles.searchContainer}>
-          <View style={styles.searchRow}>
-            <View style={styles.searchInputWrapper}>
-              <Input
-                placeholder="Search by code or title..."
-                value={search}
-                onChangeText={setSearch}
-                containerStyle={styles.searchInput}
-                leftIcon={<IconSymbol name="magnifyingglass" size={20} color={colors.textMuted} />}
-              />
-            </View>
-            <View style={styles.filterButtonWrapper}>
-              <FilterPanel
-                fields={filterFields}
-                filters={filters}
-                onFilterChange={handleFilterChange}
-                onReset={handleFilterReset}
-                saveKey="purchase-requests"
-              />
-            </View>
-          </View>
-        </View>
+        <ListSearchBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search by code or title..."
+          filterFields={filterFields}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onFilterReset={handleFilterReset}
+          filterSaveKey="purchase-requests"
+        />
 
         {Object.keys(filters).length > 0 && (
           <FilterTags
@@ -362,16 +347,6 @@ function PurchaseRequestsScreenInner() {
 const styles = StyleSheet.create({
   container:      { flex: 1 },
   innerContainer: { flex: 1 },
-
-  searchContainer: {
-    paddingHorizontal: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-  },
-  searchRow:           { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  searchInputWrapper:  { flex: 1 },
-  searchInput:         { marginBottom: 0 },
-  filterButtonWrapper: { alignSelf: 'flex-start' },
 
   listContent: {
     padding: Layout.screenPadding,

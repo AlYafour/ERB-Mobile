@@ -5,7 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  RefreshControl,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,10 +13,13 @@ import { purchaseRequestsApi } from '@/lib/api/purchase-requests';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -49,7 +51,7 @@ interface TimelineItem {
   timestamp: string | null;
   duration: string | null;
   notes: string | null;
-  documents: Array<{ type: string; url: string; name: string }>;
+  documents: { type: string; url: string; name: string }[];
   related_id: number;
   related_type: string;
 }
@@ -128,15 +130,14 @@ function PurchaseRequestTrackingScreenInner() {
   useEffect(() => { load(); }, [load]);
 
   const onRefresh = () => { setRefreshing(true); load(); };
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const S = makeStyles(C);
 
   if (loading) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Workflow Tracking" showBack />
-      <View style={S.center}>
-        <AppEmptyState variant="loading" title="Loading timeline..." />
-      </View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
@@ -169,14 +170,7 @@ function PurchaseRequestTrackingScreenInner() {
       <ScrollView
         contentContainerStyle={S.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.primary}
-            colors={[C.primary]}
-          />
-        }
+        refreshControl={pullToRefresh}
       >
 
         {/* Summary card */}
@@ -331,9 +325,7 @@ function PurchaseRequestTrackingScreenInner() {
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content: { padding: 16, paddingBottom: 24 },
+    ...baseDetailStyles(C),
     card: { marginBottom: 16 },
 
     // Summary card

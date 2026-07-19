@@ -1,7 +1,7 @@
-import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View, Text } from 'react-native';
+import { Tabs, useFocusEffect } from 'expo-router';
+import { StyleSheet, View, Text, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
@@ -34,26 +34,52 @@ export default function TabLayout() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mounted = useRef(true);
 
-  const fetchUnread = async () => {
+  const fetchUnread = useCallback(async () => {
     try {
       const { count } = await notificationsApi.getUnreadCount();
       if (mounted.current) setUnreadCount(count ?? 0);
     } catch {
       // silent — badge is best-effort
     }
-  };
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
-    if (notificationsEnabled) {
-      fetchUnread();
-      pollRef.current = setInterval(fetchUnread, BADGE_POLL_MS);
-    }
-    return () => {
-      mounted.current = false;
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [notificationsEnabled]);
+    return () => { mounted.current = false; };
+  }, []);
+
+  // Poll ONLY while the tabs group is focused and the app is active — this
+  // layout stays mounted for the whole session, so without this guard the
+  // old effect kept polling every 60s in the background even while the user
+  // was deep in a stack screen outside the tab bar. Mirrors the guard
+  // app/(tabs)/notifications.tsx already uses for its own polling.
+  useFocusEffect(
+    useCallback(() => {
+      const startPoll = () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        if (notificationsEnabled) {
+          pollRef.current = setInterval(fetchUnread, BADGE_POLL_MS);
+        }
+      };
+
+      if (notificationsEnabled) fetchUnread();
+      startPoll();
+
+      const sub = AppState.addEventListener('change', state => {
+        if (state === 'active') {
+          if (notificationsEnabled) fetchUnread();
+          startPoll();
+        } else {
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      });
+
+      return () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        sub.remove();
+      };
+    }, [fetchUnread, notificationsEnabled])
+  );
 
   // On Android with edge-to-edge + 3-button nav: insets.bottom can be 0 even with buttons present.
   // Minimum 12px ensures the bar never clips.

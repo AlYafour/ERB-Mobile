@@ -1,35 +1,39 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseQuotationsApi } from '@/lib/api/purchase-quotations';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
+import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { PurchaseQuotation } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useDetailFetch } from '@/lib/hooks/use-detail-fetch';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
+import { formatMoney } from '@/lib/utils/format';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
-function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info' | 'default' {
-  switch (s) {
-    case 'accepted':
-    case 'awarded':  return 'success';
-    case 'rejected':
-    case 'cancelled':
-    case 'expired':  return 'danger';
-    case 'pending':  return 'warning';
-    default:         return 'default';
-  }
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  accepted: 'success',
+  awarded: 'success',
+  rejected: 'danger',
+  cancelled: 'danger',
+  expired: 'danger',
+  pending: 'warning',
+};
+
+function getStatusVariant(s?: string): BadgeVariant {
+  return STATUS_VARIANTS[s || ''] ?? 'default';
 }
 
 function fmtDate(d?: string | null) {
@@ -41,15 +45,12 @@ function PurchaseQuotationDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
-  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const S = makeStyles(C);
 
-  const [quotation, setQuotation] = useState<PurchaseQuotation | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [awarding, setAwarding] = useState(false);
   const [rejecting, setRejecting] = useState(false);
 
@@ -59,17 +60,10 @@ function PurchaseQuotationDetailScreenInner() {
   const canAward = hasPermission('purchase_quotation', 'award');
   const canReject = hasPermission('purchase_quotation', 'reject');
 
-  const load = async () => {
-    try { setLoading(true); setQuotation(await purchaseQuotationsApi.getById(id)); }
-    catch (e: any) { toast(e.message || 'Failed to load', 'error'); }
-    finally { setLoading(false); setRefreshing(false); }
-  };
-
-  useEffect(() => { load(); }, [id]);
-  // Stale-detail fix: refetch when the screen regains focus (a child
-  // flow - create QR/PO/GRN/invoice, approve, edit - can change this
-  // document's state while this screen stays mounted underneath).
-  useRefetchOnFocus(load);
+  const { data: quotation, loading, refreshing, reload, onRefresh } = useDetailFetch(
+    (qId: number) => purchaseQuotationsApi.getById(qId), id, 'Failed to load'
+  );
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const handleAward = async () => {
     if (!await confirm('Award this quotation? This marks it as the selected supplier.')) return;
@@ -77,7 +71,7 @@ function PurchaseQuotationDetailScreenInner() {
       setAwarding(true);
       await purchaseQuotationsApi.award(id);
       toast('Quotation awarded', 'success');
-      load();
+      reload();
     } catch (e: any) {
       toast(e.message || 'Failed to award', 'error');
     } finally {
@@ -85,15 +79,15 @@ function PurchaseQuotationDetailScreenInner() {
     }
   };
 
-  const handleReject = async () => {
-    if (!await confirm('Reject this quotation?')) return;
+  const handleRejectConfirm = async (reason: string) => {
     try {
       setRejecting(true);
-      await purchaseQuotationsApi.reject(id);
+      await purchaseQuotationsApi.reject(id, reason);
       toast('Quotation rejected', 'info');
-      load();
+      setRejectOpen(false);
+      reload();
     } catch (e: any) {
-      toast(e.message || 'Failed to reject', 'error');
+      toast(e?.response?.data?.error || e.message || 'Failed to reject', 'error');
     } finally {
       setRejecting(false);
     }
@@ -102,14 +96,22 @@ function PurchaseQuotationDetailScreenInner() {
   if (loading && !quotation) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Purchase Quotation" showBack />
-      <View style={S.center}><AppEmptyState variant="loading" title="Loading quotation..." /></View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
   if (!quotation) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Purchase Quotation" showBack />
-      <View style={S.center}><AppEmptyState variant="empty" title="Quotation not found" /></View>
+      <View style={S.center}>
+        <AppEmptyState
+          variant="error"
+          title="Failed to load"
+          message="Could not load the purchase quotation."
+          actionLabel="Try Again"
+          onAction={reload}
+        />
+      </View>
     </SafeAreaView>
   );
 
@@ -131,11 +133,7 @@ function PurchaseQuotationDetailScreenInner() {
       />
       <ScrollView
         contentContainerStyle={[S.content, { paddingBottom: showActions ? 100 : 24 }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={C.primary} colors={[C.primary]} />
-        }
+        refreshControl={pullToRefresh}
         showsVerticalScrollIndicator={false}
       >
         {/* Quotation Info */}
@@ -184,7 +182,7 @@ function PurchaseQuotationDetailScreenInner() {
                       {item.unit_price ? (
                         <View style={[S.chip, { backgroundColor: C.surfaceSoft }]}>
                           <Text style={[S.chipText, { color: C.textMuted }]}>
-                            AED {Number(item.unit_price).toFixed(2)}
+                            {formatMoney(item.unit_price)}
                           </Text>
                         </View>
                       ) : null}
@@ -192,7 +190,7 @@ function PurchaseQuotationDetailScreenInner() {
                   </View>
                   {item.total ? (
                     <Text style={[S.itemTotal, { color: C.textPrimary }]}>
-                      AED {Number(item.total).toFixed(2)}
+                      {formatMoney(item.total)}
                     </Text>
                   ) : null}
                 </View>
@@ -206,15 +204,15 @@ function PurchaseQuotationDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={[S.sectionTitle, { color: C.textPrimary }]}>Summary</Text>
             {quotation.subtotal !== undefined ? (
-              <AppCardRow label="Subtotal" value={`AED ${Number(quotation.subtotal).toFixed(2)}`} />
+              <AppCardRow label="Subtotal" value={formatMoney(quotation.subtotal)} />
             ) : null}
             {q.tax_amount !== undefined && q.tax_amount > 0 ? (
-              <AppCardRow label="Tax" value={`AED ${Number(q.tax_amount).toFixed(2)}`} />
+              <AppCardRow label="Tax" value={formatMoney(q.tax_amount)} />
             ) : null}
             <View style={[S.totalRow, { borderTopColor: C.primary }]}>
               <Text style={[S.totalLabel, { color: C.textPrimary }]}>Total</Text>
               <Text style={[S.totalValue, { color: C.primary }]}>
-                AED {Number(quotation.total_amount).toFixed(2)}
+                {formatMoney(quotation.total_amount)}
               </Text>
             </View>
           </AppCard>
@@ -258,22 +256,28 @@ function PurchaseQuotationDetailScreenInner() {
           ) : null}
           {canReject ? (
             <AppButton title="Reject" variant="dangerOutline" size="md"
-              onPress={handleReject} loading={rejecting} disabled={awarding || rejecting}
+              onPress={() => setRejectOpen(true)} disabled={awarding || rejecting}
               style={S.barBtn} />
           ) : null}
         </View>
       ) : null}
+
+      <RejectionReasonDialog
+        isOpen={rejectOpen}
+        onClose={() => { if (!rejecting) setRejectOpen(false); }}
+        onConfirm={handleRejectConfirm}
+        loading={rejecting}
+        title="Reject Quotation"
+        message="Please provide a reason for rejecting this quotation."
+      />
     </SafeAreaView>
   );
 }
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container:    { flex: 1, backgroundColor: C.background },
-    center:       { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    ...baseDetailStyles(C),
     content:      { padding: 16 },
-    card:         { marginBottom: 12 },
-    sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 14, letterSpacing: -0.2 },
 
     notesBox:  { marginTop: 10, padding: 12, borderRadius: 8 },
     notesText: { fontSize: 13, lineHeight: 20 },

@@ -1,85 +1,74 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { productsApi } from '@/lib/api/products';
 import { suppliersApi } from '@/lib/api/suppliers';
-import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
-import { AppButton } from '@/components/ui/AppButton';
-import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
+import { FormBottomBar } from '@/components/ui/FormBottomBar';
 import { Supplier } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { useEditForm } from '@/lib/hooks/use-edit-form';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
+import { UNITS } from '@/constants/units';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
-
-const UNITS = [
-  { value: 'piece', label: 'Piece' },
-  { value: 'kg', label: 'Kilogram' },
-  { value: 'g', label: 'Gram' },
-  { value: 'liter', label: 'Liter' },
-  { value: 'ml', label: 'Milliliter' },
-  { value: 'meter', label: 'Meter' },
-  { value: 'cm', label: 'Centimeter' },
-  { value: 'box', label: 'Box' },
-  { value: 'pack', label: 'Pack' },
-];
 
 const DISCOUNT_TYPES = [
   { value: 'percentage', label: 'Percentage (%)' },
   { value: 'fixed', label: 'Fixed Amount' },
 ];
 
+interface ProductEditForm {
+  name: string;
+  code: string;
+  sku: string;
+  barcode: string;
+  description: string;
+  brand: string;
+  category: string;
+  unit: string;
+  supplier: number | undefined;
+  unit_price: string;
+  buy_price: string;
+  discount: string;
+  discount_type: string;
+  track_stock: boolean;
+  stock_balance: string;
+  min_stock_level: string;
+  is_active: boolean;
+}
+
 function EditProductScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
-  const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const S = makeStyles(C);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({
-    name: '',
-    code: '',
-    sku: '',
-    barcode: '',
-    description: '',
-    brand: '',
-    category: '',
-    unit: 'piece',
-    supplier: undefined as number | undefined,
-    unit_price: '',
-    buy_price: '',
-    discount: '',
-    discount_type: 'percentage',
-    track_stock: false,
-    stock_balance: '',
-    min_stock_level: '',
-    is_active: true,
-  });
 
-  useEffect(() => {
-    Promise.all([
-      productsApi.getById(id),
-      suppliersApi.getAll({ page_size: 100 }),
-    ]).then(([product, suppResp]) => {
+  const { loading, saving, errors, form, set, handleSubmit } = useEditForm<ProductEditForm>({
+    id,
+    load: async () => {
+      const [product, suppResp] = await Promise.all([
+        productsApi.getById(id),
+        suppliersApi.getAll({ page_size: 100 }),
+      ]);
       setSuppliers(suppResp.results || []);
       const p = product as any;
       const supplierId =
         typeof p.supplier === 'object' && p.supplier !== null ? Number(p.supplier.id)
         : typeof p.supplier === 'number' ? p.supplier
         : undefined;
-      setForm({
+      return {
         name:           p.name || '',
         code:           p.code || '',
         sku:            p.sku || '',
@@ -97,53 +86,35 @@ function EditProductScreenInner() {
         stock_balance:  p.stock_balance != null ? String(p.stock_balance) : '',
         min_stock_level:p.min_stock_level != null ? String(p.min_stock_level) : '',
         is_active:      p.is_active ?? true,
-      });
-    }).catch((err: any) => {
-      toast(err.message || 'Failed to load product', 'error');
-      router.back();
-    }).finally(() => setLoading(false));
-  }, [id]);
-
-  const set = (key: keyof typeof form) => (val: any) =>
-    setForm((f) => ({ ...f, [key]: val }));
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = 'Product name is required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    try {
-      setSaving(true);
-      await productsApi.update(id, {
-        ...form,
-        unit_price: parseFloat(form.unit_price) || 0,
-        buy_price: parseFloat(form.buy_price) || 0,
-        discount: parseFloat(form.discount) || 0,
-        stock_balance: parseInt(form.stock_balance) || 0,
-        min_stock_level: parseInt(form.min_stock_level) || 0,
-      });
-      toast('Product updated successfully', 'success');
-      router.back();
-    } catch (err: any) {
-      toast(err.message || 'Failed to update product', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+      };
+    },
+    validate: (f) => {
+      const e: Record<string, string> = {};
+      if (!f.name.trim()) e.name = 'Product name is required';
+      return e;
+    },
+    submit: (f) => productsApi.update(id, {
+      ...f,
+      unit_price: parseFloat(f.unit_price) || 0,
+      buy_price: parseFloat(f.buy_price) || 0,
+      discount: parseFloat(f.discount) || 0,
+      stock_balance: parseInt(f.stock_balance) || 0,
+      min_stock_level: parseInt(f.min_stock_level) || 0,
+    }),
+    loadErrorMessage: 'Failed to load product',
+    successMessage: 'Product updated successfully',
+    submitErrorMessage: 'Failed to update product',
+  });
 
   const supplierOptions = suppliers.map((s) => ({
     value: Number(s.id),
     label: (s as any).business_name || s.name || `Supplier ${s.id}`,
   }));
 
-  if (loading) return (
+  if (loading || !form) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Edit Product" showBack />
-      <View style={S.center}><AppEmptyState variant="loading" title="Loading product..." /></View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
@@ -167,7 +138,7 @@ function EditProductScreenInner() {
           <Input label="Brand" value={form.brand} onChangeText={set('brand')} placeholder="Enter brand" />
           <Input label="Category" value={form.category} onChangeText={set('category')}
             placeholder="Enter category" />
-          <SearchableDropdown label="Unit" options={UNITS} value={form.unit}
+          <SearchableDropdown label="Unit" options={[...UNITS]} value={form.unit}
             onChange={(v) => set('unit')(v as string)} placeholder="Select unit" />
           {supplierOptions.length > 0 ? (
             <SearchableDropdown label="Supplier" options={supplierOptions} value={form.supplier}
@@ -217,36 +188,25 @@ function EditProductScreenInner() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
-          disabled={saving} style={S.barBtn} />
-        <AppButton title="Save Changes" variant="primary" size="md" onPress={handleSubmit}
-          loading={saving} disabled={saving} style={S.barBtn} />
-      </View>
+      <FormBottomBar
+        onCancel={() => router.back()}
+        submitLabel="Save Changes"
+        onSubmit={handleSubmit}
+        loading={saving}
+      />
     </SafeAreaView>
   );
 }
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content:   { padding: 16, paddingBottom: 8 },
-    card:      { marginBottom: 12 },
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    ...baseDetailStyles(C),
+    content: { padding: 16, paddingBottom: 8 },
     switchRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingVertical: 10, marginTop: 4,
     },
     switchLabel: { fontSize: 14, fontWeight: '500' },
-    bottomBar: {
-      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
-      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
-    },
-    barBtn: { flex: 1 },
   });
 }
 

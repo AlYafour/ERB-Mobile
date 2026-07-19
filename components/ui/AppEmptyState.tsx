@@ -19,7 +19,7 @@ export interface AppEmptyStateProps {
 
 const DEFAULT_ICONS: Record<EmptyVariant, string> = {
   empty: 'tray',
-  error: 'exclamationmark.triangle',
+  error: 'exclamationmark.triangle.fill',
   loading: 'arrow.clockwise',
   offline: 'wifi.slash',
 };

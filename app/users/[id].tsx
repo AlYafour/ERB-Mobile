@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { usersApi } from '@/lib/api/users';
 import { User } from '@/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { Colors, ModuleTints } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
@@ -52,15 +55,31 @@ function UserDetailScreenInner() {
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!id) { setError('Invalid user ID'); setLoading(false); return; }
-    usersApi.getById(id)
-      .then(u => { setUser(u); })
-      .catch(e => { setError(e.message || 'Failed to load user'); })
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    if (!id) { setError('Invalid user ID'); setLoading(false); setRefreshing(false); return; }
+    try {
+      setError(null);
+      const u = await usersApi.getById(id);
+      setUser(u);
+    } catch (e: any) {
+      setError(e.message || 'Failed to load user');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [id]);
+
+  useEffect(() => { load(); }, [load]);
+  // Stale-detail fix: refetch when the screen regains focus (a child
+  // flow - edit, permission changes - can change this record while this
+  // screen stays mounted underneath).
+  useRefetchOnFocus(load);
+
+  const onRefresh = () => { setRefreshing(true); load(); };
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const fullName = user
     ? [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || user.email
@@ -81,7 +100,7 @@ function UserDetailScreenInner() {
       <AppHeader title="User Details" showBack={true} />
 
       {loading ? (
-        <AppEmptyState variant="loading" title="Loading user…" />
+        <AppSkeletonList count={3} lines={4} />
       ) : error || !user ? (
         <AppEmptyState
           variant="error"
@@ -94,6 +113,7 @@ function UserDetailScreenInner() {
         <ScrollView
           contentContainerStyle={[s.scroll, { paddingBottom: 48 }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={pullToRefresh}
         >
           {/* ── Avatar hero ── */}
           <View style={[s.hero, { backgroundColor: c.primary }]}>
@@ -105,20 +125,20 @@ function UserDetailScreenInner() {
             <Text style={s.heroName} numberOfLines={1}>{fullName}</Text>
             {roleLabel && <Text style={s.heroRole}>{roleLabel}</Text>}
             <View style={s.badgeRow}>
-              <View style={[s.badge, { backgroundColor: user.is_active ? '#dcfce7' : '#fee2e2' }]}>
-                <View style={[s.badgeDot, { backgroundColor: user.is_active ? '#16a34a' : '#dc2626' }]} />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: user.is_active ? '#166534' : '#991b1b' }}>
+              <View style={[s.badge, { backgroundColor: user.is_active ? c.successBg : c.dangerBg }]}>
+                <View style={[s.badgeDot, { backgroundColor: user.is_active ? c.success : c.danger }]} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: user.is_active ? c.successText : c.errorText }}>
                   {user.is_active ? 'Active' : 'Inactive'}
                 </Text>
               </View>
               {user.is_staff && (
-                <View style={[s.badge, { backgroundColor: '#EFF6FF' }]}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8' }}>Staff</Text>
+                <View style={[s.badge, { backgroundColor: c.infoBg }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: c.info }}>Staff</Text>
                 </View>
               )}
               {user.is_superuser && (
-                <View style={[s.badge, { backgroundColor: '#FDF4FF' }]}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>Superuser</Text>
+                <View style={[s.badge, { backgroundColor: ModuleTints[cs].admin.bg }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: ModuleTints[cs].admin.fg }}>Superuser</Text>
                 </View>
               )}
             </View>
@@ -142,16 +162,16 @@ function UserDetailScreenInner() {
               <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }]}>
                 {user.is_superuser && (
                   <View style={[s.accessRow, { borderBottomColor: c.border }]}>
-                    <View style={[s.accessIcon, { backgroundColor: '#F5F3FF' }]}>
-                      <IconSymbol name="checkmark.shield.fill" size={16} color="#7C3AED" />
+                    <View style={[s.accessIcon, { backgroundColor: ModuleTints[cs].admin.bg }]}>
+                      <IconSymbol name="checkmark.shield.fill" size={16} color={ModuleTints[cs].admin.fg} />
                     </View>
                     <Text style={[s.accessLabel, { color: c.textPrimary }]}>Full system access (Superuser)</Text>
                   </View>
                 )}
                 {user.is_staff && !user.is_superuser && (
                   <View style={[s.accessRow, { borderBottomColor: c.border }]}>
-                    <View style={[s.accessIcon, { backgroundColor: '#EFF6FF' }]}>
-                      <IconSymbol name="person.badge.shield.checkmark.fill" size={16} color="#1D4ED8" />
+                    <View style={[s.accessIcon, { backgroundColor: c.infoBg }]}>
+                      <IconSymbol name="person.badge.shield.checkmark.fill" size={16} color={c.info} />
                     </View>
                     <Text style={[s.accessLabel, { color: c.textPrimary }]}>Staff (admin panel access)</Text>
                   </View>

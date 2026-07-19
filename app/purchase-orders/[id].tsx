@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseOrdersApi } from '@/lib/api/purchase-orders';
@@ -8,15 +8,18 @@ import { toast, confirm } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { PurchaseOrder } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useDetailFetch } from '@/lib/hooks/use-detail-fetch';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
+import { formatMoney } from '@/lib/utils/format';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -28,13 +31,16 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
-function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info' {
-  switch (s) {
-    case 'approved': case 'completed': return 'success';
-    case 'rejected': case 'cancelled': return 'danger';
-    case 'pending':  return 'warning';
-    default:         return 'info';
-  }
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  approved: 'success',
+  completed: 'success',
+  rejected: 'danger',
+  cancelled: 'danger',
+  pending: 'warning',
+};
+
+function getStatusVariant(s?: string): BadgeVariant {
+  return STATUS_VARIANTS[s || ''] ?? 'info';
 }
 
 function PurchaseOrderDetailScreenInner() {
@@ -46,9 +52,6 @@ function PurchaseOrderDetailScreenInner() {
   const C = Colors[cs];
   const insets = useSafeAreaInsets();
 
-  const [order, setOrder] = useState<PurchaseOrder | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -62,23 +65,10 @@ function PurchaseOrderDetailScreenInner() {
   const canCancel  = hasPermission('purchase_order', 'cancel');
   const canReopen  = hasPermission('purchase_order', 'reopen');
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      setOrder(await purchaseOrdersApi.getById(id));
-    } catch (e: any) {
-      toast(e.message || 'Failed to load', 'error');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [id]);
-  // Stale-detail fix: refetch when the screen regains focus (a child
-  // flow - create QR/PO/GRN/invoice, approve, edit - can change this
-  // document's state while this screen stays mounted underneath).
-  useRefetchOnFocus(load);
+  const { data: order, loading, refreshing, reload, onRefresh } = useDetailFetch(
+    (orderId: number) => purchaseOrdersApi.getById(orderId), id, 'Failed to load'
+  );
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const handleApprove = async () => {
     const orderNum = (order as any)?.order_number || `LPO-${id}`;
@@ -87,7 +77,7 @@ function PurchaseOrderDetailScreenInner() {
       setApproving(true);
       await purchaseOrdersApi.approve(id);
       toast('Order approved successfully', 'success');
-      load();
+      reload();
     } catch (e: any) {
       toast(e.message || 'Failed to approve', 'error');
     } finally {
@@ -101,7 +91,7 @@ function PurchaseOrderDetailScreenInner() {
       await purchaseOrdersApi.reject(id, reason);
       toast('Order rejected', 'info');
       setRejectOpen(false);
-      load();
+      reload();
     } catch (e: any) {
       toast(e?.response?.data?.error || e.message || 'Failed to reject', 'error');
     } finally {
@@ -115,7 +105,7 @@ function PurchaseOrderDetailScreenInner() {
       setCancelling(true);
       await purchaseOrdersApi.cancel(id);
       toast('Order cancelled', 'info');
-      load();
+      reload();
     } catch (e: any) {
       toast(e.message || 'Failed to cancel', 'error');
     } finally {
@@ -129,7 +119,7 @@ function PurchaseOrderDetailScreenInner() {
       setReopening(true);
       await purchaseOrdersApi.reopen(id);
       toast('Order reopened', 'success');
-      load();
+      reload();
     } catch (e: any) {
       toast(e.message || 'Failed to reopen', 'error');
     } finally {
@@ -146,9 +136,7 @@ function PurchaseOrderDetailScreenInner() {
   if (loading && !order) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Purchase Order" showBack />
-      <View style={S.center}>
-        <AppEmptyState variant="loading" title="Loading order..." />
-      </View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
@@ -156,7 +144,13 @@ function PurchaseOrderDetailScreenInner() {
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Purchase Order" showBack />
       <View style={S.center}>
-        <AppEmptyState variant="empty" title="Order not found" />
+        <AppEmptyState
+          variant="error"
+          title="Failed to load"
+          message="Could not load the purchase order."
+          actionLabel="Try Again"
+          onAction={reload}
+        />
       </View>
     </SafeAreaView>
   );
@@ -191,14 +185,7 @@ function PurchaseOrderDetailScreenInner() {
 
       <ScrollView
         contentContainerStyle={[S.content, showBottomBar && { paddingBottom: 32 }]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={C.primary}
-            colors={[C.primary]}
-          />
-        }
+        refreshControl={pullToRefresh}
         showsVerticalScrollIndicator={false}
       >
         {/* Order Information */}
@@ -262,14 +249,14 @@ function PurchaseOrderDetailScreenInner() {
                       </Text>
                       {item.unit_price ? (
                         <Text style={[S.metaChip, { color: C.textSecondary, backgroundColor: C.surfaceSoft }]}>
-                          Unit: AED {Number(item.unit_price).toFixed(2)}
+                          Unit: {formatMoney(item.unit_price)}
                         </Text>
                       ) : null}
                     </View>
                   </View>
                   {item.total ? (
                     <Text style={[S.itemTotal, { color: C.textPrimary }]}>
-                      AED {Number(item.total).toFixed(2)}
+                      {formatMoney(item.total)}
                     </Text>
                   ) : null}
                 </View>
@@ -283,16 +270,16 @@ function PurchaseOrderDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Summary</Text>
             {order.subtotal !== undefined && (
-              <AppCardRow label="Subtotal" value={`AED ${Number(order.subtotal).toFixed(2)}`} />
+              <AppCardRow label="Subtotal" value={formatMoney(order.subtotal)} />
             )}
             {order.tax_amount !== undefined && Number(order.tax_amount) > 0 && (
-              <AppCardRow label="Tax" value={`AED ${Number(order.tax_amount).toFixed(2)}`} />
+              <AppCardRow label="Tax" value={formatMoney(order.tax_amount)} />
             )}
             {order.total_amount !== undefined && (
               <View style={[S.totalRow, { borderTopColor: C.primary }]}>
                 <Text style={[S.totalLabel, { color: C.textPrimary }]}>Total</Text>
                 <Text style={[S.totalValue, { color: C.primary }]}>
-                  AED {Number(order.total_amount).toFixed(2)}
+                  {formatMoney(order.total_amount)}
                 </Text>
               </View>
             )}
@@ -386,15 +373,7 @@ function PurchaseOrderDetailScreenInner() {
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content:   { padding: 16, paddingBottom: 24 },
-    card:      { marginBottom: 12 },
-
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    ...baseDetailStyles(C),
 
     linkRow: {
       flexDirection: 'row', justifyContent: 'space-between',

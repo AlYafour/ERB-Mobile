@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,8 +17,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Logo } from '@/components/ui/Logo';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type Step = 'request' | 'confirm' | 'done';
+
+type Palette = typeof Colors.light | typeof Colors.dark;
 
 /**
  * Forgot-password flow. Two backend calls, no session established:
@@ -27,10 +31,14 @@ type Step = 'request' | 'confirm' | 'done';
  * The user signs in fresh afterward — this screen never stores tokens.
  */
 export default function ForgotPasswordScreen() {
+  const cs = useColorScheme() ?? 'light';
+  const C = Colors[cs];
+  const s = useMemo(() => makeStyles(C), [C]);
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { branding } = useAuth();
-  const brandColor = branding?.primary_color || '#C9943A';
+  const brandColor = branding?.primary_color || C.primary;
 
   const [step, setStep] = useState<Step>('request');
   const [identifier, setIdentifier] = useState('');
@@ -38,8 +46,6 @@ export default function ForgotPasswordScreen() {
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -84,7 +90,7 @@ export default function ForgotPasswordScreen() {
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#07111F" />
+      <StatusBar barStyle={cs === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={C.background} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 }]}
@@ -124,7 +130,7 @@ export default function ForgotPasswordScreen() {
                   accessibilityLabel="Send reset code"
                   accessibilityState={{ disabled: loading, busy: loading }}
                 >
-                  {loading ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={s.btnText}>Send Reset Code</Text>}
+                  {loading ? <ActivityIndicator color={C.primaryText} size="small" /> : <Text style={s.btnText}>Send Reset Code</Text>}
                 </TouchableOpacity>
               </>
             )}
@@ -153,20 +159,11 @@ export default function ForgotPasswordScreen() {
                   value={newPassword}
                   onChangeText={setNewPassword}
                   placeholder="At least 8 characters"
-                  secureTextEntry={!showNewPassword}
+                  secureTextEntry
+                  secureToggle
                   autoCapitalize="none"
                   autoComplete="password-new"
                   containerStyle={s.field}
-                  rightIcon={
-                    <TouchableOpacity
-                      onPress={() => setShowNewPassword(v => !v)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={showNewPassword ? 'Hide password' : 'Show password'}
-                    >
-                      <IconSymbol name={showNewPassword ? 'eye.slash.fill' : 'eye.fill'} size={19} color="#64748B" />
-                    </TouchableOpacity>
-                  }
                 />
 
                 <Input
@@ -174,22 +171,13 @@ export default function ForgotPasswordScreen() {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   placeholder="Re-enter new password"
-                  secureTextEntry={!showConfirmPassword}
+                  secureTextEntry
+                  secureToggle
                   autoCapitalize="none"
                   autoComplete="password-new"
                   returnKeyType="done"
                   onSubmitEditing={handleConfirm}
                   containerStyle={s.field}
-                  rightIcon={
-                    <TouchableOpacity
-                      onPress={() => setShowConfirmPassword(v => !v)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={showConfirmPassword ? 'Hide password' : 'Show password'}
-                    >
-                      <IconSymbol name={showConfirmPassword ? 'eye.slash.fill' : 'eye.fill'} size={19} color="#64748B" />
-                    </TouchableOpacity>
-                  }
                 />
 
                 <TouchableOpacity
@@ -201,7 +189,7 @@ export default function ForgotPasswordScreen() {
                   accessibilityLabel="Reset password"
                   accessibilityState={{ disabled: loading, busy: loading }}
                 >
-                  {loading ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={s.btnText}>Reset Password</Text>}
+                  {loading ? <ActivityIndicator color={C.primaryText} size="small" /> : <Text style={s.btnText}>Reset Password</Text>}
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -219,7 +207,7 @@ export default function ForgotPasswordScreen() {
             {step === 'done' && (
               <>
                 <View style={s.successBox}>
-                  <IconSymbol name="checkmark.circle.fill" size={28} color="#6EAF86" />
+                  <IconSymbol name="checkmark.circle.fill" size={28} color={C.success} />
                   <Text style={s.successText}>Your password has been reset. Please sign in with your new password.</Text>
                 </View>
                 <TouchableOpacity
@@ -252,43 +240,43 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#07111F' },
+const makeStyles = (C: Palette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.background },
   scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 },
   logoWrap: { alignItems: 'center', marginBottom: 28 },
 
   card: {
-    backgroundColor: '#0D1B2A',
-    borderColor: '#1E3349',
+    backgroundColor: C.surface,
+    borderColor: C.border,
     borderWidth: 1,
     borderRadius: 22,
     padding: 28,
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#F8FAFC', marginBottom: 4 },
-  sub: { fontSize: 13, color: '#64748B', marginBottom: 22, lineHeight: 19 },
+  title: { fontSize: 20, fontWeight: '700', color: C.textPrimary, marginBottom: 4 },
+  sub: { fontSize: 13, color: C.textMuted, marginBottom: 22, lineHeight: 19 },
 
   errorBox: {
-    backgroundColor: 'rgba(239,68,68,0.10)',
+    backgroundColor: C.dangerBg,
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.28)',
+    borderColor: `${C.danger}47`,
   },
-  errorText: { color: '#FCA5A5', fontSize: 13, fontWeight: '500', textAlign: 'center' },
+  errorText: { color: C.errorText, fontSize: 13, fontWeight: '500', textAlign: 'center' },
 
   successBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: 'rgba(110,175,134,0.10)',
+    backgroundColor: C.successBg,
     borderRadius: 12,
     padding: 16,
     marginBottom: 22,
     borderWidth: 1,
-    borderColor: 'rgba(110,175,134,0.28)',
+    borderColor: `${C.success}47`,
   },
-  successText: { flex: 1, color: '#8FCBA5', fontSize: 14, lineHeight: 20 },
+  successText: { flex: 1, color: C.successText, fontSize: 14, lineHeight: 20 },
 
   field: { marginBottom: 14 },
 
@@ -301,8 +289,8 @@ const s = StyleSheet.create({
     minHeight: 48,
   },
   btnDisabled: { opacity: 0.55 },
-  btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  btnText: { color: C.primaryText, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 
   backLink: { alignItems: 'center', marginTop: 18, minHeight: 44, justifyContent: 'center' },
-  backText: { color: '#94A3B8', fontSize: 14, fontWeight: '600' },
+  backText: { color: C.textMuted, fontSize: 14, fontWeight: '600' },
 });

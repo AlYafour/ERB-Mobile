@@ -1,26 +1,29 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useCancellableFetch } from '@/lib/hooks/use-cancellable-fetch';
 import { purchaseOrdersApi } from '@/lib/api/purchase-orders';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast } from '@/lib/hooks/use-toast';
-import { Input } from '@/components/ui/Input';
-import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
+import { ListSearchBar } from '@/components/ui/ListSearchBar';
+import { FilterField } from '@/components/ui/FilterPanel';
 import FilterTags from '@/components/ui/FilterTags';
 import { PurchaseOrder, PaginatedResponse } from '@/types';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { getDateAccent } from '@/lib/utils/list-helpers';
 import { Colors } from '@/constants/theme';
-import { Spacing, Typography } from '@/constants/spacing';
+import { Spacing } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
 import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
+import { AppPagination } from '@/components/ui/AppPagination';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
 
@@ -31,6 +34,118 @@ const statusLabels: Record<string, string> = {
   completed: 'Completed',
   cancelled: 'Cancelled',
 };
+
+function getStatusVariant(status?: string): 'success' | 'danger' | 'warning' | 'info' {
+  switch (status) {
+    case 'approved': case 'completed': return 'success';
+    case 'rejected': case 'cancelled': return 'danger';
+    case 'pending':  return 'warning';
+    default:         return 'info';
+  }
+}
+
+/**
+ * Memoized list row — re-renders only when its item or theme changes, not on
+ * every parent state change (pagination, filters, loading flags).
+ */
+const POCard = React.memo(function POCard({
+  item,
+  colors,
+  onOpen,
+}: {
+  item: PurchaseOrder;
+  colors: typeof Colors.light | typeof Colors.dark;
+  onOpen: (id: number) => void;
+}) {
+  const itemId    = Number(item.id);
+  const orderNum  = item.order_number || `LPO-${itemId}`;
+  const supplier  = typeof item.supplier === 'object'
+    ? (item.supplier as any)?.name
+    : (item as any).supplier_name || null;
+  const project   = typeof (item as any).project === 'object'
+    ? (item as any).project?.name
+    : (item as any).project_name || null;
+  const prCode    = (item as any).purchase_request_number || (item as any).purchase_request_code || null;
+  const orderDate = (item as any).order_date
+    ? new Date((item as any).order_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  const delivRaw: string | undefined = (item as any).delivery_date;
+  const delivDate  = delivRaw ? new Date(delivRaw) : null;
+  const delivLabel = delivDate
+    ? delivDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  const isActive   = item.status !== 'completed' && item.status !== 'rejected' && item.status !== 'cancelled';
+  const dateAccent = getDateAccent(delivRaw);
+  const isOverdue  = isActive && dateAccent.overdue;
+  const isUrgent   = isActive && dateAccent.urgent;
+  const delivColor = isOverdue ? colors.danger : isUrgent ? colors.warning : colors.textPrimary;
+  const total      = (item as any).total_amount ?? (item as any).total ?? null;
+  const itemCount  = item.items?.length ?? null;
+  const accentColor = isOverdue ? colors.danger : isUrgent ? colors.warning : undefined;
+
+  return (
+    <AppCard
+      style={[styles.itemCard, accentColor && { borderLeftWidth: 3, borderLeftColor: accentColor }]}
+      onPress={() => onOpen(itemId)}
+    >
+      <View style={styles.topRow}>
+        <DocumentIconTile type="purchase_order" />
+        <View style={styles.titleCol}>
+          <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>{orderNum}</Text>
+          {supplier ? (
+            <Text style={[styles.supplierText, { color: colors.textSecondary }]} numberOfLines={1}>{supplier}</Text>
+          ) : null}
+        </View>
+        <AppBadge variant={getStatusVariant(item.status)}>
+          {statusLabels[item.status || ''] || item.status || 'Unknown'}
+        </AppBadge>
+      </View>
+
+      {project ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Project</Text>
+          <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>{project}</Text>
+        </View>
+      ) : null}
+      {prCode ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Linked PR</Text>
+          <Text style={[styles.metaValue, { color: colors.primary }]} numberOfLines={1}>{prCode}</Text>
+        </View>
+      ) : null}
+      {orderDate ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Order Date</Text>
+          <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{orderDate}</Text>
+        </View>
+      ) : null}
+      {delivLabel ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Delivery</Text>
+          <Text style={[styles.metaValue, { color: delivColor, fontWeight: isOverdue || isUrgent ? '600' : '400' }]}>
+            {delivLabel}{isOverdue ? ' · Overdue' : isUrgent ? ' · Soon' : ''}
+          </Text>
+        </View>
+      ) : null}
+      {total != null ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Total</Text>
+          <Text style={[styles.metaValue, { color: colors.success, fontWeight: '600' }]}>
+            AED {Number(total).toFixed(2)}
+          </Text>
+        </View>
+      ) : null}
+      {itemCount !== null && itemCount > 0 ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Items</Text>
+          <Text style={[styles.metaValue, { color: colors.textSecondary }]}>
+            {itemCount} item{itemCount !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      ) : null}
+    </AppCard>
+  );
+});
 
 function PurchaseOrdersScreenInner() {
   const router = useRouter();
@@ -44,34 +159,49 @@ function PurchaseOrdersScreenInner() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [data, setData] = useState<PaginatedResponse<PurchaseOrder> | null>(null);
-  const [loading, setLoading] = useState(true);
+  // initialLoading fills the screen once; listLoading (pagination / filter /
+  // search reloads) keeps the list AND its pagination footer mounted.
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isSuperuser = user?.is_superuser ?? false;
   const canCreate = isSuperuser || (hasPermission('purchase_order', 'create') ?? false);
 
+  // Stale-response guard: an older response never overwrites a newer one,
+  // and nothing sets state after unmount.
+  const { nextSignal, isCurrent, mountedRef } = useCancellableFetch();
+  const hasLoadedOnce = useRef(false);
+
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => { loadOrders(); }, [page, debouncedSearch, filters]);
-
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
+    const { seq } = nextSignal();
+    setError(null);
+    if (hasLoadedOnce.current) setListLoading(true);
     try {
-      setError(null);
-      setLoading(true);
       const response = await purchaseOrdersApi.getAll({ page, page_size: 50, search: debouncedSearch, ...filters });
+      if (!isCurrent(seq) || !mountedRef.current) return;
       setData(response);
+      hasLoadedOnce.current = true;
     } catch (err: any) {
+      if (!isCurrent(seq) || !mountedRef.current) return;
       setError(err.message || 'Failed to load purchase orders');
       toast(err.message || 'Failed to load purchase orders', 'error');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent(seq) && mountedRef.current) {
+        setInitialLoading(false);
+        setListLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [page, debouncedSearch, filters, nextSignal, isCurrent, mountedRef]);
+
+  useEffect(() => { loadOrders(); }, [loadOrders]);
 
   const onRefresh = () => { setRefreshing(true); loadOrders(); };
 
@@ -99,107 +229,20 @@ function PurchaseOrdersScreenInner() {
     const f = { ...filters }; delete f[key]; setFilters(f); setPage(1);
   };
 
-  const getStatusVariant = (status?: string): 'success' | 'danger' | 'warning' | 'info' => {
-    switch (status) {
-      case 'approved': case 'completed': return 'success';
-      case 'rejected': case 'cancelled': return 'danger';
-      case 'pending':  return 'warning';
-      default:         return 'info';
-    }
-  };
-
-  const renderItem = ({ item }: { item: PurchaseOrder }) => {
-    const itemId    = Number(item.id);
-    const orderNum  = item.order_number || `LPO-${itemId}`;
-    const supplier  = typeof item.supplier === 'object'
-      ? (item.supplier as any)?.name
-      : (item as any).supplier_name || null;
-    const project   = typeof (item as any).project === 'object'
-      ? (item as any).project?.name
-      : (item as any).project_name || null;
-    const prCode    = (item as any).purchase_request_number || (item as any).purchase_request_code || null;
-    const orderDate = (item as any).order_date
-      ? new Date((item as any).order_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      : null;
-    const delivRaw: string | undefined = (item as any).delivery_date;
-    const delivDate  = delivRaw ? new Date(delivRaw) : null;
-    const delivLabel = delivDate
-      ? delivDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      : null;
-    const now        = new Date();
-    const isActive   = item.status !== 'completed' && item.status !== 'rejected' && item.status !== 'cancelled';
-    const isOverdue  = delivDate && isActive && delivDate < now;
-    const isUrgent   = delivDate && isActive && delivDate < new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
-    const delivColor = isOverdue ? colors.danger : isUrgent ? colors.warning : colors.textPrimary;
-    const total      = (item as any).total_amount ?? (item as any).total ?? null;
-    const itemCount  = item.items?.length ?? null;
-    const accentColor = isOverdue ? colors.danger : isUrgent ? colors.warning : undefined;
-
-    return (
-      <AppCard
-        style={[styles.itemCard, accentColor && { borderLeftWidth: 3, borderLeftColor: accentColor }]}
-        onPress={() => router.push(`/purchase-orders/${itemId}` as any)}
-      >
-        <View style={styles.topRow}>
-          <DocumentIconTile type="purchase_order" />
-          <View style={styles.titleCol}>
-            <Text style={[styles.itemCode, { color: colors.textPrimary }]} numberOfLines={1}>{orderNum}</Text>
-            {supplier ? (
-              <Text style={[styles.supplierText, { color: colors.textSecondary }]} numberOfLines={1}>{supplier}</Text>
-            ) : null}
-          </View>
-          <AppBadge variant={getStatusVariant(item.status)}>
-            {statusLabels[item.status || ''] || item.status || 'Unknown'}
-          </AppBadge>
-        </View>
-
-        {project ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Project</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>{project}</Text>
-          </View>
-        ) : null}
-        {prCode ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Linked PR</Text>
-            <Text style={[styles.metaValue, { color: colors.primary }]} numberOfLines={1}>{prCode}</Text>
-          </View>
-        ) : null}
-        {orderDate ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Order Date</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{orderDate}</Text>
-          </View>
-        ) : null}
-        {delivLabel ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Delivery</Text>
-            <Text style={[styles.metaValue, { color: delivColor, fontWeight: isOverdue || isUrgent ? '600' : '400' }]}>
-              {delivLabel}{isOverdue ? ' · Overdue' : isUrgent ? ' · Soon' : ''}
-            </Text>
-          </View>
-        ) : null}
-        {total != null ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Total</Text>
-            <Text style={[styles.metaValue, { color: colors.success, fontWeight: '600' }]}>
-              AED {Number(total).toFixed(2)}
-            </Text>
-          </View>
-        ) : null}
-        {itemCount !== null && itemCount > 0 ? (
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Items</Text>
-            <Text style={[styles.metaValue, { color: colors.textSecondary }]}>
-              {itemCount} item{itemCount !== 1 ? 's' : ''}
-            </Text>
-          </View>
-        ) : null}
-      </AppCard>
-    );
-  };
   // Stale-list fix: refetch when the screen regains focus (create/detail flows)
   useRefetchOnFocus(loadOrders);
+
+  const openOrder = useCallback(
+    (id: number) => router.push(`/purchase-orders/${id}` as any),
+    [router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: PurchaseOrder }) => (
+      <POCard item={item} colors={colors} onOpen={openOrder} />
+    ),
+    [colors, openOrder],
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -214,28 +257,16 @@ function PurchaseOrdersScreenInner() {
           ) : undefined}
         />
 
-        <View style={styles.searchContainer}>
-          <View style={styles.searchRow}>
-            <View style={styles.searchInputWrapper}>
-              <Input
-                placeholder="Search orders..."
-                value={search}
-                onChangeText={setSearch}
-                containerStyle={styles.searchInput}
-                leftIcon={<IconSymbol name="magnifyingglass" size={20} color={colors.textMuted} />}
-              />
-            </View>
-            <View style={styles.filterBtnWrapper}>
-              <FilterPanel
-                fields={filterFields}
-                filters={filters}
-                onFilterChange={handleFilterChange}
-                onReset={handleFilterReset}
-                saveKey="purchase-orders"
-              />
-            </View>
-          </View>
-        </View>
+        <ListSearchBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search orders..."
+          filterFields={filterFields}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onFilterReset={handleFilterReset}
+          filterSaveKey="purchase-orders"
+        />
 
         {Object.keys(filters).length > 0 && (
           <FilterTags
@@ -246,42 +277,51 @@ function PurchaseOrdersScreenInner() {
           />
         )}
 
-        {loading && !refreshing ? (
+        {initialLoading ? (
           <AppEmptyState variant="loading" title="Loading orders..." />
         ) : error && !data?.results?.length ? (
-          <AppEmptyState variant="error" title="Failed to load" message={error} actionLabel="Try Again" onAction={loadOrders} />
-        ) : !data?.results?.length ? (
+          <AppErrorState title="Failed to load" message={error} onRetry={loadOrders} />
+        ) : !data?.results?.length && !listLoading ? (
           <AppEmptyState variant="empty" icon="cart" title="No purchase orders" message="No orders found matching your criteria." />
         ) : (
-          <FlatList
-            data={data.results}
-            renderItem={renderItem}
-            keyExtractor={(item, index) => String(item.id ?? index)}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.primary}
-                colors={[colors.primary]}
-              />
-            }
-            ListFooterComponent={
-              data && data.count > 50 ? (
-                <View style={[styles.pagination, { backgroundColor: colors.surfaceSoft, borderTopColor: colors.border }]}>
-                  <AppButton title="Previous" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!data.previous || page === 1} style={styles.paginationBtn} />
-                  <Text style={[styles.paginationText, { color: colors.textMuted }]}>
-                    {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
-                  </Text>
-                  <AppButton title="Next" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => p + 1)}
-                    disabled={!data.next} style={styles.paginationBtn} />
-                </View>
-              ) : null
-            }
-          />
+          <View style={{ flex: 1 }}>
+            {/* Slim reload bar — the list and its pagination stay mounted */}
+            {listLoading && !refreshing ? (
+              <View style={[styles.reloadBar, { backgroundColor: colors.surfaceSoft }]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.reloadText, { color: colors.textMuted }]}>Updating…</Text>
+              </View>
+            ) : null}
+            <FlatList
+              data={data?.results ?? []}
+              renderItem={renderItem}
+              keyExtractor={(item, index) => String(item.id ?? index)}
+              contentContainerStyle={styles.listContent}
+              style={listLoading ? { opacity: 0.6 } : undefined}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={colors.primary}
+                  colors={[colors.primary]}
+                />
+              }
+              ListFooterComponent={
+                data && data.count > 50 ? (
+                  <AppPagination
+                    page={page}
+                    pageSize={50}
+                    totalCount={data.count}
+                    hasPrevious={!!data.previous}
+                    hasNext={!!data.next}
+                    onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+                    onNext={() => setPage((p) => p + 1)}
+                    loading={listLoading}
+                  />
+                ) : null
+              }
+            />
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -291,16 +331,6 @@ function PurchaseOrdersScreenInner() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   innerContainer: { flex: 1 },
-
-  searchContainer: {
-    paddingHorizontal: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-  },
-  searchRow:          { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  searchInputWrapper: { flex: 1 },
-  searchInput:        { marginBottom: 0 },
-  filterBtnWrapper:   { alignSelf: 'flex-start' },
 
   listContent: {
     padding: Layout.screenPadding,
@@ -324,13 +354,11 @@ const styles = StyleSheet.create({
   metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 80, flexShrink: 0 },
   metaValue: { fontSize: 13, flex: 1 },
 
-  pagination: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
-    gap: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
+  reloadBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, paddingVertical: 6,
   },
-  paginationBtn:  { minWidth: 80 },
-  paginationText: { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
+  reloadText: { fontSize: 12, fontWeight: '500' },
 });
 
 

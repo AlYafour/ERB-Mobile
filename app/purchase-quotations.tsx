@@ -1,28 +1,27 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useCancellableFetch } from '@/lib/hooks/use-cancellable-fetch';
 import { purchaseQuotationsApi } from '@/lib/api/purchase-quotations';
 import { toast } from '@/lib/hooks/use-toast';
-import { Input } from '@/components/ui/Input';
-import FilterPanel, { FilterField } from '@/components/ui/FilterPanel';
+import { ListSearchBar } from '@/components/ui/ListSearchBar';
+import { FilterField } from '@/components/ui/FilterPanel';
 import FilterTags from '@/components/ui/FilterTags';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
 import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
-import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge } from '@/components/ui/AppBadge';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { AppPagination } from '@/components/ui/AppPagination';
 import { PurchaseQuotation, PaginatedResponse } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Spacing, Typography } from '@/constants/spacing';
+import { Spacing } from '@/constants/spacing';
 import { Layout } from '@/constants/layout';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-
-type AppColors = typeof Colors.light | typeof Colors.dark;
 
 const statusLabels: Record<string, string> = {
   pending:   'Pending',
@@ -48,6 +47,65 @@ function fmtDate(d?: string | null) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/**
+ * Memoized list row — re-renders only when its item or theme changes, not on
+ * every parent state change (pagination, filters, loading flags).
+ */
+const PQCard = React.memo(function PQCard({
+  item,
+  colors,
+  onOpen,
+}: {
+  item: PurchaseQuotation;
+  colors: typeof Colors.light | typeof Colors.dark;
+  onOpen: (id: number) => void;
+}) {
+  const itemId       = Number(item.id);
+  const pqNum        = (item as any).quotation_number || `PQ-${itemId}`;
+  const supplierName = typeof item.supplier === 'object'
+    ? item.supplier?.name : (item as any).supplier_name || null;
+  const quotDate     = fmtDate((item as any).quotation_date);
+  const validUntil   = fmtDate((item as any).valid_until);
+  const total        = (item as any).total ?? (item as any).total_amount;
+
+  return (
+    <AppCard style={styles.itemCard} onPress={() => onOpen(itemId)}>
+      <View style={styles.topRow}>
+        <DocumentIconTile type="purchase_quotation" />
+        <View style={styles.titleCol}>
+          <Text style={[styles.itemNum, { color: colors.primary }]} numberOfLines={1}>{pqNum}</Text>
+          {supplierName ? (
+            <Text style={[styles.supplierText, { color: colors.textSecondary }]} numberOfLines={1}>{supplierName}</Text>
+          ) : null}
+        </View>
+        <AppBadge variant={getStatusVariant(item.status)}>
+          {statusLabels[item.status || ''] || item.status || 'Unknown'}
+        </AppBadge>
+      </View>
+      {quotDate ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Quotation Date</Text>
+          <Text style={[styles.metaValue, { color: colors.textSecondary }]}>{quotDate}</Text>
+        </View>
+      ) : null}
+      {validUntil ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Valid Until</Text>
+          <Text style={[styles.metaValue, { color: colors.textSecondary }]}>{validUntil}</Text>
+        </View>
+      ) : null}
+      {total != null ? (
+        <View style={styles.metaRow}>
+          <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Total</Text>
+          <Text style={[styles.metaValue, { color: colors.success, fontWeight: '700' }]}>
+            AED {Number(total).toFixed(2)}
+          </Text>
+        </View>
+      ) : null}
+    </AppCard>
+  );
+});
+
 function PurchaseQuotationsScreenInner() {
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
@@ -58,30 +116,48 @@ function PurchaseQuotationsScreenInner() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [data, setData] = useState<PaginatedResponse<PurchaseQuotation> | null>(null);
-  const [loading, setLoading] = useState(true);
+  // initialLoading fills the screen once; listLoading (pagination / filter /
+  // search reloads) keeps the list AND its pagination footer mounted.
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Stale-response guard: an older response never overwrites a newer one,
+  // and nothing sets state after unmount.
+  const { nextSignal, isCurrent, mountedRef } = useCancellableFetch();
+  const hasLoadedOnce = useRef(false);
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => { loadQuotations(); }, [page, debouncedSearch, filters]);
-
-  const loadQuotations = async () => {
+  const loadQuotations = useCallback(async () => {
+    const { seq } = nextSignal();
+    setError(null);
+    if (hasLoadedOnce.current) setListLoading(true);
     try {
-      setError(null);
-      setLoading(true);
-      setData(await purchaseQuotationsApi.getAll({ page, page_size: 50, search: debouncedSearch, ...filters }));
+      const response = await purchaseQuotationsApi.getAll({ page, page_size: 50, search: debouncedSearch, ...filters });
+      if (!isCurrent(seq) || !mountedRef.current) return;
+      setData(response);
+      hasLoadedOnce.current = true;
     } catch (err: any) {
+      if (!isCurrent(seq) || !mountedRef.current) return;
       setError(err.message || 'Failed to load purchase quotations');
       toast(err.message || 'Failed to load purchase quotations', 'error');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent(seq) && mountedRef.current) {
+        setInitialLoading(false);
+        setListLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [page, debouncedSearch, filters, nextSignal, isCurrent, mountedRef]);
+
+  useEffect(() => { loadQuotations(); }, [loadQuotations]);
+
+  const onRefresh = () => { setRefreshing(true); loadQuotations(); };
 
   const filterFields: FilterField[] = [
     { name: 'quotation_number', label: 'Quotation Number', type: 'text', group: 'Quotation Info' },
@@ -108,60 +184,24 @@ function PurchaseQuotationsScreenInner() {
     const f = { ...filters }; delete f[key]; setFilters(f); setPage(1);
   };
 
-  const S = makeStyles(C);
-
-  const renderItem = ({ item }: { item: PurchaseQuotation }) => {
-    const itemId       = Number(item.id);
-    const pqNum        = (item as any).quotation_number || `PQ-${itemId}`;
-    const supplierName = typeof item.supplier === 'object'
-      ? item.supplier?.name : (item as any).supplier_name || null;
-    const quotDate     = fmtDate((item as any).quotation_date);
-    const validUntil   = fmtDate((item as any).valid_until);
-    const total        = (item as any).total ?? (item as any).total_amount;
-
-    return (
-      <AppCard style={S.itemCard} onPress={() => router.push(`/purchase-quotations/${itemId}` as any)}>
-        <View style={S.topRow}>
-          <DocumentIconTile type="purchase_quotation" />
-          <View style={S.titleCol}>
-            <Text style={[S.itemNum, { color: C.primary }]} numberOfLines={1}>{pqNum}</Text>
-            {supplierName ? (
-              <Text style={[S.supplierText, { color: C.textSecondary }]} numberOfLines={1}>{supplierName}</Text>
-            ) : null}
-          </View>
-          <AppBadge variant={getStatusVariant(item.status)}>
-            {statusLabels[item.status || ''] || item.status || 'Unknown'}
-          </AppBadge>
-        </View>
-        {quotDate ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Quotation Date</Text>
-            <Text style={[S.metaValue, { color: C.textSecondary }]}>{quotDate}</Text>
-          </View>
-        ) : null}
-        {validUntil ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Valid Until</Text>
-            <Text style={[S.metaValue, { color: C.textSecondary }]}>{validUntil}</Text>
-          </View>
-        ) : null}
-        {total != null ? (
-          <View style={S.metaRow}>
-            <Text style={[S.metaLabel, { color: C.textMuted }]}>Total</Text>
-            <Text style={[S.metaValue, { color: C.success, fontWeight: '700' }]}>
-              AED {Number(total).toFixed(2)}
-            </Text>
-          </View>
-        ) : null}
-      </AppCard>
-    );
-  };
   // Stale-list fix: refetch when the screen regains focus (create/detail flows)
   useRefetchOnFocus(loadQuotations);
 
+  const openQuotation = useCallback(
+    (id: number) => router.push(`/purchase-quotations/${id}` as any),
+    [router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: PurchaseQuotation }) => (
+      <PQCard item={item} colors={C} onOpen={openQuotation} />
+    ),
+    [C, openQuotation],
+  );
+
   return (
-    <SafeAreaView style={[S.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
-      <View style={S.inner}>
+    <SafeAreaView style={[styles.container, { backgroundColor: C.background }]} edges={['top', 'bottom']}>
+      <View style={styles.inner}>
         {/* No "New" button: quotations are created from a Quotation Request's
             detail flow — the old button pointed at a route that doesn't exist
             and landed users on the Unmatched Route screen. */}
@@ -171,20 +211,16 @@ function PurchaseQuotationsScreenInner() {
           showBack
         />
 
-        <View style={S.searchContainer}>
-          <View style={S.searchRow}>
-            <View style={S.searchInputWrapper}>
-              <Input placeholder="Search purchase quotations..." value={search} onChangeText={setSearch}
-                containerStyle={S.searchInput}
-                leftIcon={<IconSymbol name="magnifyingglass" size={20} color={C.textMuted} />} />
-            </View>
-            <View style={S.filterBtnWrapper}>
-              <FilterPanel fields={filterFields} filters={filters}
-                onFilterChange={handleFilterChange} onReset={handleFilterReset}
-                saveKey="purchase-quotations" />
-            </View>
-          </View>
-        </View>
+        <ListSearchBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search purchase quotations..."
+          filterFields={filterFields}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onFilterReset={handleFilterReset}
+          filterSaveKey="purchase-quotations"
+        />
 
         {Object.keys(filters).length > 0 && (
           <FilterTags filters={filters} fields={filterFields}
@@ -192,93 +228,87 @@ function PurchaseQuotationsScreenInner() {
             onClearAll={() => { setFilters({}); setPage(1); }} />
         )}
 
-        {loading && !refreshing ? (
+        {initialLoading ? (
           <AppEmptyState variant="loading" title="Loading purchase quotations..." />
         ) : error && !data?.results?.length ? (
-          <AppEmptyState variant="error" title="Failed to load" message={error}
-            actionLabel="Try Again" onAction={loadQuotations} />
-        ) : !data?.results?.length ? (
+          <AppErrorState title="Failed to load" message={error} onRetry={loadQuotations} />
+        ) : !data?.results?.length && !listLoading ? (
           <AppEmptyState variant="empty" icon="doc.text" title="No purchase quotations"
             message="No purchase quotations found matching your criteria." />
         ) : (
-          <FlatList
-            data={data.results}
-            renderItem={renderItem}
-            keyExtractor={(item, index) => String(item.id ?? index)}
-            contentContainerStyle={S.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing}
-                onRefresh={() => { setRefreshing(true); loadQuotations(); }}
-                tintColor={C.primary} colors={[C.primary]} />
-            }
-            ListFooterComponent={
-              data && data.count > 50 ? (
-                <View style={[S.pagination, { backgroundColor: C.surfaceSoft, borderTopColor: C.border }]}>
-                  <AppButton title="Previous" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!data.previous || page === 1} style={S.paginationBtn} />
-                  <Text style={[S.paginationText, { color: C.textMuted }]}>
-                    {((page - 1) * 50) + 1}–{Math.min(page * 50, data.count)} of {data.count}
-                  </Text>
-                  <AppButton title="Next" variant="secondary" size="sm"
-                    onPress={() => setPage((p) => p + 1)}
-                    disabled={!data.next} style={S.paginationBtn} />
-                </View>
-              ) : null
-            }
-          />
+          <View style={{ flex: 1 }}>
+            {/* Slim reload bar — the list and its pagination stay mounted */}
+            {listLoading && !refreshing ? (
+              <View style={[styles.reloadBar, { backgroundColor: C.surfaceSoft }]}>
+                <ActivityIndicator size="small" color={C.primary} />
+                <Text style={[styles.reloadText, { color: C.textMuted }]}>Updating…</Text>
+              </View>
+            ) : null}
+            <FlatList
+              data={data?.results ?? []}
+              renderItem={renderItem}
+              keyExtractor={(item, index) => String(item.id ?? index)}
+              contentContainerStyle={styles.listContent}
+              style={listLoading ? { opacity: 0.6 } : undefined}
+              refreshControl={
+                <RefreshControl refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={C.primary} colors={[C.primary]} />
+              }
+              ListFooterComponent={
+                data && data.count > 50 ? (
+                  <AppPagination
+                    page={page}
+                    pageSize={50}
+                    totalCount={data.count}
+                    hasPrevious={!!data.previous}
+                    hasNext={!!data.next}
+                    onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+                    onNext={() => setPage((p) => p + 1)}
+                    loading={listLoading}
+                  />
+                ) : null
+              }
+            />
+          </View>
         )}
       </View>
     </SafeAreaView>
   );
 }
 
-function makeStyles(C: AppColors) {
-  return StyleSheet.create({
-    container: { flex: 1 },
-    inner:     { flex: 1 },
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  inner:     { flex: 1 },
 
-    searchContainer: {
-      paddingHorizontal: Layout.screenPadding,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.sm,
-    },
-    searchRow:         { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    searchInputWrapper:{ flex: 1 },
-    searchInput:       { marginBottom: 0 },
-    filterBtnWrapper:  { alignSelf: 'flex-start' },
+  listContent: {
+    padding: Layout.screenPadding,
+    paddingTop: Spacing.md,
+    paddingBottom: 120,
+  },
+  itemCard: { marginBottom: Spacing.sm },
 
-    listContent: {
-      padding: Layout.screenPadding,
-      paddingTop: Spacing.md,
-      paddingBottom: 120,
-    },
-    itemCard: { marginBottom: Spacing.sm },
+  topRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: Spacing.sm, marginBottom: Spacing.md,
+  },
+  titleCol: { flex: 1, gap: 2 },
+  itemNum: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
+  supplierText: { fontSize: 13, lineHeight: 18 },
 
-    topRow: {
-      flexDirection: 'row', alignItems: 'center',
-      gap: Spacing.sm, marginBottom: Spacing.md,
-    },
-    titleCol: { flex: 1, gap: 2 },
-    itemNum: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
-    supplierText: { fontSize: 13, lineHeight: 18 },
+  metaRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: Spacing.sm, paddingVertical: 3,
+  },
+  metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 110, flexShrink: 0 },
+  metaValue: { fontSize: 13, flex: 1 },
 
-    metaRow: {
-      flexDirection: 'row', alignItems: 'center',
-      gap: Spacing.sm, paddingVertical: 3,
-    },
-    metaLabel: { fontSize: 12, fontWeight: '500', minWidth: 110, flexShrink: 0 },
-    metaValue: { fontSize: 13, flex: 1 },
-
-    pagination: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
-      gap: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    paginationBtn:  { minWidth: 80 },
-    paginationText: { fontSize: Typography.sizes.sm, textAlign: 'center', flex: 1 },
-  });
-}
+  reloadBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, paddingVertical: 6,
+  },
+  reloadText: { fontSize: 12, fontWeight: '500' },
+});
 
 
 export default function PurchaseQuotationsScreen() {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TextInputProps, ViewStyle } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TextInputProps, ViewStyle, TouchableOpacity } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -10,6 +11,10 @@ interface InputProps extends TextInputProps {
   containerStyle?: ViewStyle;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  /** When true (and secureTextEntry is used), renders a built-in eye/eye-slash
+   *  toggle as the rightIcon, managing its own show/hide state. Ignored if an
+   *  explicit rightIcon is also passed. */
+  secureToggle?: boolean;
 }
 
 export function Input({
@@ -20,11 +25,29 @@ export function Input({
   style,
   leftIcon,
   rightIcon,
+  secureToggle = false,
+  secureTextEntry,
   ...props
 }: InputProps) {
   const cs = useColorScheme() ?? 'light';
   const colors = Colors[cs];
   const [focused, setFocused] = useState(false);
+  const [secureVisible, setSecureVisible] = useState(false);
+
+  const isSecureToggle = secureToggle && secureTextEntry !== undefined && !rightIcon;
+  const effectiveSecureTextEntry = isSecureToggle ? !secureVisible : secureTextEntry;
+  const effectiveRightIcon =
+    rightIcon ??
+    (isSecureToggle ? (
+      <TouchableOpacity
+        onPress={() => setSecureVisible(v => !v)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityRole="button"
+        accessibilityLabel={secureVisible ? 'Hide password' : 'Show password'}
+      >
+        <IconSymbol name={secureVisible ? 'eye.slash.fill' : 'eye.fill'} size={19} color="#64748B" />
+      </TouchableOpacity>
+    ) : null);
 
   const borderColor = error
     ? colors.error
@@ -57,16 +80,17 @@ export function Input({
             {
               color: colors.textPrimary,
               paddingLeft: leftIcon ? 44 : 14,
-              paddingRight: rightIcon ? 44 : 14,
+              paddingRight: effectiveRightIcon ? 44 : 14,
             },
             style,
           ]}
           placeholderTextColor={colors.textMuted}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
+          secureTextEntry={effectiveSecureTextEntry}
           {...props}
         />
-        {rightIcon ? <View style={s.rightSlot}>{rightIcon}</View> : null}
+        {effectiveRightIcon ? <View style={s.rightSlot}>{effectiveRightIcon}</View> : null}
       </View>
 
       {error ? (

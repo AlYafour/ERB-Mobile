@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { purchaseRequestsApi } from '@/lib/api/purchase-requests';
@@ -15,9 +15,10 @@ import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { PurchaseRequest } from '@/types';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useDetailFetch } from '@/lib/hooks/use-detail-fetch';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -29,9 +30,6 @@ function PurchaseRequestDetailScreenInner() {
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const insets = useSafeAreaInsets();
-  const [request, setRequest] = useState<PurchaseRequest | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -47,39 +45,30 @@ function PurchaseRequestDetailScreenInner() {
   const canCreateQR = hasPermission('quotation_request', 'create');
   const canCreatePO = hasPermission('purchase_order', 'create');
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      setRequest(await purchaseRequestsApi.getById(id));
-    } catch (e: any) { toast(e.message || 'Failed to load', 'error'); }
-    finally { setLoading(false); setRefreshing(false); }
-  };
-
-  useEffect(() => { load(); }, [id]);
-  // Stale-detail fix: refetch when the screen regains focus (a child
-  // flow - create QR/PO/GRN/invoice, approve, edit - can change this
-  // document's state while this screen stays mounted underneath).
-  useRefetchOnFocus(load);
+  const { data: request, loading, refreshing, reload, onRefresh } = useDetailFetch(
+    (reqId: number) => purchaseRequestsApi.getById(reqId), id, 'Failed to load'
+  );
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const handleApprove = async () => {
     const prCode = (request as any)?.code || `PR-${id}`;
     const prTitle = (request as any)?.title;
     const label = prTitle ? `${prCode} — ${prTitle}` : prCode;
     if (!await confirm(`Approve ${label}?\n\nThis will mark the request as approved.`)) return;
-    try { setApproving(true); await purchaseRequestsApi.approve(id); toast('Approved successfully', 'success'); load(); }
+    try { setApproving(true); await purchaseRequestsApi.approve(id); toast('Approved successfully', 'success'); reload(); }
     catch (e: any) { toast(e.message || 'Failed to approve', 'error'); }
     finally { setApproving(false); }
   };
 
   const handleRejectConfirm = async (reason: string) => {
-    try { setRejecting(true); await purchaseRequestsApi.reject(id, reason); toast('Rejected', 'info'); setRejectOpen(false); load(); }
+    try { setRejecting(true); await purchaseRequestsApi.reject(id, reason); toast('Rejected', 'info'); setRejectOpen(false); reload(); }
     catch (e: any) { toast(e?.response?.data?.error || e.message || 'Failed to reject', 'error'); }
     finally { setRejecting(false); }
   };
 
   const handleUndoApproval = async () => {
     if (!await confirm('Undo the approval of this request?')) return;
-    try { setUndoing(true); await purchaseRequestsApi.undoApproval(id); toast('Approval undone', 'success'); load(); }
+    try { setUndoing(true); await purchaseRequestsApi.undoApproval(id); toast('Approval undone', 'success'); reload(); }
     catch (e: any) { toast(e.message || 'Failed', 'error'); }
     finally { setUndoing(false); }
   };
@@ -90,7 +79,7 @@ function PurchaseRequestDetailScreenInner() {
       setResubmitting(true);
       await purchaseRequestsApi.resubmit(id);
       toast('Request resubmitted for approval', 'success');
-      load();
+      reload();
     } catch (e: any) {
       toast(e.message || 'Failed to resubmit', 'error');
     } finally {
@@ -149,7 +138,7 @@ function PurchaseRequestDetailScreenInner() {
       />
       <ScrollView
         contentContainerStyle={[S.content, showBottomBar && { paddingBottom: 32 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.primary} colors={[C.primary]} />}
+        refreshControl={pullToRefresh}
         showsVerticalScrollIndicator={false}>
 
         {/* Details */}
@@ -316,11 +305,7 @@ function PurchaseRequestDetailScreenInner() {
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content: { padding: 16, paddingBottom: 24 },
-    card: { marginBottom: 12 },
-    sectionTitle: { fontSize: 15, fontWeight: '700', color: C.textPrimary, marginBottom: 14, letterSpacing: -0.2 },
+    ...baseDetailStyles(C),
     link: { color: C.primary, textDecorationLine: 'underline' },
     notesBox: { marginTop: 10, padding: 12, backgroundColor: C.surfaceSoft, borderRadius: 8 },
     notesText: { fontSize: 13, color: C.textSecondary, lineHeight: 20 },

@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Modal, FlatList,
+  FlatList,
 } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { IconSymbol } from './icon-symbol';
+import { AppBottomSheet } from './AppBottomSheet';
 
 type Palette = typeof Colors.light | typeof Colors.dark;
 
@@ -71,7 +72,6 @@ export default function DatePickerInput({
 
   const years = useMemo(() => buildYearRange(minimumDate, maximumDate), [minimumDate, maximumDate]);
   const totalDays = daysInMonth(selYear, selMonth);
-  const days = Array.from({ length: totalDays }, (_, i) => i + 1);
 
   const handleOpen = () => {
     const d = value ? toDate(value) : new Date();
@@ -132,116 +132,111 @@ export default function DatePickerInput({
       {label && <Text style={S.label}>{label}</Text>}
 
       <TouchableOpacity style={[S.trigger, show && S.triggerFocused]} onPress={handleOpen} activeOpacity={0.75}>
-        <MaterialIcons name="calendar-today" size={18} color={value ? C.tint : C.textTertiary} style={{ marginRight: 8 }} />
+        <IconSymbol name="calendar" size={18} color={value ? C.tint : C.textTertiary} style={{ marginRight: 8 }} />
         <Text style={[S.triggerText, !value && S.placeholder]} numberOfLines={1}>
           {value ? formatDisplay(value) : placeholder}
         </Text>
         {value ? (
           <TouchableOpacity onPress={(e) => { e.stopPropagation(); onChange(''); }} hitSlop={10}>
-            <MaterialIcons name="cancel" size={18} color={C.textTertiary} />
+            <IconSymbol name="xmark.circle.fill" size={18} color={C.textTertiary} />
           </TouchableOpacity>
         ) : (
-          <MaterialIcons name="expand-more" size={20} color={C.textTertiary} />
+          <IconSymbol name="chevron.down" size={20} color={C.textTertiary} />
         )}
       </TouchableOpacity>
 
-      <Modal transparent visible={show} animationType="slide" onRequestClose={() => setShow(false)}>
-        <View style={S.overlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShow(false)} />
-          <View style={S.sheet}>
+      <AppBottomSheet visible={show} onClose={() => setShow(false)}>
 
-            {/* Header */}
-            <View style={S.sheetHeader}>
-              <TouchableOpacity onPress={() => setShow(false)} style={S.hBtn}>
-                <Text style={S.cancelTxt}>Cancel</Text>
-              </TouchableOpacity>
-              <Text style={S.sheetTitle}>{label || 'Select Date'}</Text>
-              <TouchableOpacity onPress={handleConfirm} style={S.hBtn}>
-                <Text style={S.doneTxt}>Done</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Month + Year navigation */}
-            <View style={S.navRow}>
-              <TouchableOpacity onPress={prevMonth} style={S.navBtn} hitSlop={8}>
-                <MaterialIcons name="chevron-left" size={26} color={C.tint} />
-              </TouchableOpacity>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={S.navMonth}>{MONTHS_LONG[selMonth - 1]} {selYear}</Text>
-              </View>
-              <TouchableOpacity onPress={nextMonth} style={S.navBtn} hitSlop={8}>
-                <MaterialIcons name="chevron-right" size={26} color={C.tint} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Year quick-select */}
-            <FlatList
-              data={years}
-              keyExtractor={(y) => String(y)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={S.yearList}
-              initialScrollIndex={Math.max(0, years.indexOf(selYear))}
-              getItemLayout={(_, i) => ({ length: 60, offset: 60 * i, index: i })}
-              renderItem={({ item: y }) => (
-                <TouchableOpacity
-                  onPress={() => handleYearChange(y)}
-                  style={[S.yearChip, y === selYear && S.yearChipActive]}>
-                  <Text style={[S.yearChipTxt, y === selYear && S.yearChipTxtActive]}>{y}</Text>
-                </TouchableOpacity>
-              )}
-            />
-
-            {/* Weekday headers */}
-            <View style={S.weekRow}>
-              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
-                <Text key={d} style={S.weekDay}>{d}</Text>
-              ))}
-            </View>
-
-            {/* Calendar grid */}
-            <View style={S.grid}>
-              {Array.from({ length: rows * 7 }, (_, i) => {
-                const day = i - firstWeekday + 1;
-                const valid = day >= 1 && day <= totalDays;
-                const disabled = valid && isDisabled(day);
-                const selected = valid && day === selDay;
-                const todayCell = valid && isToday(day);
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[S.cell, selected && S.cellSelected, todayCell && !selected && S.cellToday]}
-                    onPress={() => valid && !disabled && setSelDay(day)}
-                    disabled={!valid || disabled}
-                    activeOpacity={0.7}>
-                    {valid && (
-                      <Text style={[
-                        S.cellTxt,
-                        disabled && S.cellTxtDisabled,
-                        selected && S.cellTxtSelected,
-                        todayCell && !selected && { color: C.tint, fontWeight: '700' },
-                      ]}>
-                        {day}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Selected date display */}
-            <View style={S.footer}>
-              <Text style={S.footerTxt}>
-                {selDay} {MONTHS_LONG[selMonth - 1]} {selYear}
-              </Text>
-              <TouchableOpacity onPress={handleConfirm} style={S.confirmBtn} activeOpacity={0.85}>
-                <Text style={S.confirmTxt}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
-
-          </View>
+        {/* Header */}
+        <View style={S.sheetHeader}>
+          <TouchableOpacity onPress={() => setShow(false)} style={S.hBtn}>
+            <Text style={S.cancelTxt}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={S.sheetTitle}>{label || 'Select Date'}</Text>
+          <TouchableOpacity onPress={handleConfirm} style={S.hBtn}>
+            <Text style={S.doneTxt}>Done</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+
+        {/* Month + Year navigation */}
+        <View style={S.navRow}>
+          <TouchableOpacity onPress={prevMonth} style={S.navBtn} hitSlop={8}>
+            <IconSymbol name="chevron.left" size={26} color={C.tint} />
+          </TouchableOpacity>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={S.navMonth}>{MONTHS_LONG[selMonth - 1]} {selYear}</Text>
+          </View>
+          <TouchableOpacity onPress={nextMonth} style={S.navBtn} hitSlop={8}>
+            <IconSymbol name="chevron.right" size={26} color={C.tint} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Year quick-select */}
+        <FlatList
+          data={years}
+          keyExtractor={(y) => String(y)}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={S.yearList}
+          initialScrollIndex={Math.max(0, years.indexOf(selYear))}
+          getItemLayout={(_, i) => ({ length: 60, offset: 60 * i, index: i })}
+          renderItem={({ item: y }) => (
+            <TouchableOpacity
+              onPress={() => handleYearChange(y)}
+              style={[S.yearChip, y === selYear && S.yearChipActive]}>
+              <Text style={[S.yearChipTxt, y === selYear && S.yearChipTxtActive]}>{y}</Text>
+            </TouchableOpacity>
+          )}
+        />
+
+        {/* Weekday headers */}
+        <View style={S.weekRow}>
+          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+            <Text key={d} style={S.weekDay}>{d}</Text>
+          ))}
+        </View>
+
+        {/* Calendar grid */}
+        <View style={S.grid}>
+          {Array.from({ length: rows * 7 }, (_, i) => {
+            const day = i - firstWeekday + 1;
+            const valid = day >= 1 && day <= totalDays;
+            const disabled = valid && isDisabled(day);
+            const selected = valid && day === selDay;
+            const todayCell = valid && isToday(day);
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[S.cell, selected && S.cellSelected, todayCell && !selected && S.cellToday]}
+                onPress={() => valid && !disabled && setSelDay(day)}
+                disabled={!valid || disabled}
+                activeOpacity={0.7}>
+                {valid && (
+                  <Text style={[
+                    S.cellTxt,
+                    disabled && S.cellTxtDisabled,
+                    selected && S.cellTxtSelected,
+                    todayCell && !selected && { color: C.tint, fontWeight: '700' },
+                  ]}>
+                    {day}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Selected date display */}
+        <View style={S.footer}>
+          <Text style={S.footerTxt}>
+            {selDay} {MONTHS_LONG[selMonth - 1]} {selYear}
+          </Text>
+          <TouchableOpacity onPress={handleConfirm} style={S.confirmBtn} activeOpacity={0.85}>
+            <Text style={S.confirmTxt}>Confirm</Text>
+          </TouchableOpacity>
+        </View>
+
+      </AppBottomSheet>
     </View>
   );
 }
@@ -260,15 +255,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   triggerFocused: { borderColor: C.tint, borderWidth: 1.5 },
   triggerText: { flex: 1, fontSize: 15, color: C.text, fontWeight: '500' },
   placeholder: { color: C.textTertiary, fontWeight: '400' },
-
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: C.card,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingBottom: 28,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12, shadowRadius: 16, elevation: 20,
-  },
 
   sheetHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

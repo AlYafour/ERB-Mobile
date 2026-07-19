@@ -4,7 +4,12 @@ import { useConfirm } from '@/lib/hooks/use-toast';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { AppButton as Button } from './AppButton';
 
-export default function ConfirmDialog() {
+interface ConfirmDialogProps {
+  /** Locks the backdrop (and disables both actions) while a confirm is in flight — mirrors AppDialog's busy handling. */
+  busy?: boolean;
+}
+
+export default function ConfirmDialog({ busy = false }: ConfirmDialogProps) {
   const { confirmState, handleConfirm, handleCancel } = useConfirm();
   const backgroundColor = useThemeColor({}, 'background');
   const textColor = useThemeColor({}, 'text');
@@ -16,23 +21,25 @@ export default function ConfirmDialog() {
       visible={confirmState.isOpen}
       transparent
       animationType="fade"
-      onRequestClose={handleCancel}>
+      onRequestClose={() => { if (!busy) handleCancel(); }}>
       <View style={styles.overlay}>
         <View style={[styles.modalContent, { backgroundColor }]}>
           <Text style={[styles.title, { color: textColor }]}>Confirm Action</Text>
           <Text style={[styles.message, { color: textColor }]}>{confirmState.message}</Text>
-          
+
           <View style={styles.actions}>
             <Button
               title="Cancel"
               variant="secondary"
               onPress={handleCancel}
+              disabled={busy}
               style={styles.button}
             />
             <Button
               title="Confirm"
               variant="primary"
               onPress={handleConfirm}
+              loading={busy}
               style={styles.button}
             />
           </View>

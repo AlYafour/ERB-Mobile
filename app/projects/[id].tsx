@@ -1,21 +1,21 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { projectsApi } from '@/lib/api/projects';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
-import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
-import { Project } from '@/types';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useDetailFetch } from '@/lib/hooks/use-detail-fetch';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -28,15 +28,16 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
-function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info' | 'default' {
-  switch (s) {
-    case 'active':    return 'success';
-    case 'completed': return 'info';
-    case 'on_hold':   return 'warning';
-    case 'inactive':  return 'danger';
-    case 'cancelled': return 'danger';
-    default:          return 'default';
-  }
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  active: 'success',
+  completed: 'info',
+  on_hold: 'warning',
+  inactive: 'danger',
+  cancelled: 'danger',
+};
+
+function getStatusVariant(s?: string): BadgeVariant {
+  return STATUS_VARIANTS[s || ''] ?? 'default';
 }
 
 function fmtDate(d?: string | null): string | null {
@@ -53,44 +54,35 @@ function ProjectDetailScreenInner() {
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
   const isSuperuser = user?.is_superuser ?? false;
   const canUpdate = isSuperuser || (hasPermission('project', 'update') ?? false);
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      setProject(await projectsApi.getById(id));
-    } catch (err: any) {
-      toast(err.message || 'Failed to load project', 'error');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [id]);
-  // Stale-detail fix: refetch when the screen regains focus (a child
-  // flow - create QR/PO/GRN/invoice, approve, edit - can change this
-  // document's state while this screen stays mounted underneath).
-  useRefetchOnFocus(load);
+  const { data: project, loading, refreshing, reload, onRefresh } = useDetailFetch(
+    (projId: number) => projectsApi.getById(projId), id, 'Failed to load project'
+  );
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const S = makeStyles(C);
 
-  if (loading) return (
+  if (loading && !project) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Project" showBack />
-      <View style={S.center}><AppEmptyState variant="loading" title="Loading project..." /></View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
   if (!project) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Project" showBack />
-      <View style={S.center}><AppEmptyState variant="empty" title="Project not found" /></View>
+      <View style={S.center}>
+        <AppEmptyState
+          variant="error"
+          title="Failed to load"
+          message="Could not load the project."
+          actionLabel="Try Again"
+          onAction={reload}
+        />
+      </View>
     </SafeAreaView>
   );
 
@@ -113,10 +105,7 @@ function ProjectDetailScreenInner() {
 
       <ScrollView
         contentContainerStyle={S.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={C.primary} colors={[C.primary]} />
-        }
+        refreshControl={pullToRefresh}
         showsVerticalScrollIndicator={false}
       >
         {/* Basic Information */}
@@ -180,14 +169,7 @@ function ProjectDetailScreenInner() {
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content:   { padding: 16, paddingBottom: 24 },
-    card:      { marginBottom: 12 },
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    ...baseDetailStyles(C),
     editBtn: { marginTop: 8 },
   });
 }

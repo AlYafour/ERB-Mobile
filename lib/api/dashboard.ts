@@ -1,7 +1,21 @@
-import { apiClient } from '../api';
+import { purchaseRequestsApi } from './purchase-requests';
+import { purchaseOrdersApi } from './purchase-orders';
+import { goodsReceivingApi } from './goods-receiving';
+import { purchaseInvoicesApi } from './purchase-invoices';
+import { suppliersApi } from './suppliers';
+import { productsApi } from './products';
+import { projectsApi } from './projects';
+import { quotationRequestsApi } from './quotation-requests';
+import { usersApi } from './users';
 
-// Suppress non-actionable errors from dashboard console output
+// Suppress non-actionable errors from dashboard console output.
+// ApiError (thrown by unwrap() in lib/api/*.ts) carries the response status,
+// so branch on the numeric code first and fall back to string-matching the
+// message only for errors that didn't carry one.
 function isSilentError(error: any): boolean {
+  const status = error?.status;
+  if (status === 401 || status === 403 || status === 404 || status === 0) return true;
+
   const msg = (error?.message || String(error)).toLowerCase();
   return (
     msg.includes('session expired') ||
@@ -16,16 +30,43 @@ function isSilentError(error: any): boolean {
     msg.includes('404')
   );
 }
-import { purchaseRequestsApi } from './purchase-requests';
-import { purchaseQuotationsApi } from './purchase-quotations';
-import { purchaseOrdersApi } from './purchase-orders';
-import { goodsReceivingApi } from './goods-receiving';
-import { purchaseInvoicesApi } from './purchase-invoices';
-import { suppliersApi } from './suppliers';
-import { productsApi } from './products';
-import { projectsApi } from './projects';
-import { quotationRequestsApi } from './quotation-requests';
-import { usersApi } from './users';
+
+/** Runs `apiCall`, returning `defaultValue` (and swallowing non-actionable errors) on failure. */
+async function safeGet<T>(apiCall: () => Promise<T>, defaultValue: T): Promise<T> {
+  try {
+    return await apiCall();
+  } catch (error: any) {
+    if (__DEV__ && !isSilentError(error)) console.warn('Dashboard API error:', error);
+    return defaultValue;
+  }
+}
+
+/**
+ * Pages through every record of a list endpoint (mirrors suppliersApi.getAllActive's
+ * page/hasMore/next loop) instead of assuming a single page_size: 1000 request
+ * captures everything — datasets past 1000 rows were silently truncated before.
+ */
+async function fetchAllPages<T>(
+  fetchPage: (page: number, page_size: number) => Promise<{ results?: T[]; next?: string | null }>,
+  page_size = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await fetchPage(page, page_size);
+    if (response.results && response.results.length > 0) {
+      all.push(...response.results);
+      hasMore = !!response.next;
+      page++;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return all;
+}
 
 export interface DashboardStats {
   purchaseRequests: {
@@ -131,15 +172,6 @@ export interface RecentActivity {
 
 export const dashboardApi = {
   getStats: async (): Promise<DashboardStats> => {
-    const safeGet = async (apiCall: () => Promise<any>, defaultValue: any = { count: 0 }) => {
-      try {
-        return await apiCall();
-      } catch (error: any) {
-        if (__DEV__ && !isSilentError(error)) console.warn('Error fetching stats:', error);
-        return defaultValue;
-      }
-    };
-
     const [
       purchaseRequests,
       quotationRequests,
@@ -149,30 +181,34 @@ export const dashboardApi = {
       goodsReceiving,
       invoices,
     ] = await Promise.all([
-      safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1 })),
-      safeGet(() => quotationRequestsApi.getAll({ page: 1, page_size: 1 })),
-      safeGet(() => suppliersApi.getAll({ page: 1, page_size: 1 })),
-      safeGet(() => productsApi.getAll({ page: 1, page_size: 1 })),
-      safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1 })),
-      safeGet(() => goodsReceivingApi.getAll({ page: 1, page_size: 1 })),
-      safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1 })),
+      safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1 }), { results: [], count: 0 } as any),
+      safeGet(() => quotationRequestsApi.getAll({ page: 1, page_size: 1 }), { results: [], count: 0 } as any),
+      safeGet(() => suppliersApi.getAll({ page: 1, page_size: 1 }), { results: [], count: 0 } as any),
+      safeGet(() => productsApi.getAll({ page: 1, page_size: 1 }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1 }), { results: [], count: 0 } as any),
+      safeGet(() => goodsReceivingApi.getAll({ page: 1, page_size: 1 }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1 }), { results: [], count: 0 } as any),
     ]);
 
-    const prPending = await safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'pending' }));
-    const prApproved = await safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'approved' }));
-    const prRejected = await safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'rejected' }));
-
-    const qrPending = await safeGet(() => quotationRequestsApi.getAll({ page: 1, page_size: 1, status: 'pending' }));
-    const qrCompleted = await safeGet(() => quotationRequestsApi.getAll({ page: 1, page_size: 1, status: 'completed' }));
-
-    const poPending = await safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'pending' }));
-    const poApproved = await safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'approved' }));
-    const poRejected = await safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'rejected' }));
-    const poCompleted = await safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'completed' }));
-
-    const invPending = await safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'pending' }));
-    const invApproved = await safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'approved' }));
-    const invPaid = await safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'paid' }));
+    const [
+      prPending, prApproved, prRejected,
+      qrPending, qrCompleted,
+      poPending, poApproved, poRejected, poCompleted,
+      invPending, invApproved, invPaid,
+    ] = await Promise.all([
+      safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'rejected' }), { results: [], count: 0 } as any),
+      safeGet(() => quotationRequestsApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
+      safeGet(() => quotationRequestsApi.getAll({ page: 1, page_size: 1, status: 'completed' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'rejected' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'completed' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
+      safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'paid' }), { results: [], count: 0 } as any),
+    ]);
 
     return {
       purchaseRequests: {
@@ -214,33 +250,23 @@ export const dashboardApi = {
   getProjectAnalytics: async (): Promise<ProjectAnalytics[]> => {
     try {
       const projects = await projectsApi.getAll({ page: 1, page_size: 100 });
-      
+
+      // Hoisted above the per-project loop (was re-fetched for every project before).
+      const allPOs = await fetchAllPages((page, page_size) => purchaseOrdersApi.getAll({ page, page_size }));
+
       const analytics: ProjectAnalytics[] = [];
-      
+
       for (const project of projects.results || []) {
         try {
-          const projectPRs = await purchaseRequestsApi.getAll({ 
-            page: 1, 
-            page_size: 1000,
-            project: Number(project.id) 
-          });
-          
-          const allPOs = await purchaseOrdersApi.getAll({ 
-            page: 1, 
-            page_size: 1000,
-          });
-          
-          const projectPRIds = (projectPRs.results || []).map(pr => Number(pr.id));
-          const projectPOs = {
-            results: (allPOs.results || []).filter((po: any) => 
-              projectPRIds.includes(Number(po.purchase_request))
-            ),
-            count: 0,
-          };
-          projectPOs.count = projectPOs.results.length;
+          const projectPRs = await fetchAllPages((page, page_size) =>
+            purchaseRequestsApi.getAll({ page, page_size, project: Number(project.id) })
+          );
+
+          const projectPRIds = projectPRs.map(pr => Number(pr.id));
+          const projectPOs = allPOs.filter((po: any) => projectPRIds.includes(Number(po.purchase_request)));
 
           let totalSpending = 0;
-          for (const po of projectPOs.results || []) {
+          for (const po of projectPOs) {
             totalSpending += (po as any).total || 0;
           }
 
@@ -249,7 +275,7 @@ export const dashboardApi = {
             name: project.name,
             code: (project as any).code || '',
             totalSpending,
-            poCount: projectPOs.count || 0,
+            poCount: projectPOs.length,
             progress: 0,
           });
         } catch (error: any) {
@@ -267,7 +293,7 @@ export const dashboardApi = {
   getRecentActivity: async (): Promise<RecentActivity[]> => {
     try {
       const activities: RecentActivity[] = [];
-      
+
       try {
         const prs = await purchaseRequestsApi.getAll({ page: 1, page_size: 10 });
         for (const pr of prs.results || []) {
@@ -336,45 +362,36 @@ export const dashboardApi = {
 
       for (const user of users.results || []) {
         try {
-          const userPRs = await purchaseRequestsApi.getAll({ 
-            page: 1, 
-            page_size: 1000,
-            created_by: Number(user.id) 
-          });
+          const userPRs = await fetchAllPages((page, page_size) =>
+            purchaseRequestsApi.getAll({ page, page_size, created_by: Number(user.id) })
+          );
 
-          const approvedPRs = await purchaseRequestsApi.getAll({ 
-            page: 1, 
-            page_size: 1000,
-            approved_by: Number(user.id),
-            status: 'approved'
-          });
+          const approvedPRs = await fetchAllPages((page, page_size) =>
+            purchaseRequestsApi.getAll({ page, page_size, approved_by: Number(user.id), status: 'approved' })
+          );
 
-          const userPOs = await purchaseOrdersApi.getAll({ 
-            page: 1, 
-            page_size: 1000,
-            created_by: Number(user.id) 
-          });
+          const userPOs = await fetchAllPages((page, page_size) =>
+            purchaseOrdersApi.getAll({ page, page_size, created_by: Number(user.id) })
+          );
 
-          const userInvoices = await purchaseInvoicesApi.getAll({ 
-            page: 1, 
-            page_size: 1000,
-            created_by: Number(user.id) 
-          });
+          const userInvoices = await fetchAllPages((page, page_size) =>
+            purchaseInvoicesApi.getAll({ page, page_size, created_by: Number(user.id) })
+          );
 
-          const totalActivity = 
-            (userPRs.count || 0) + 
-            (approvedPRs.count || 0) + 
-            (userPOs.count || 0) + 
-            (userInvoices.count || 0);
+          const totalActivity =
+            userPRs.length +
+            approvedPRs.length +
+            userPOs.length +
+            userInvoices.length;
 
           if (totalActivity > 0) {
             activities.push({
               id: Number(user.id),
               username: user.username || '',
-              createdPR: userPRs.count || 0,
-              approvedRequests: approvedPRs.count || 0,
-              createdPO: userPOs.count || 0,
-              createdInvoices: userInvoices.count || 0,
+              createdPR: userPRs.length,
+              approvedRequests: approvedPRs.length,
+              createdPO: userPOs.length,
+              createdInvoices: userInvoices.length,
             });
           }
         } catch (error: any) {
@@ -397,20 +414,11 @@ export const dashboardApi = {
 
   getProcurementCycleMetrics: async (): Promise<ProcurementCycleMetrics> => {
     try {
-      const safeGet = async (apiCall: () => Promise<any>, defaultValue: any = { results: [], count: 0 }) => {
-        try {
-          return await apiCall();
-        } catch (error: any) {
-          if (__DEV__ && !isSilentError(error)) console.warn('Error fetching cycle metrics:', error);
-          return defaultValue;
-        }
-      };
-
       const [allPOs, allPRs, allGRNs, allInvoices] = await Promise.all([
-        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1000 })),
-        safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1000 })),
-        safeGet(() => goodsReceivingApi.getAll({ page: 1, page_size: 1000 })),
-        safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1000 })),
+        safeGet(() => fetchAllPages((page, page_size) => purchaseOrdersApi.getAll({ page, page_size })), [] as any[]),
+        safeGet(() => fetchAllPages((page, page_size) => purchaseRequestsApi.getAll({ page, page_size })), [] as any[]),
+        safeGet(() => fetchAllPages((page, page_size) => goodsReceivingApi.getAll({ page, page_size })), [] as any[]),
+        safeGet(() => fetchAllPages((page, page_size) => purchaseInvoicesApi.getAll({ page, page_size })), [] as any[]),
       ]);
 
     let totalPRToPODays = 0;
@@ -420,9 +428,9 @@ export const dashboardApi = {
     let totalGRNToInvoiceDays = 0;
     let grnToInvoiceCount = 0;
 
-    for (const po of allPOs.results || []) {
+    for (const po of allPOs) {
       if ((po as any).purchase_request) {
-        const pr = (allPRs.results || []).find((p: any) => Number(p.id) === Number((po as any).purchase_request));
+        const pr = allPRs.find((p: any) => Number(p.id) === Number((po as any).purchase_request));
         if (pr && (pr as any).created_at && (po as any).created_at) {
           const prDate = new Date((pr as any).created_at);
           const poDate = new Date((po as any).created_at);
@@ -435,9 +443,9 @@ export const dashboardApi = {
       }
     }
 
-    for (const grn of allGRNs.results || []) {
+    for (const grn of allGRNs) {
       if ((grn as any).purchase_order_id) {
-        const po = (allPOs.results || []).find((p: any) => Number(p.id) === Number((grn as any).purchase_order_id));
+        const po = allPOs.find((p: any) => Number(p.id) === Number((grn as any).purchase_order_id));
         if (po && (po as any).created_at && (grn as any).receipt_date) {
           const poDate = new Date((po as any).created_at);
           const grnDate = new Date((grn as any).receipt_date);
@@ -450,9 +458,9 @@ export const dashboardApi = {
       }
     }
 
-    for (const invoice of allInvoices.results || []) {
+    for (const invoice of allInvoices) {
       if ((invoice as any).grn_id) {
-        const grn = (allGRNs.results || []).find((g: any) => Number(g.id) === Number((invoice as any).grn_id));
+        const grn = allGRNs.find((g: any) => Number(g.id) === Number((invoice as any).grn_id));
         if (grn && (grn as any).receipt_date && (invoice as any).invoice_date) {
           const grnDate = new Date((grn as any).receipt_date);
           const invDate = new Date((invoice as any).invoice_date);
@@ -497,25 +505,16 @@ export const dashboardApi = {
 
   getChartData: async (): Promise<ChartData> => {
     try {
-      const safeGet = async (apiCall: () => Promise<any>, defaultValue: any = { results: [], count: 0 }) => {
-        try {
-          return await apiCall();
-        } catch (error: any) {
-          if (__DEV__ && !isSilentError(error)) console.warn('Error fetching chart data:', error);
-          return defaultValue;
-        }
-      };
-
       const [allPRs, allPOs, allInvoices, allProjects, allSuppliers] = await Promise.all([
-        safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1000 })),
-        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1000 })),
-        safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1000 })),
-        safeGet(() => projectsApi.getAll({ page: 1, page_size: 100 })),
-        safeGet(() => suppliersApi.getAll({ page: 1, page_size: 1000 })),
+        safeGet(() => fetchAllPages((page, page_size) => purchaseRequestsApi.getAll({ page, page_size })), [] as any[]),
+        safeGet(() => fetchAllPages((page, page_size) => purchaseOrdersApi.getAll({ page, page_size })), [] as any[]),
+        safeGet(() => fetchAllPages((page, page_size) => purchaseInvoicesApi.getAll({ page, page_size })), [] as any[]),
+        safeGet(() => projectsApi.getAll({ page: 1, page_size: 100 }), { results: [], count: 0 } as any),
+        safeGet(() => fetchAllPages((page, page_size) => suppliersApi.getAll({ page, page_size })), [] as any[]),
       ]);
 
     const monthlyProcurementMap = new Map<string, { volume: number; count: number }>();
-    for (const pr of allPRs.results || []) {
+    for (const pr of allPRs) {
       if ((pr as any).created_at) {
         const date = new Date((pr as any).created_at);
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -528,7 +527,7 @@ export const dashboardApi = {
     }
 
     const monthlyInvoicesMap = new Map<string, { count: number; amount: number }>();
-    for (const inv of allInvoices.results || []) {
+    for (const inv of allInvoices) {
       if ((inv as any).invoice_date) {
         const date = new Date((inv as any).invoice_date);
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -543,13 +542,11 @@ export const dashboardApi = {
       const projectSpendingMap = new Map<string, number>();
       for (const project of allProjects.results || []) {
         try {
-          const projectPRs = await safeGet(() => purchaseRequestsApi.getAll({ 
-            page: 1, 
-            page_size: 1000,
-            project: Number(project.id) 
-          }));
-          const projectPRIds = (projectPRs.results || []).map((pr: any) => Number(pr.id));
-          const projectPOs = (allPOs.results || []).filter((po: any): po is typeof po =>
+          const projectPRs = await safeGet(() => fetchAllPages((page, page_size) =>
+            purchaseRequestsApi.getAll({ page, page_size, project: Number(project.id) })
+          ), [] as any[]);
+          const projectPRIds = projectPRs.map((pr: any) => Number(pr.id));
+          const projectPOs = allPOs.filter((po: any): po is typeof po =>
             projectPRIds.includes(Number(po.purchase_request))
           );
           let totalSpending = 0;
@@ -565,8 +562,8 @@ export const dashboardApi = {
       }
 
       const supplierMap = new Map<string, { poCount: number; totalAmount: number }>();
-      for (const supplier of allSuppliers.results || []) {
-        const supplierPOs = (allPOs.results || []).filter((po: any) => 
+      for (const supplier of allSuppliers) {
+        const supplierPOs = allPOs.filter((po: any) =>
           Number(po.supplier) === Number(supplier.id)
         );
         let totalAmount = 0;
@@ -581,23 +578,40 @@ export const dashboardApi = {
         }
       }
 
+      const [
+        prPending, prApproved, prRejected,
+        poPending, poApproved, poRejected, poCompleted,
+        invPending, invApproved, invPaid,
+      ] = await Promise.all([
+        safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'rejected' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'rejected' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'completed' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'pending' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'approved' }), { results: [], count: 0 } as any),
+        safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'paid' }), { results: [], count: 0 } as any),
+      ]);
+
       const prStatus = {
-        pending: (await safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'pending' }))).count || 0,
-        approved: (await safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'approved' }))).count || 0,
-        rejected: (await safeGet(() => purchaseRequestsApi.getAll({ page: 1, page_size: 1, status: 'rejected' }))).count || 0,
+        pending: prPending.count || 0,
+        approved: prApproved.count || 0,
+        rejected: prRejected.count || 0,
       };
 
       const poStatus = {
-        pending: (await safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'pending' }))).count || 0,
-        approved: (await safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'approved' }))).count || 0,
-        rejected: (await safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'rejected' }))).count || 0,
-        completed: (await safeGet(() => purchaseOrdersApi.getAll({ page: 1, page_size: 1, status: 'completed' }))).count || 0,
+        pending: poPending.count || 0,
+        approved: poApproved.count || 0,
+        rejected: poRejected.count || 0,
+        completed: poCompleted.count || 0,
       };
 
       const invStatus = {
-        pending: (await safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'pending' }))).count || 0,
-        approved: (await safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'approved' }))).count || 0,
-        paid: (await safeGet(() => purchaseInvoicesApi.getAll({ page: 1, page_size: 1, status: 'paid' }))).count || 0,
+        pending: invPending.count || 0,
+        approved: invApproved.count || 0,
+        paid: invPaid.count || 0,
       };
 
       return {
@@ -657,4 +671,3 @@ export const dashboardApi = {
     }
   },
 };
-

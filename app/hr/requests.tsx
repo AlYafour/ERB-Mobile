@@ -7,23 +7,21 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppButton } from '@/components/ui/AppButton';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppFilterBar } from '@/components/ui/AppFilterBar';
 import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
-import { Colors, ModuleTints } from '@/constants/theme';
+import { Colors, ModuleTints, CARD_SHADOW } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { hrRequestsApi, HRRequest, HRLeaveBalance } from '@/lib/api/hr';
-import { apiClient } from '@/lib/api';
-import { API_ENDPOINTS } from '@/constants/api';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useMyEmployeeProfile } from '@/lib/hooks/use-employee-profile';
 
 // Icons must exist in components/ui/icon-symbol.tsx MAPPING — unmapped names
 // silently render as an empty circle on Android.
@@ -38,8 +36,6 @@ const REQUEST_TYPES = [
   { value: 'document_request',label: 'Document / HR Letter',icon: 'doc.text',                     tint: 'admin' as const },
   { value: 'other',           label: 'Other',               icon: 'ellipsis.circle',              tint: 'operations' as const },
 ];
-
-type BadgeVariant = 'success' | 'danger' | 'warning' | 'default';
 
 function getStatusVariant(status: string): BadgeVariant {
   switch (status) {
@@ -56,7 +52,7 @@ type AppColors = typeof Colors.light | typeof Colors.dark;
 const ListGap = () => <View style={{ height: 12 }} />;
 
 export default function HRRequestsScreen() {
-  const { user } = useAuth();
+  const { employeeId, loading: profileLoading } = useMyEmployeeProfile();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const insets = useSafeAreaInsets();
@@ -80,11 +76,13 @@ export default function HRRequestsScreen() {
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [requests, setRequests] = useState<HRRequest[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<HRLeaveBalance[]>([]);
-  const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [rejectDialogId, setRejectDialogId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState('');
   const [viewAll, setViewAll] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -112,57 +110,57 @@ export default function HRRequestsScreen() {
   // - reqSeq: monotonically increasing token; an older response can never
   //   overwrite a newer one (rapid filter taps used to race out of order).
   // - mountedRef: no setState after the screen is closed.
-  // - employeeIdRef: the (expensive) full-employee-list lookup runs ONCE per
-  //   session, not on every filter change like before.
   const reqSeq = useRef(0);
   const mountedRef = useRef(true);
   const hasLoadedOnce = useRef(false);
-  const employeeIdRef = useRef<number | null | 'unresolved'>('unresolved');
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
-  const resolveEmployeeId = useCallback(async (): Promise<number | null> => {
-    if (employeeIdRef.current !== 'unresolved') return employeeIdRef.current;
-    const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
-    const employees: any[] = Array.isArray(empRes.data) ? empRes.data : (empRes.data?.results ?? []);
-    const me = employees.find(
-      (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
-    );
-    const resolved: number | null = me ? me.id : null;
-    employeeIdRef.current = resolved;
-    if (mountedRef.current && me) setEmployeeId(me.id);
-    return resolved;
-  }, [user]);
-
-  const loadData = useCallback(async () => {
-    if (!user) {
-      setInitialLoading(false); setRefreshing(false);
-      return;
-    }
+  // Employee-record resolution now lives in useMyEmployeeProfile — this
+  // loader only fetches the requests page(s) + leave balances once that
+  // employee id (or the manager's view-all permission) is known.
+  const loadData = useCallback(async (pg = 1, append = false) => {
+    if (profileLoading) return;
     const seq = ++reqSeq.current;
-    if (hasLoadedOnce.current) setListLoading(true);
+    if (append) setLoadingMore(true);
+    else if (hasLoadedOnce.current) setListLoading(true);
     try {
-      const myEmployeeId = await resolveEmployeeId();
-      if (seq !== reqSeq.current || !mountedRef.current) return;
-      if (myEmployeeId == null && !canViewAll) return;
+      if (employeeId == null && !canViewAll) {
+        if (seq === reqSeq.current && mountedRef.current) {
+          setInitialLoading(false); setRefreshing(false); setListLoading(false); setLoadingMore(false);
+        }
+        return;
+      }
 
-      const params: any = {};
-      if (!viewAll && myEmployeeId != null) params.employee = myEmployeeId;
+      const params: any = { page: pg };
+      if (!viewAll && employeeId != null) params.employee = employeeId;
       if (filterStatus) params.status = filterStatus;
 
-      const [reqRes, balanceRes] = await Promise.allSettled([
-        hrRequestsApi.getAll(params),
-        myEmployeeId != null
-          ? hrRequestsApi.getLeaveBalances(myEmployeeId, new Date().getFullYear())
-          : Promise.resolve([]),
-      ]);
+      if (append) {
+        const res = await hrRequestsApi.getAll(params);
+        if (seq !== reqSeq.current || !mountedRef.current) return;
+        setRequests(prev => [...prev, ...(res.results ?? [])]);
+        setHasMore(!!res.next);
+        setPage(pg);
+      } else {
+        const [reqRes, balanceRes] = await Promise.allSettled([
+          hrRequestsApi.getAll(params),
+          employeeId != null
+            ? hrRequestsApi.getLeaveBalances(employeeId, new Date().getFullYear())
+            : Promise.resolve([]),
+        ]);
 
-      if (seq !== reqSeq.current || !mountedRef.current) return;
-      if (reqRes.status === 'fulfilled') setRequests(reqRes.value.results ?? []);
-      if (balanceRes.status === 'fulfilled') setLeaveBalances(balanceRes.value as HRLeaveBalance[]);
+        if (seq !== reqSeq.current || !mountedRef.current) return;
+        if (reqRes.status === 'fulfilled') {
+          setRequests(reqRes.value.results ?? []);
+          setHasMore(!!reqRes.value.next);
+          setPage(pg);
+        }
+        if (balanceRes.status === 'fulfilled') setLeaveBalances(balanceRes.value as HRLeaveBalance[]);
+      }
       hasLoadedOnce.current = true;
     } catch (e: any) {
       if (seq === reqSeq.current && mountedRef.current) {
@@ -173,14 +171,16 @@ export default function HRRequestsScreen() {
         setInitialLoading(false);
         setListLoading(false);
         setRefreshing(false);
+        setLoadingMore(false);
       }
     }
-  }, [user, filterStatus, viewAll, canViewAll, resolveEmployeeId]);
+  }, [employeeId, profileLoading, filterStatus, viewAll, canViewAll]);
 
   useEffect(() => { loadData(); }, [loadData]);
   // Stale-list fix: refetch when the screen regains focus
   useRefetchOnFocus(loadData);
-  const handleRefresh = () => { setRefreshing(true); loadData(); };
+  const handleRefresh = () => { setRefreshing(true); loadData(1); };
+  const handleLoadMore = () => { if (hasMore && !loadingMore && !listLoading) loadData(page + 1, true); };
 
   const handleSubmit = async () => {
     if (!employeeId) { toast('No employee profile linked', 'error'); return; }
@@ -387,7 +387,7 @@ export default function HRRequestsScreen() {
         loading={listLoading && !refreshing}
       />
 
-      {initialLoading ? (
+      {profileLoading || initialLoading ? (
         <AppSkeletonList count={4} lines={3} />
       ) : requests.length === 0 ? (
         <AppEmptyState
@@ -410,6 +410,13 @@ export default function HRRequestsScreen() {
               tintColor={C.primary}
               colors={[C.primary]}
             />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore
+              ? <View style={{ paddingVertical: 20 }}><AppEmptyState variant="loading" title="" /></View>
+              : null
           }
         />
       )}
@@ -616,8 +623,7 @@ function makeStyles(C: AppColors) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: C.border,
       gap: 8,
-      shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+      ...CARD_SHADOW,
     },
     reqHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
     typeTile: {

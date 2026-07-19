@@ -1,23 +1,24 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator, Animated, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/ui/AppHeader';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppBottomSheet, SheetAction } from '@/components/ui/AppBottomSheet';
-import { Colors } from '@/constants/theme';
+import { Colors, CARD_SHADOW } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { hrAttendanceApi, hrRequestsApi, hrPayrollApi, HRAttendance, HREmployee, HRLeaveBalance } from '@/lib/api/hr';
+import { hrAttendanceApi, hrRequestsApi, hrPayrollApi, HRAttendance, HRLeaveBalance } from '@/lib/api/hr';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/constants/api';
 import { toast } from '@/lib/hooks/use-toast';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useMyEmployeeProfile } from '@/lib/hooks/use-employee-profile';
+import { formatMoney } from '@/lib/utils/format';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -53,8 +54,7 @@ function attBg(status: string, C: AppColors): string {
   }
 }
 
-type ReqBadgeVariant = 'success' | 'danger' | 'warning' | 'default';
-function reqStatusVariant(status: string): ReqBadgeVariant {
+function reqStatusVariant(status: string): BadgeVariant {
   switch (status) {
     case 'approved': return 'success';
     case 'rejected': return 'danger';
@@ -64,7 +64,12 @@ function reqStatusVariant(status: string): ReqBadgeVariant {
 }
 
 const HR_ACTIONS = [
-  { id: 'annual_leave',     icon: 'calendar',              label: 'Time Off',             sub: 'Annual, sick, emergency leave' },
+  // Split out of a single 'Time Off' action — it used to always pre-select
+  // Annual Leave in hr/requests.tsx's form despite advertising sick/emergency
+  // leave too.
+  { id: 'annual_leave',     icon: 'sun.max.fill',                  label: 'Annual Leave',    sub: 'Planned time off' },
+  { id: 'sick_leave',       icon: 'cross.case.fill',                label: 'Sick Leave',      sub: 'Medical leave' },
+  { id: 'emergency_leave',  icon: 'exclamationmark.triangle.fill',  label: 'Emergency Leave', sub: 'Urgent, unplanned leave' },
   { id: 'work_from_home',   icon: 'laptopcomputer',         label: 'Work From Home',       sub: 'WFH request' },
   { id: 'overtime',         icon: 'clock.fill',             label: 'Overtime',             sub: 'Submit overtime hours' },
   { id: 'advance_salary',   icon: 'dollarsign.circle.fill', label: 'Loan / Advance',       sub: 'Salary advance or loan' },
@@ -75,16 +80,16 @@ const HR_ACTIONS = [
 const ICON_COLORS = ['#C9943A','#3A7D52','#B7791F','#6F625E','#8A5A15','#6B7280'];
 
 export default function HRScreen() {
-  const { user } = useAuth();
   const router = useRouter();
   const cs = useColorScheme() ?? 'light';
   const c = Colors[cs];
+
+  const { employeeProfile, employeeId, loading: profileLoading, reload: reloadProfile } = useMyEmployeeProfile();
 
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
-  const [employeeProfile, setEmployeeProfile] = useState<HREmployee | null>(null);
   const [todayAttendance, setTodayAttendance] = useState<HRAttendance | null>(null);
   const [recentRequests, setRecentRequests] = useState<any[]>([]);
   const [latestPayroll, setLatestPayroll] = useState<any | null>(null);
@@ -112,47 +117,40 @@ export default function HRScreen() {
     pulseAnim.setValue(1);
   }, [todayAttendance, pulseAnim]);
 
-  // No setState after the tab unmounts (this loader awaits 5 requests).
+  // No setState after the tab unmounts (this loader awaits 4 requests).
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
-  const loadData = async () => {
-    if (!user) { setLoading(false); setRefreshing(false); return; }
+  // Employee-record resolution now lives in useMyEmployeeProfile — this
+  // loader only fetches the attendance/requests/payroll/leave snapshots
+  // once that employee id is known.
+  const loadData = useCallback(async () => {
+    if (!employeeId) { setLoading(false); setRefreshing(false); return; }
     try {
-      const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
+      const today = new Date().toISOString().split('T')[0];
+      const year = new Date().getFullYear();
+      const [attRes, reqRes, payRes, leaveRes] = await Promise.allSettled([
+        apiClient.get(`${API_ENDPOINTS.HR_ATTENDANCE}?employee=${employeeId}&date=${today}`),
+        hrRequestsApi.getAll({ employee: employeeId, page: 1 }),
+        hrPayrollApi.getAll({ employee: employeeId, page: 1 }),
+        hrRequestsApi.getLeaveBalances(employeeId, year),
+      ]);
       if (!mountedRef.current) return;
-      const employees: any[] = Array.isArray(empRes.data) ? empRes.data : ((empRes.data as any)?.results ?? []);
-      const myProfile = employees.find(
-        (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
-      );
-      setEmployeeProfile(myProfile ?? null);
 
-      if (myProfile) {
-        const today = new Date().toISOString().split('T')[0];
-        const year = new Date().getFullYear();
-        const [attRes, reqRes, payRes, leaveRes] = await Promise.allSettled([
-          apiClient.get(`${API_ENDPOINTS.HR_ATTENDANCE}?employee=${myProfile.id}&date=${today}`),
-          hrRequestsApi.getAll({ employee: myProfile.id, page: 1 }),
-          hrPayrollApi.getAll({ employee: myProfile.id, page: 1 }),
-          hrRequestsApi.getLeaveBalances(myProfile.id, year),
-        ]);
-        if (!mountedRef.current) return;
-
-        if (attRes.status === 'fulfilled') {
-          setTodayAttendance((attRes.value.data as any)?.results?.[0] ?? null);
-        }
-        if (reqRes.status === 'fulfilled') {
-          setRecentRequests(((reqRes.value as any).results ?? []).slice(0, 4));
-        }
-        if (payRes.status === 'fulfilled') {
-          setLatestPayroll(((payRes.value as any).results)?.[0] ?? null);
-        }
-        if (leaveRes.status === 'fulfilled') {
-          setLeaveBalance(leaveRes.value ?? []);
-        }
+      if (attRes.status === 'fulfilled') {
+        setTodayAttendance((attRes.value.data as any)?.results?.[0] ?? null);
+      }
+      if (reqRes.status === 'fulfilled') {
+        setRecentRequests(((reqRes.value as any).results ?? []).slice(0, 4));
+      }
+      if (payRes.status === 'fulfilled') {
+        setLatestPayroll(((payRes.value as any).results)?.[0] ?? null);
+      }
+      if (leaveRes.status === 'fulfilled') {
+        setLeaveBalance(leaveRes.value ?? []);
       }
     } catch (e) {
       if (__DEV__) console.error('HR load error:', e);
@@ -162,13 +160,16 @@ export default function HRScreen() {
         setRefreshing(false);
       }
     }
-  };
+  }, [employeeId]);
 
-  useEffect(() => { loadData(); }, [user]);
+  useEffect(() => {
+    if (profileLoading) return;
+    loadData();
+  }, [profileLoading, loadData]);
   // Tab screens stay mounted — refresh attendance/requests/payroll snapshots
   // whenever the user switches back to the HR tab.
   useRefetchOnFocus(loadData);
-  const handleRefresh = () => { setRefreshing(true); loadData(); };
+  const handleRefresh = () => { setRefreshing(true); reloadProfile(); };
 
   const handleCheckIn = async () => {
     setChecking(true);
@@ -219,11 +220,9 @@ export default function HRScreen() {
   const isOnBreak    = !!todayAttendance?.break_start && !todayAttendance?.break_end;
   const fmtTime = (dt: string | null) =>
     dt ? new Date(dt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
-  const fmtMoney = (v: string | number) =>
-    `AED ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
 
   // ── Loading state ──
-  if (loading) {
+  if (profileLoading || loading) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.background }]} edges={['top']}>
         <AppHeader title="Human Resources" />
@@ -507,7 +506,7 @@ export default function HRScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.payMonth}>{latestPayroll.month_name} {latestPayroll.year}</Text>
                 <Text style={s.payNetLabel}>Net Salary</Text>
-                <Text style={s.payAmount}>{fmtMoney(latestPayroll.net_salary)}</Text>
+                <Text style={s.payAmount}>{formatMoney(latestPayroll.net_salary, { decimals: 0 })}</Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
                 <AppBadge variant={latestPayroll.status === 'paid' ? 'success' : 'info'}>
@@ -578,14 +577,6 @@ export default function HRScreen() {
     </SafeAreaView>
   );
 }
-
-const CARD_SHADOW = {
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.05,
-  shadowRadius: 6,
-  elevation: 2,
-} as const;
 
 const s = StyleSheet.create({
   root: { flex: 1 },

@@ -58,8 +58,8 @@ const WELCOME: ChatMessage = {
   content: 'مرحباً! أنا مساعدك الذكي للمشتريات.\n\nيمكنك الكتابة أو الضغط على 🎙 للكلام أو 📎 لإرسال صورة.',
 };
 
-const VC: Record<VoiceState, string> = {
-  idle: Colors.light.tint, recording: '#ef4444', thinking: '#f97316', speaking: '#3b82f6',
+const VC_STATIC: Record<Exclude<VoiceState, 'idle'>, string> = {
+  recording: '#ef4444', thinking: '#f97316', speaking: '#3b82f6',
 };
 
 const VL: Record<VoiceState, string> = {
@@ -371,7 +371,7 @@ export default function AIProcurementChat({ onAddItems, onFormUpdate }: Props) {
 
   // ── Full chat sheet ───────────────────────────────────────────────────────
 
-  const vColor = VC[voiceState];
+  const vColor = voiceState === 'idle' ? C.tint : VC_STATIC[voiceState];
 
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={handleClose} statusBarTranslucent>
@@ -510,7 +510,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   // FAB
   fab: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#fff',
+    backgroundColor: C.surface,
     borderWidth: 1.5, borderColor: C.border,
     borderRadius: 12, padding: 12, marginBottom: 16,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
@@ -528,7 +528,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   // Modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#fff',
+    backgroundColor: C.surface,
     borderTopLeftRadius: 22, borderTopRightRadius: 22,
     maxHeight: '88%',
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
@@ -538,7 +538,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   // Header
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#1A1A2E',
+    backgroundColor: Colors.dark.header,
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: 2, borderBottomColor: C.tint,
     borderTopLeftRadius: 22, borderTopRightRadius: 22,
@@ -581,7 +581,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   },
   bubble: { maxWidth: '82%', paddingHorizontal: 13, paddingVertical: 10, borderRadius: 16 },
   bubbleUser: { backgroundColor: C.tint, borderBottomRightRadius: 4 },
-  bubbleBot: { backgroundColor: '#F1F5F9', borderBottomLeftRadius: 4 },
+  bubbleBot: { backgroundColor: C.surfaceMuted, borderBottomLeftRadius: 4 },
   bubbleText: { fontSize: 14, lineHeight: 21 },
   bubbleTextUser: { color: '#fff' },
   bubbleTextBot: { color: C.text },
@@ -613,11 +613,11 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-end', gap: 6,
     paddingHorizontal: 10, paddingVertical: 10,
     paddingBottom: Platform.OS === 'ios' ? 16 : 10,
-    backgroundColor: '#fff',
+    backgroundColor: C.surface,
   },
   iconBtn: {
     width: 38, height: 38, borderRadius: 9,
-    backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: C.border,
+    backgroundColor: C.surfaceMuted, borderWidth: 1.5, borderColor: C.border,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   textInput: {
@@ -626,7 +626,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: Platform.OS === 'ios' ? 11 : 8,
     paddingBottom: Platform.OS === 'ios' ? 11 : 8,
-    fontSize: 15, color: C.text, backgroundColor: '#F8FAFC',
+    fontSize: 15, color: C.text, backgroundColor: C.surfaceMuted,
   },
   micBtn: {
     width: 38, height: 38, borderRadius: 9,

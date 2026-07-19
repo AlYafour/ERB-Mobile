@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { AppState } from 'react-native';
-import { apiClient } from '@/lib/api';
+import { apiClient, ApiResponse } from '@/lib/api';
 import { User } from '@/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerDeviceForPush, unregisterDeviceForPush } from '@/lib/push-notifications';
@@ -122,6 +122,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Shared post-authentication step for both login() and verifyTwoFactor():
+   * given the raw response from apiClient.login()/verify2FA() (tokens already
+   * stored by apiClient at this point if the HTTP call itself succeeded),
+   * resolves the user profile, sets it, and kicks off the non-blocking
+   * branding + push-device registration.
+   *
+   * On ANY failure to establish a usable session — no profile resolvable, or
+   * an unexpected exception along the way — this is the single cleanup path:
+   * apiClient.logout() clears whatever tokens were stored so a half-established
+   * session never lingers. Previously verifyTwoFactor() had no equivalent to
+   * login()'s own-error handling here, so an exception thrown while resolving
+   * the profile could leave stale tokens behind after a "failed" 2FA attempt.
+   */
+  const establishSession = async (
+    response: ApiResponse<any>,
+    fallbackError: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (!(response.data && response.status >= 200 && response.status < 300)) {
+        return { success: false, error: response.error || fallbackError };
+      }
+      const data = response.data as any;
+
+      // The backend response includes the full user object — use it directly
+      // so `user` is set BEFORE we report success. This removes the
+      // login→tabs→login bounce (AuthGate used to see user===null mid-redirect).
+      let userData: any = data.user ?? null;
+      if (!userData) {
+        userData = await apiClient.getCurrentUser();
+      }
+      if (!userData) {
+        // No profile — navigating would strand the user in the AuthGate
+        // bounce. Fail loudly instead of succeeding into a broken state.
+        await apiClient.logout().catch(() => {});
+        return { success: false, error: 'Could not load your profile. Please try again.' };
+      }
+      setUser(userData);
+
+      // Background: branding + push-device registration (both non-blocking)
+      fetchAndCacheBranding().then(b => { if (b) setBranding(b); });
+      registerDeviceForPush().catch(() => {});
+
+      return { success: true };
+    } catch (error: any) {
+      await apiClient.logout().catch(() => {});
+      return { success: false, error: error.message || fallbackError };
+    }
+  };
+
   const login = async (username: string, password: string): Promise<LoginResult> => {
     try {
       const response = await apiClient.login(username, password);
@@ -138,32 +188,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             expiresIn: typeof data.expires_in === 'number' ? data.expires_in : undefined,
           };
         }
-
-        // The backend login response includes the full user object — use it
-        // directly so `user` is set BEFORE we report success. This removes the
-        // login→tabs→login bounce (AuthGate used to see user===null mid-redirect).
-        let userData: any = data.user ?? null;
-        if (!userData) {
-          try { userData = await apiClient.getCurrentUser(); } catch {}
-        }
-        if (!userData) {
-          // No profile — navigating would strand the user in the AuthGate
-          // bounce. Fail loudly instead of succeeding into a broken state.
-          await apiClient.logout().catch(() => {});
-          return { success: false, error: 'Could not load your profile. Please try again.' };
-        }
-        setUser(userData);
-
-        // Background: branding + push-device registration (both non-blocking)
-        fetchAndCacheBranding().then(b => { if (b) setBranding(b); });
-        registerDeviceForPush().catch(() => {});
-
-        return { success: true };
       }
 
-      const errorMessage = response.error ||
-        (response.status === 400 ? 'Invalid username or password' : 'Login failed');
-      return { success: false, error: errorMessage };
+      const fallback = response.status === 400 ? 'Invalid username or password' : 'Login failed';
+      return await establishSession(response, fallback);
     } catch (error: any) {
       return { success: false, error: error.message || 'Login failed' };
     }
@@ -172,19 +200,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyTwoFactor = async (tempToken: string, code: string) => {
     try {
       const response = await apiClient.verify2FA(tempToken, code);
-      if (response.data && response.status >= 200 && response.status < 300) {
-        const userData = (response.data as any).user ?? (await apiClient.getCurrentUser());
-        if (!userData) {
-          await apiClient.logout().catch(() => {});
-          return { success: false, error: 'Could not load your profile. Please try again.' };
-        }
-        setUser(userData);
-        fetchAndCacheBranding().then(b => { if (b) setBranding(b); });
-        registerDeviceForPush().catch(() => {});
-        return { success: true };
-      }
-      return { success: false, error: response.error || 'Invalid or expired code.' };
+      return await establishSession(response, 'Invalid or expired code.');
     } catch (error: any) {
+      // apiClient.verify2FA(), unlike apiClient.login(), has no internal
+      // try/catch of its own — clean up here so a thrown error never leaves
+      // stale tokens behind.
+      await apiClient.logout().catch(() => {});
       return { success: false, error: error.message || 'Verification failed' };
     }
   };

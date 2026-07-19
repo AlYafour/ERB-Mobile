@@ -12,7 +12,7 @@ interface AppPermissionGateProps {
   category?: string;
   action?: string;
   /** Pass if ANY of these pairs is granted (used with or instead of category/action). */
-  anyOf?: Array<{ category: string; action: string }>;
+  anyOf?: { category: string; action: string }[];
   /** Restrict to tenant/platform admins (web parity for admin-only pages). */
   adminOnly?: boolean;
   children: ReactNode;
@@ -35,7 +35,7 @@ export function AppPermissionGate({
 }: AppPermissionGateProps) {
   const { isLoading, isAdmin, hasPermission, hasAnyPermission } = usePermissionsContext();
   const router = useRouter();
-  const cs = useColorScheme() ?? 'light';
+  const cs = useColorScheme();
   const C = Colors[cs];
 
   if (isLoading) {

@@ -20,11 +20,6 @@ export function toast(message: string, type: ToastType = 'info') {
   const id = `toast-${++toastId}`;
   toasts = [...toasts, { id, message, type }];
   notify();
-  
-  setTimeout(() => {
-    toasts = toasts.filter((t) => t.id !== id);
-    notify();
-  }, 5000);
 }
 
 export function removeToast(id: string) {

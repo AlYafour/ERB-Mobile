@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { PurchaseInvoice, PurchaseInvoiceItem, PaginatedResponse } from '@/types';
 
 export const purchaseInvoicesApi = {
@@ -12,30 +13,16 @@ export const purchaseInvoicesApi = {
     created_by?: number;
     invoice_date_after?: string;
     invoice_date_before?: string;
-  }): Promise<PaginatedResponse<PurchaseInvoice>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<PurchaseInvoice>> => {
+    const queryString = buildQueryString(params || {});
     const endpoint = `${API_ENDPOINTS.PURCHASE_INVOICES}${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<PurchaseInvoice>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch purchase invoices');
-    }
-    return response.data;
+    const response = await apiClient.get<PaginatedResponse<PurchaseInvoice>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch purchase invoices');
   },
 
   getById: async (id: number | string): Promise<PurchaseInvoice> => {
     const response = await apiClient.get<PurchaseInvoice>(API_ENDPOINTS.PURCHASE_INVOICE_DETAIL(String(id)));
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch purchase invoice');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch purchase invoice');
   },
 
   create: async (data: {
@@ -50,18 +37,12 @@ export const purchaseInvoicesApi = {
     items: Omit<PurchaseInvoiceItem, 'id' | 'created_at' | 'product'>[];
   }): Promise<PurchaseInvoice> => {
     const response = await apiClient.post<PurchaseInvoice>(API_ENDPOINTS.PURCHASE_INVOICES, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create purchase invoice');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to create purchase invoice');
   },
 
   update: async (id: number | string, data: Partial<PurchaseInvoice>): Promise<PurchaseInvoice> => {
     const response = await apiClient.patch<PurchaseInvoice>(API_ENDPOINTS.PURCHASE_INVOICE_DETAIL(String(id)), data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update purchase invoice');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to update purchase invoice');
   },
 
   delete: async (id: number | string): Promise<void> => {
@@ -73,18 +54,12 @@ export const purchaseInvoicesApi = {
 
   approve: async (id: number | string): Promise<PurchaseInvoice> => {
     const response = await apiClient.post<PurchaseInvoice>(`${API_ENDPOINTS.PURCHASE_INVOICE_DETAIL(String(id))}approve/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to approve purchase invoice');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to approve purchase invoice');
   },
 
   reject: async (id: number | string, rejection_reason: string): Promise<PurchaseInvoice> => {
     const response = await apiClient.post<PurchaseInvoice>(`${API_ENDPOINTS.PURCHASE_INVOICE_DETAIL(String(id))}reject/`, { rejection_reason });
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to reject purchase invoice');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to reject purchase invoice');
   },
 
   markPaid: async (
@@ -97,10 +72,6 @@ export const purchaseInvoicesApi = {
     }
   ): Promise<PurchaseInvoice> => {
     const response = await apiClient.post<PurchaseInvoice>(`${API_ENDPOINTS.PURCHASE_INVOICE_DETAIL(String(id))}mark_paid/`, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to mark invoice as paid');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to mark invoice as paid');
   },
 };
-

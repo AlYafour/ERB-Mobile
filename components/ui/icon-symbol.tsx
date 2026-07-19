@@ -105,6 +105,7 @@ const MAPPING = {
   'link': 'link',
   'network': 'wifi',
   'wifi': 'wifi',
+  'wifi.slash': 'wifi-off',
   'chart.bar.fill': 'bar-chart',
   'chart.line.uptrend.xyaxis': 'trending-up',
   'checkmark.seal.fill': 'verified',

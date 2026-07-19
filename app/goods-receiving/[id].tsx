@@ -1,21 +1,23 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { goodsReceivingApi, GoodsReceivedNote } from '@/lib/api/goods-receiving';
-import { useAuth } from '@/contexts/AuthContext';
+import { goodsReceivingApi } from '@/lib/api/goods-receiving';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useDetailFetch } from '@/lib/hooks/use-detail-fetch';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
@@ -26,37 +28,36 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
-function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info' | 'default' {
-  switch (s) {
-    case 'completed': return 'success';
-    case 'cancelled': return 'danger';
-    case 'partial':   return 'warning';
-    case 'draft':     return 'default';
-    default:          return 'info';
-  }
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  completed: 'success',
+  cancelled: 'danger',
+  partial: 'warning',
+  draft: 'default',
+};
+
+function getStatusVariant(s?: string): BadgeVariant {
+  return STATUS_VARIANTS[s || ''] ?? 'info';
 }
 
-function getQualityVariant(s?: string): 'success' | 'danger' | 'warning' | 'info' {
-  switch (s) {
-    case 'good':     return 'success';
-    case 'defective': case 'missing': return 'danger';
-    case 'damaged':  return 'warning';
-    default:         return 'info';
-  }
+const QUALITY_VARIANTS: Record<string, BadgeVariant> = {
+  good: 'success',
+  defective: 'danger',
+  missing: 'danger',
+  damaged: 'warning',
+};
+
+function getQualityVariant(s?: string): BadgeVariant {
+  return QUALITY_VARIANTS[s || ''] ?? 'info';
 }
 
 function GoodsReceivingDetailScreenInner() {
   const { id: paramId } = useLocalSearchParams();
   const router = useRouter();
   const id = Number(paramId);
-  const { user } = useAuth();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const insets = useSafeAreaInsets();
 
-  const [grn, setGrn] = useState<GoodsReceivedNote | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [markingDelivered, setMarkingDelivered] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
@@ -66,23 +67,10 @@ function GoodsReceivingDetailScreenInner() {
   const canUpdate = hasPermission('goods_receiving', 'update');
   const canCancel = hasPermission('goods_receiving', 'cancel');
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      setGrn(await goodsReceivingApi.getById(id));
-    } catch (e: any) {
-      toast(e.message || 'Failed to load', 'error');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [id]);
-  // Stale-detail fix: refetch when the screen regains focus (a child
-  // flow - create QR/PO/GRN/invoice, approve, edit - can change this
-  // document's state while this screen stays mounted underneath).
-  useRefetchOnFocus(load);
+  const { data: grn, loading, refreshing, reload, onRefresh } = useDetailFetch(
+    (grnId: number) => goodsReceivingApi.getById(grnId), id, 'Failed to load'
+  );
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   const handleMarkDelivered = async () => {
     if (!await confirm('Mark supplier invoice as delivered?')) return;
@@ -90,7 +78,7 @@ function GoodsReceivingDetailScreenInner() {
       setMarkingDelivered(true);
       await goodsReceivingApi.markInvoiceDelivered(id);
       toast('Invoice marked as delivered', 'success');
-      load();
+      reload();
     } catch (e: any) {
       toast(e.message || 'Failed to mark delivered', 'error');
     } finally {
@@ -104,7 +92,7 @@ function GoodsReceivingDetailScreenInner() {
       setCancelling(true);
       await goodsReceivingApi.cancel(id);
       toast('GRN cancelled', 'info');
-      load();
+      reload();
     } catch (e: any) {
       toast(e.message || 'Failed to cancel', 'error');
     } finally {
@@ -121,9 +109,7 @@ function GoodsReceivingDetailScreenInner() {
   if (loading && !grn) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Goods Receiving" showBack />
-      <View style={S.center}>
-        <AppEmptyState variant="loading" title="Loading GRN..." />
-      </View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
@@ -131,7 +117,13 @@ function GoodsReceivingDetailScreenInner() {
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Goods Receiving" showBack />
       <View style={S.center}>
-        <AppEmptyState variant="empty" title="GRN not found" />
+        <AppEmptyState
+          variant="error"
+          title="Failed to load"
+          message="Could not load the goods receiving note."
+          actionLabel="Try Again"
+          onAction={reload}
+        />
       </View>
     </SafeAreaView>
   );
@@ -159,14 +151,7 @@ function GoodsReceivingDetailScreenInner() {
 
       <ScrollView
         contentContainerStyle={[S.content, showBottomBar && { paddingBottom: 32 }]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={C.primary}
-            colors={[C.primary]}
-          />
-        }
+        refreshControl={pullToRefresh}
         showsVerticalScrollIndicator={false}
       >
         {/* GRN Information */}
@@ -214,7 +199,7 @@ function GoodsReceivingDetailScreenInner() {
           <AppCard style={S.card}>
             <Text style={S.sectionTitle}>Received Items ({grn.items.length})</Text>
             {grn.items.map((item, i) => {
-              const name = typeof item.product === 'object' ? (item.product as any)?.name : 'N/A';
+              const name = typeof item.product === 'object' ? (item.product as any)?.name : (item as any).product_name || 'N/A';
               const isLast = i === grn.items.length - 1;
               return (
                 <View
@@ -319,15 +304,7 @@ function GoodsReceivingDetailScreenInner() {
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content:   { padding: 16, paddingBottom: 24 },
-    card:      { marginBottom: 12 },
-
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    ...baseDetailStyles(C),
 
     linkRow: {
       flexDirection: 'row', justifyContent: 'space-between',

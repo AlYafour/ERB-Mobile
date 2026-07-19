@@ -1,29 +1,30 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { quotationRequestsApi } from '@/lib/api/quotation-requests';
-import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard, AppCardRow } from '@/components/ui/AppCard';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppSkeletonList } from '@/components/ui/AppSkeleton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { QuotationRequest } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
-import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { useDetailFetch } from '@/lib/hooks/use-detail-fetch';
+import { usePullToRefresh } from '@/lib/hooks/use-pull-to-refresh';
+import { baseDetailStyles } from '@/lib/utils/detail-styles';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 
-function getStatusVariant(s?: string): 'success' | 'danger' | 'warning' | 'info' | 'default' {
-  switch (s) {
-    case 'completed': return 'success';
-    case 'cancelled': return 'danger';
-    case 'pending':   return 'warning';
-    default:          return 'default';
-  }
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  completed: 'success',
+  cancelled: 'danger',
+  pending: 'warning',
+};
+
+function getStatusVariant(s?: string): BadgeVariant {
+  return STATUS_VARIANTS[s || ''] ?? 'default';
 }
 
 function QuotationRequestDetailScreenInner() {
@@ -34,33 +35,30 @@ function QuotationRequestDetailScreenInner() {
   const C = Colors[cs];
   const S = makeStyles(C);
 
-  const [request, setRequest] = useState<QuotationRequest | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = async () => {
-    try { setLoading(true); setRequest(await quotationRequestsApi.getById(id)); }
-    catch (e: any) { toast(e.message || 'Failed to load', 'error'); }
-    finally { setLoading(false); setRefreshing(false); }
-  };
-
-  useEffect(() => { load(); }, [id]);
-  // Stale-detail fix: refetch when the screen regains focus (a child
-  // flow - create QR/PO/GRN/invoice, approve, edit - can change this
-  // document's state while this screen stays mounted underneath).
-  useRefetchOnFocus(load);
+  const { data: request, loading, refreshing, reload, onRefresh } = useDetailFetch(
+    (reqId: number) => quotationRequestsApi.getById(reqId), id, 'Failed to load'
+  );
+  const pullToRefresh = usePullToRefresh(refreshing, onRefresh);
 
   if (loading && !request) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Quotation Request" showBack />
-      <View style={S.center}><AppEmptyState variant="loading" title="Loading request..." /></View>
+      <AppSkeletonList count={3} lines={4} />
     </SafeAreaView>
   );
 
   if (!request) return (
     <SafeAreaView style={S.container} edges={['top', 'bottom']}>
       <AppHeader title="Quotation Request" showBack />
-      <View style={S.center}><AppEmptyState variant="empty" title="Request not found" /></View>
+      <View style={S.center}>
+        <AppEmptyState
+          variant="error"
+          title="Failed to load"
+          message="Could not load the quotation request."
+          actionLabel="Try Again"
+          onAction={reload}
+        />
+      </View>
     </SafeAreaView>
   );
 
@@ -87,11 +85,7 @@ function QuotationRequestDetailScreenInner() {
       />
       <ScrollView
         contentContainerStyle={S.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={C.primary} colors={[C.primary]} />
-        }
+        refreshControl={pullToRefresh}
         showsVerticalScrollIndicator={false}
       >
         {/* Request Info */}
@@ -171,11 +165,7 @@ function QuotationRequestDetailScreenInner() {
 
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
-    container:    { flex: 1, backgroundColor: C.background },
-    center:       { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content:      { padding: 16, paddingBottom: 24 },
-    card:         { marginBottom: 12 },
-    sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 14, letterSpacing: -0.2 },
+    ...baseDetailStyles(C),
 
     linkRow: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

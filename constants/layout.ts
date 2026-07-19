@@ -1,8 +1,8 @@
-import { Spacing } from './spacing';
+import { Spacing, CARD_PADDING } from './spacing';
 
 export const Layout = {
   screenPadding:     Spacing.lg,    // 16
-  cardPadding:       18,
+  cardPadding:       CARD_PADDING, // 18 — single source: constants/spacing.ts
   cardMarginBottom:  Spacing.md,    // 12
   cardGap:           Spacing.md,    // 12
   sectionMarginTop:  Spacing.xl,    // 20

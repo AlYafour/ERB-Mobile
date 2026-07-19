@@ -6,11 +6,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { Colors, CARD_SHADOW } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { dashboardApi, DashboardStats, RecentActivity, ProcurementCycleMetrics } from '@/lib/api/dashboard';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 
 const { width: SW } = Dimensions.get('window');
 const HPAD = 16;
@@ -141,6 +142,8 @@ function DashboardScreenInner() {
     load();
     return () => { mounted.current = false; };
   }, [load]);
+  // Refresh KPIs/activity/cycle metrics whenever this screen regains focus.
+  useRefetchOnFocus(load);
 
   const onRefresh = () => { setRefreshing(true); load(); };
 
@@ -264,14 +267,6 @@ function DashboardScreenInner() {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-const CARD_SHADOW = {
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.05,
-  shadowRadius: 4,
-  elevation: 1,
-} as const;
-
 const kpi = StyleSheet.create({
   card: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, marginBottom: 10, ...CARD_SHADOW },
   iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },

@@ -17,7 +17,6 @@ export function Logo({ size = 120, style, logoUrl }: LogoProps) {
         />
       ) : (
         <Image
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
           source={require('@/assets/images/icon.png')}
           style={{ width: size, height: size, resizeMode: 'contain' }}
         />

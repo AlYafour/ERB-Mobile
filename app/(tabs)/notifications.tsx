@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, StyleSheet, FlatList, RefreshControl,
+  View, StyleSheet, RefreshControl,
   TouchableOpacity, Text, AppState,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { notificationsApi } from '@/lib/api/notifications';
@@ -184,30 +185,30 @@ export default function NotificationsScreen() {
       style={[
         styles.item,
         {
-          backgroundColor: item.is_read ? colors.card : colors.tintSubtle,
-          borderColor: item.is_read ? colors.border : colors.tint + '30',
+          backgroundColor: item.is_read ? colors.surface : colors.primarySoft,
+          borderColor: item.is_read ? colors.border : colors.primary + '30',
         },
       ]}
     >
       <View style={styles.itemLeft}>
-        <View style={[styles.iconWrap, { backgroundColor: item.is_read ? colors.backgroundSecondary : colors.tintSubtle }]}>
+        <View style={[styles.iconWrap, { backgroundColor: item.is_read ? colors.surfaceMuted : colors.primarySoft }]}>
           <IconSymbol
             name={item.is_read ? 'bell' : 'bell.fill'}
             size={18}
-            color={item.is_read ? colors.textMuted : colors.tint}
+            color={item.is_read ? colors.textMuted : colors.primary}
           />
         </View>
       </View>
       <View style={styles.itemBody}>
         <View style={styles.itemHeader}>
           <Text
-            style={[styles.itemTitle, { color: colors.text, fontWeight: item.is_read ? '400' : '600' }]}
+            style={[styles.itemTitle, { color: colors.textPrimary, fontWeight: item.is_read ? '400' : '600' }]}
             numberOfLines={1}
           >
             {item.title}
           </Text>
           {!item.is_read && (
-            <View style={[styles.unreadDot, { backgroundColor: colors.tint }]} />
+            <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
           )}
         </View>
         <Text style={[styles.itemMessage, { color: colors.textSecondary }]} numberOfLines={2}>
@@ -237,7 +238,7 @@ export default function NotificationsScreen() {
               style={[styles.markAllBtn, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}
               activeOpacity={0.7}
             >
-              <Text style={[styles.markAllText, { color: colors.tint }]}>
+              <Text style={[styles.markAllText, { color: colors.primary }]}>
                 {markingAll ? 'Marking…' : 'Mark all read'}
               </Text>
             </TouchableOpacity>
@@ -256,7 +257,7 @@ export default function NotificationsScreen() {
           onAction={() => loadNotifications(false)}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={notifications}
           renderItem={renderItem}
           keyExtractor={(item, idx) => String(item.id ?? item.created_at ?? idx)}
@@ -268,8 +269,8 @@ export default function NotificationsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.tint}
-              colors={[colors.tint]}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
             />
           }
           ListEmptyComponent={

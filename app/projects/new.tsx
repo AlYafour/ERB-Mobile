@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { View, Text, Switch, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { projectsApi } from '@/lib/api/projects';
 import { toast } from '@/lib/hooks/use-toast';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppCard } from '@/components/ui/AppCard';
-import { AppButton } from '@/components/ui/AppButton';
+import { AppSectionHeader } from '@/components/ui/AppScreen';
+import { FormBottomBar } from '@/components/ui/FormBottomBar';
 import { Input } from '@/components/ui/Input';
 import SearchableDropdown from '@/components/ui/SearchableDropdown';
+import DatePickerInput from '@/components/ui/DatePickerInput';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
@@ -24,7 +26,6 @@ const STATUS_OPTIONS = [
 
 function NewProjectScreenInner() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
   const S = makeStyles(C);
@@ -80,8 +81,8 @@ function NewProjectScreenInner() {
       <ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Basic Information */}
+        <AppSectionHeader title="Basic Information" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Basic Information</Text>
           <Input label="Project Code *" value={form.code} onChangeText={set('code')}
             placeholder="Enter project code" error={errors.code} />
           <Input label="Project Name *" value={form.name} onChangeText={set('name')}
@@ -98,8 +99,8 @@ function NewProjectScreenInner() {
         </AppCard>
 
         {/* Contact */}
+        <AppSectionHeader title="Contact Information" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Contact Information</Text>
           <Input label="Contact Person" value={form.contact_person} onChangeText={set('contact_person')}
             placeholder="Enter contact person" />
           <Input label="Mobile Number" value={form.mobile_number} onChangeText={set('mobile_number')}
@@ -107,17 +108,18 @@ function NewProjectScreenInner() {
         </AppCard>
 
         {/* Dates */}
+        <AppSectionHeader title="Project Dates" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Project Dates</Text>
-          <Input label="Start Date" value={form.start_date} onChangeText={set('start_date')}
-            placeholder="YYYY-MM-DD" />
-          <Input label="End Date" value={form.end_date} onChangeText={set('end_date')}
-            placeholder="YYYY-MM-DD" />
+          <DatePickerInput label="Start Date" value={form.start_date} onChange={set('start_date')}
+            placeholder="Select date" />
+          <DatePickerInput label="End Date" value={form.end_date} onChange={set('end_date')}
+            placeholder="Select date"
+            minimumDate={form.start_date ? new Date(form.start_date) : undefined} />
         </AppCard>
 
         {/* Status */}
+        <AppSectionHeader title="Status" style={S.sectionHeaderOverride} />
         <AppCard style={S.card}>
-          <Text style={S.sectionTitle}>Status</Text>
           <SearchableDropdown label="Project Status" options={STATUS_OPTIONS}
             value={form.project_status}
             onChange={(v) => set('project_status')(v as string)}
@@ -133,12 +135,13 @@ function NewProjectScreenInner() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      <View style={[S.bottomBar, { borderTopColor: C.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AppButton title="Cancel" variant="outline" size="md" onPress={() => router.back()}
-          disabled={saving} style={S.barBtn} />
-        <AppButton title="Create Project" variant="primary" size="md" onPress={handleSubmit}
-          loading={saving} disabled={saving} style={S.barBtn} />
-      </View>
+      <FormBottomBar
+        onCancel={() => router.back()}
+        cancelDisabled={saving}
+        submitLabel="Create Project"
+        onSubmit={handleSubmit}
+        loading={saving}
+      />
     </SafeAreaView>
   );
 }
@@ -148,20 +151,12 @@ function makeStyles(C: AppColors) {
     container: { flex: 1, backgroundColor: C.background },
     content:   { padding: 16, paddingBottom: 8 },
     card:      { marginBottom: 12 },
-    sectionTitle: {
-      fontSize: 15, fontWeight: '700', color: C.textPrimary,
-      marginBottom: 14, letterSpacing: -0.2,
-    },
+    sectionHeaderOverride: { paddingHorizontal: 4 },
     switchRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingVertical: 10, marginTop: 4,
     },
     switchLabel: { fontSize: 14, fontWeight: '500' },
-    bottomBar: {
-      flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
-      borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: C.surface,
-    },
-    barBtn: { flex: 1 },
   });
 }
 

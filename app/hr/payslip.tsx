@@ -1,19 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
+import { Colors, CARD_SHADOW } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { hrPayrollApi, HRPayroll } from '@/lib/api/hr';
-import { apiClient } from '@/lib/api';
-import { API_ENDPOINTS } from '@/constants/api';
+import { useMyEmployeeProfile } from '@/lib/hooks/use-employee-profile';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { formatMoney } from '@/lib/utils/format';
 
 type AppColors = typeof Colors.light | typeof Colors.dark;
 type BadgeVariant = 'success' | 'info' | 'default';
@@ -26,11 +27,13 @@ function getPayStatusVariant(status: string): BadgeVariant {
   }
 }
 
-const fmt = (v: string | number) =>
-  `AED ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmt = (v: string | number) => formatMoney(v);
+
+// FlashList ignores `gap` in contentContainerStyle — spacing via separator.
+const ListGap = () => <View style={{ height: 12 }} />;
 
 export default function PayslipScreen() {
-  const { user } = useAuth();
+  const { employeeId, loading: profileLoading } = useMyEmployeeProfile();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
@@ -38,28 +41,40 @@ export default function PayslipScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [payrolls, setPayrolls] = useState<HRPayroll[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!user) { setLoading(false); setRefreshing(false); return; }
+  // Employee-record resolution now lives in useMyEmployeeProfile — this
+  // loader only fetches the payroll page(s) once that employee id is known.
+  const loadData = useCallback(async (pg = 1, append = false) => {
+    if (!employeeId) { setLoading(false); setRefreshing(false); return; }
     try {
-      const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
-      const employees: any[] = Array.isArray(empRes.data) ? empRes.data : (empRes.data?.results ?? []);
-      const me = employees.find(
-        (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
-      );
-      if (!me) { setLoading(false); setRefreshing(false); return; }
-      const res = await hrPayrollApi.getAll({ employee: me.id });
-      setPayrolls(res.results ?? []);
+      if (!append) setLoading(true);
+      else setLoadingMore(true);
+
+      const res = await hrPayrollApi.getAll({ employee: employeeId, page: pg });
+      const newPayrolls = res.results ?? [];
+      setPayrolls(prev => append ? [...prev, ...newPayrolls] : newPayrolls);
+      setHasMore(!!res.next);
+      setPage(pg);
     } catch {
       // silent
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
-  }, [user]);
+  }, [employeeId]);
 
-  useEffect(() => { loadData(); }, [loadData]);
-  const handleRefresh = () => { setRefreshing(true); loadData(); };
+  useEffect(() => {
+    if (profileLoading) return;
+    loadData(1);
+  }, [profileLoading, loadData]);
+  // Refresh the list whenever this screen regains focus.
+  useRefetchOnFocus(loadData);
+  const handleRefresh = () => { setRefreshing(true); loadData(1); };
+  const handleLoadMore = () => { if (hasMore && !loadingMore) loadData(page + 1, true); };
 
   const S = makeStyles(C);
 
@@ -177,7 +192,7 @@ export default function PayslipScreen() {
     <SafeAreaView style={[S.root, { backgroundColor: C.background }]} edges={['top']}>
       <AppHeader title="Payslips" showBack />
 
-      {loading ? (
+      {profileLoading || loading ? (
         <AppEmptyState variant="loading" title="Loading payslips…" />
       ) : payrolls.length === 0 ? (
         <AppEmptyState
@@ -187,11 +202,12 @@ export default function PayslipScreen() {
           message="Your monthly payslips will appear here once processed."
         />
       ) : (
-        <FlatList
+        <FlashList
           data={payrolls}
           renderItem={renderItem}
           keyExtractor={item => String(item.id)}
           contentContainerStyle={S.list}
+          ItemSeparatorComponent={ListGap}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -199,6 +215,13 @@ export default function PayslipScreen() {
               tintColor={C.primary}
               colors={[C.primary]}
             />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore
+              ? <View style={{ paddingVertical: 20 }}><AppEmptyState variant="loading" title="" /></View>
+              : null
           }
         />
       )}
@@ -209,14 +232,14 @@ export default function PayslipScreen() {
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
     root: { flex: 1 },
-    list: { padding: 16, gap: 12, paddingBottom: 32 },
+    // gap intentionally absent — FlashList spacing comes from ListGap separator
+    list: { padding: 16, paddingBottom: 32 },
 
     card: {
       backgroundColor: C.surface,
       borderRadius: 18, borderWidth: 1,
       overflow: 'hidden',
-      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+      ...CARD_SHADOW,
     },
     paidBar: { height: 3 },
     cardTop: {

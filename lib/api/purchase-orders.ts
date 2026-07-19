@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { PurchaseOrder, PurchaseOrderItem, PaginatedResponse } from '@/types';
 
 export const purchaseOrdersApi = {
@@ -26,30 +27,16 @@ export const purchaseOrdersApi = {
     delivery_date_before?: string;
     created_at_after?: string;
     created_at_before?: string;
-  }): Promise<PaginatedResponse<PurchaseOrder>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<PurchaseOrder>> => {
+    const queryString = buildQueryString(params || {});
     const endpoint = `${API_ENDPOINTS.PURCHASE_ORDERS}${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<PurchaseOrder>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch purchase orders');
-    }
-    return response.data;
+    const response = await apiClient.get<PaginatedResponse<PurchaseOrder>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch purchase orders');
   },
 
   getById: async (id: number | string): Promise<PurchaseOrder> => {
     const response = await apiClient.get<PurchaseOrder>(API_ENDPOINTS.PURCHASE_ORDER_DETAIL(String(id)));
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch purchase order');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch purchase order');
   },
 
   create: async (data: {
@@ -67,18 +54,12 @@ export const purchaseOrdersApi = {
     items: Omit<PurchaseOrderItem, 'product' | 'total' | 'created_at'>[];
   }): Promise<PurchaseOrder> => {
     const response = await apiClient.post<PurchaseOrder>(API_ENDPOINTS.PURCHASE_ORDERS, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create purchase order');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to create purchase order');
   },
 
   update: async (id: number | string, data: Partial<PurchaseOrder>): Promise<PurchaseOrder> => {
     const response = await apiClient.patch<PurchaseOrder>(API_ENDPOINTS.PURCHASE_ORDER_DETAIL(String(id)), data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update purchase order');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to update purchase order');
   },
 
   delete: async (id: number | string): Promise<void> => {
@@ -90,18 +71,12 @@ export const purchaseOrdersApi = {
 
   approve: async (id: number | string): Promise<PurchaseOrder> => {
     const response = await apiClient.post<PurchaseOrder>(`${API_ENDPOINTS.PURCHASE_ORDER_DETAIL(String(id))}approve/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to approve purchase order');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to approve purchase order');
   },
 
   reject: async (id: number | string, rejection_reason: string): Promise<PurchaseOrder> => {
     const response = await apiClient.post<PurchaseOrder>(`${API_ENDPOINTS.PURCHASE_ORDER_DETAIL(String(id))}reject/`, { rejection_reason });
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to reject purchase order');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to reject purchase order');
   },
 
   cancel: async (id: number | string, reason?: string): Promise<PurchaseOrder> => {
@@ -109,18 +84,11 @@ export const purchaseOrdersApi = {
       `${API_ENDPOINTS.PURCHASE_ORDER_DETAIL(String(id))}cancel/`,
       reason ? { reason } : undefined,
     );
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to cancel purchase order');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to cancel purchase order');
   },
 
   reopen: async (id: number | string): Promise<PurchaseOrder> => {
     const response = await apiClient.post<PurchaseOrder>(`${API_ENDPOINTS.PURCHASE_ORDER_DETAIL(String(id))}reopen/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to reopen purchase order');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to reopen purchase order');
   },
 };
-

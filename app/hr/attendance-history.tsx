@@ -1,21 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, RefreshControl,
+  View, Text, StyleSheet, RefreshControl,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/ui/AppHeader';
-import { AppBadge } from '@/components/ui/AppBadge';
+import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
+import { Colors, CARD_SHADOW } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { hrAttendanceApi, HRAttendance } from '@/lib/api/hr';
-import { apiClient } from '@/lib/api';
-import { API_ENDPOINTS } from '@/constants/api';
+import { useMyEmployeeProfile } from '@/lib/hooks/use-employee-profile';
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 
-type BadgeVariant = 'success' | 'danger' | 'warning' | 'info' | 'default';
 type AppColors = typeof Colors.light | typeof Colors.dark;
+
+// FlashList ignores `gap` in contentContainerStyle — spacing via separator.
+const ListGap = () => <View style={{ height: 10 }} />;
 
 function getStatusVariant(status: string): BadgeVariant {
   switch (status) {
@@ -38,7 +40,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function AttendanceHistoryScreen() {
-  const { user } = useAuth();
+  const { employeeId, loading: profileLoading } = useMyEmployeeProfile();
   const cs = useColorScheme() ?? 'light';
   const C = Colors[cs];
 
@@ -50,20 +52,15 @@ export default function AttendanceHistoryScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [stats, setStats] = useState({ present: 0, absent: 0, late: 0, total: 0 });
 
+  // Employee-record resolution now lives in useMyEmployeeProfile — this
+  // loader only fetches the attendance page(s) once that employee id is known.
   const loadData = useCallback(async (pg = 1, append = false) => {
-    if (!user) { setLoading(false); setRefreshing(false); return; }
+    if (!employeeId) { setLoading(false); setRefreshing(false); return; }
     try {
       if (!append) setLoading(true);
       else setLoadingMore(true);
 
-      const empRes = await apiClient.get<any>(API_ENDPOINTS.HR_EMPLOYEES);
-      const employees: any[] = Array.isArray(empRes.data) ? empRes.data : (empRes.data?.results ?? []);
-      const me = employees.find(
-        (e: any) => e.user?.id === Number(user?.id) || String(e.user?.id) === String(user?.id)
-      );
-      if (!me) { setLoading(false); setRefreshing(false); return; }
-
-      const res = await hrAttendanceApi.getAll({ employee: me.id, page: pg });
+      const res = await hrAttendanceApi.getAll({ employee: employeeId, page: pg });
       const newRecords = res.results ?? [];
       setRecords(prev => append ? [...prev, ...newRecords] : newRecords);
       setHasMore(!!res.next);
@@ -84,9 +81,14 @@ export default function AttendanceHistoryScreen() {
       setRefreshing(false);
       setLoadingMore(false);
     }
-  }, [user]);
+  }, [employeeId]);
 
-  useEffect(() => { loadData(1); }, [loadData]);
+  useEffect(() => {
+    if (profileLoading) return;
+    loadData(1);
+  }, [profileLoading, loadData]);
+  // Refresh the list whenever this screen regains focus.
+  useRefetchOnFocus(loadData);
   const handleRefresh = () => { setRefreshing(true); loadData(1); };
   const handleLoadMore = () => { if (hasMore && !loadingMore) loadData(page + 1, true); };
 
@@ -174,7 +176,7 @@ export default function AttendanceHistoryScreen() {
       <AppHeader title="Attendance History" showBack />
 
       {/* Summary bar */}
-      {!loading && records.length > 0 && (
+      {!(profileLoading || loading) && records.length > 0 && (
         <View style={[S.summaryBar, { borderBottomColor: C.border }]}>
           {[
             { label: 'Days',    value: stats.total,   color: C.textPrimary, bg: C.surfaceSoft },
@@ -190,7 +192,7 @@ export default function AttendanceHistoryScreen() {
         </View>
       )}
 
-      {loading ? (
+      {profileLoading || loading ? (
         <AppEmptyState variant="loading" title="Loading attendance…" />
       ) : records.length === 0 ? (
         <AppEmptyState
@@ -200,11 +202,12 @@ export default function AttendanceHistoryScreen() {
           message="No records found for your employee profile."
         />
       ) : (
-        <FlatList
+        <FlashList
           data={records}
           renderItem={renderItem}
           keyExtractor={item => String(item.id)}
           contentContainerStyle={S.list}
+          ItemSeparatorComponent={ListGap}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -229,7 +232,8 @@ export default function AttendanceHistoryScreen() {
 function makeStyles(C: AppColors) {
   return StyleSheet.create({
     root: { flex: 1 },
-    list: { padding: 16, gap: 10, paddingBottom: 32 },
+    // gap intentionally absent — FlashList spacing comes from ListGap separator
+    list: { padding: 16, paddingBottom: 32 },
 
     summaryBar: {
       flexDirection: 'row', gap: 8,
@@ -251,8 +255,7 @@ function makeStyles(C: AppColors) {
       borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
       borderColor: C.border,
       flexDirection: 'row', overflow: 'hidden',
-      shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+      ...CARD_SHADOW,
     },
     dateCol: {
       width: 64, alignItems: 'center', justifyContent: 'center',

@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { Product, PaginatedResponse } from '@/types';
 
 export const productsApi = {
@@ -28,46 +29,26 @@ export const productsApi = {
     track_stock?: boolean;
     created_at_after?: string;
     created_at_before?: string;
-  }): Promise<PaginatedResponse<Product>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<Product>> => {
+    const queryString = buildQueryString(params || {});
     const endpoint = `${API_ENDPOINTS.PRODUCTS}${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<Product>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch products');
-    }
-    return response.data;
+    const response = await apiClient.get<PaginatedResponse<Product>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch products');
   },
 
   getById: async (id: number | string): Promise<Product> => {
     const response = await apiClient.get<Product>(API_ENDPOINTS.PRODUCT_DETAIL(String(id)));
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch product');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch product');
   },
 
   create: async (data: Partial<Product>): Promise<Product> => {
     const response = await apiClient.post<Product>(API_ENDPOINTS.PRODUCTS, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create product');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to create product');
   },
 
   update: async (id: number | string, data: Partial<Product>): Promise<Product> => {
     const response = await apiClient.patch<Product>(API_ENDPOINTS.PRODUCT_DETAIL(String(id)), data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update product');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to update product');
   },
 
   delete: async (id: number | string): Promise<void> => {
@@ -77,4 +58,3 @@ export const productsApi = {
     }
   },
 };
-

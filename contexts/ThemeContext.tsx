@@ -31,7 +31,6 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
   const [colorScheme, _setColorScheme] = useState<ColorScheme>('light');
   const [notificationsEnabled, _setNotifs] = useState(true);
   const [soundEnabled, _setSound] = useState(true);
-  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     AsyncStorage.multiGet([KEYS.theme, KEYS.notifs, KEYS.sound])
@@ -42,8 +41,7 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
         if (map[KEYS.notifs] === 'false') _setNotifs(false);
         if (map[KEYS.sound] === 'false') _setSound(false);
       })
-      .catch(() => {})
-      .finally(() => setHydrated(true));
+      .catch(() => {});
   }, []);
 
   const setColorScheme = (cs: ColorScheme) => {
@@ -61,9 +59,10 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(KEYS.sound, String(v)).catch(() => {});
   };
 
-  // Avoid flash of wrong theme before AsyncStorage hydration
-  if (!hydrated) return null;
-
+  // Renders immediately with the 'light' default above — gating children on
+  // AsyncStorage hydration used to blank the entire app tree (including
+  // AuthProvider) with no splash/spinner fallback. The colorScheme value
+  // simply updates in place once hydration resolves.
   return (
     <ThemeContext.Provider value={{
       colorScheme,

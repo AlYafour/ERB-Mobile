@@ -1,5 +1,6 @@
-import { apiClient } from '../api';
+import { apiClient, unwrap } from '../api';
 import { API_ENDPOINTS } from '@/constants/api';
+import { buildQueryString } from '@/lib/utils/format';
 import { PaginatedResponse, Product, PurchaseOrder } from '@/types';
 
 export interface GRNItem {
@@ -46,30 +47,16 @@ export const goodsReceivingApi = {
     status?: string;
     receipt_date_after?: string;
     receipt_date_before?: string;
-  }): Promise<PaginatedResponse<GoodsReceivedNote>> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<GoodsReceivedNote>> => {
+    const queryString = buildQueryString(params || {});
     const endpoint = `${API_ENDPOINTS.GOODS_RECEIVING}${queryString ? `?${queryString}` : ''}`;
-    const response = await apiClient.get<PaginatedResponse<GoodsReceivedNote>>(endpoint);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch goods receiving notes');
-    }
-    return response.data;
+    const response = await apiClient.get<PaginatedResponse<GoodsReceivedNote>>(endpoint, options);
+    return unwrap(response, 'Failed to fetch goods receiving notes');
   },
 
   getById: async (id: number | string): Promise<GoodsReceivedNote> => {
     const response = await apiClient.get<GoodsReceivedNote>(API_ENDPOINTS.GOODS_RECEIVING_DETAIL(String(id)));
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to fetch goods receiving note');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to fetch goods receiving note');
   },
 
   create: async (data: {
@@ -84,18 +71,12 @@ export const goodsReceivingApi = {
   }): Promise<GoodsReceivedNote> => {
     // For mobile, we'll send as JSON (images will be handled separately if needed)
     const response = await apiClient.post<GoodsReceivedNote>(API_ENDPOINTS.GOODS_RECEIVING, data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to create goods receiving note');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to create goods receiving note');
   },
 
   update: async (id: number | string, data: Partial<GoodsReceivedNote>): Promise<GoodsReceivedNote> => {
     const response = await apiClient.patch<GoodsReceivedNote>(API_ENDPOINTS.GOODS_RECEIVING_DETAIL(String(id)), data);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to update goods receiving note');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to update goods receiving note');
   },
 
   delete: async (id: number | string): Promise<void> => {
@@ -107,18 +88,11 @@ export const goodsReceivingApi = {
 
   markInvoiceDelivered: async (id: number | string): Promise<GoodsReceivedNote> => {
     const response = await apiClient.post<GoodsReceivedNote>(`${API_ENDPOINTS.GOODS_RECEIVING_DETAIL(String(id))}mark_invoice_delivered/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to mark invoice as delivered');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to mark invoice as delivered');
   },
 
   cancel: async (id: number | string): Promise<GoodsReceivedNote> => {
     const response = await apiClient.post<GoodsReceivedNote>(`${API_ENDPOINTS.GOODS_RECEIVING_DETAIL(String(id))}cancel/`);
-    if (response.error || !response.data) {
-      throw new Error(response.error || 'Failed to cancel goods receiving note');
-    }
-    return response.data;
+    return unwrap(response, 'Failed to cancel goods receiving note');
   },
 };
-

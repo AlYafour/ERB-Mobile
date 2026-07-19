@@ -112,15 +112,18 @@ export default function SettingsScreen() {
   const [bioAvailable, setBioAvailable] = useState(false);
 
   useEffect(() => {
+    let live = true;
     (async () => {
       const [enabled, caps] = await Promise.all([
         isAppLockEnabled(),
         getBiometricCapabilities(),
       ]);
+      if (!live) return;
       setAppLock(enabled);
       setBioLabel(caps.label);
       setBioAvailable(caps.hasHardware && caps.enrolled);
     })();
+    return () => { live = false; };
   }, []);
 
   const handleAppLock = async (v: boolean) => {
@@ -160,11 +163,12 @@ export default function SettingsScreen() {
   const [bioLogin, setBioLogin] = useState(false);
   const [bioLoginDialog, setBioLoginDialog] = useState(false);
   const [bioLoginPassword, setBioLoginPassword] = useState('');
-  const [bioLoginShowPassword, setBioLoginShowPassword] = useState(false);
   const [bioLoginBusy, setBioLoginBusy] = useState(false);
 
   useEffect(() => {
-    isBiometricLoginEnabled().then(setBioLogin);
+    let live = true;
+    isBiometricLoginEnabled().then(enabled => { if (live) setBioLogin(enabled); });
+    return () => { live = false; };
   }, []);
 
   const handleBioLoginToggle = async (v: boolean) => {
@@ -191,11 +195,15 @@ export default function SettingsScreen() {
 
   const confirmBioLoginSetup = async () => {
     if (!bioLoginPassword) return;
+    if (!user?.username) {
+      Alert.alert('Error', 'Your username is not available right now. Please try again.');
+      return;
+    }
     setBioLoginBusy(true);
     try {
       const result = await authenticateBiometric(`Enable ${bioLabel} Sign-In`);
       if (result === 'success') {
-        await enableBiometricLogin(user?.username ?? '', bioLoginPassword);
+        await enableBiometricLogin(user.username, bioLoginPassword);
         setBioLogin(true);
         setBioLoginDialog(false);
         setBioLoginPassword('');
@@ -372,20 +380,11 @@ export default function SettingsScreen() {
           value={bioLoginPassword}
           onChangeText={setBioLoginPassword}
           placeholder="Enter your password"
-          secureTextEntry={!bioLoginShowPassword}
+          secureTextEntry
+          secureToggle
           autoCapitalize="none"
           autoFocus
           containerStyle={{ marginBottom: 4 }}
-          rightIcon={
-            <TouchableOpacity
-              onPress={() => setBioLoginShowPassword(v => !v)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel={bioLoginShowPassword ? 'Hide password' : 'Show password'}
-            >
-              <IconSymbol name={bioLoginShowPassword ? 'eye.slash.fill' : 'eye.fill'} size={19} color={c.textMuted} />
-            </TouchableOpacity>
-          }
         />
       </AppDialog>
     </SafeAreaView>
