@@ -34,6 +34,15 @@ export interface HRAttendance {
   notes: string;
 }
 
+export interface HRRequestAttachment {
+  id: string;
+  name: string;
+  size: number;
+  url: string;
+  uploaded_by_name: string | null;
+  created_at: string;
+}
+
 export interface HRRequest {
   id: number;
   employee: number;
@@ -48,6 +57,7 @@ export interface HRRequest {
   approved_at: string | null;
   rejected_at: string | null;
   reject_reason: string;
+  attachments: HRRequestAttachment[];
   created_at: string;
 }
 
@@ -147,6 +157,24 @@ export const hrRequestsApi = {
     const res = await apiClient.get<PaginatedResponse<HRLeaveBalance>>(API_ENDPOINTS.HR_LEAVE_BALANCES + `?${q}`);
     if (res.error || !res.data) return [];
     return res.data.results ?? [];
+  },
+
+  /** Attach a supporting document (e.g. a sick-leave medical certificate) to an HR request. */
+  uploadAttachment: async (
+    requestId: number,
+    file: { uri: string; type: string; name: string },
+  ): Promise<HRRequestAttachment> => {
+    const fd = new FormData();
+    fd.append('file', file as any);
+    const res = await apiClient.postForm<HRRequestAttachment>(
+      API_ENDPOINTS.HR_REQUEST_ATTACHMENTS(String(requestId)), fd,
+    );
+    return unwrap(res, 'Failed to upload attachment');
+  },
+
+  deleteAttachment: async (requestId: number, attachmentId: string): Promise<void> => {
+    const res = await apiClient.delete<void>(API_ENDPOINTS.HR_REQUEST_ATTACHMENT_DELETE(String(requestId), attachmentId));
+    if (res.error) throw new Error(res.error);
   },
 };
 

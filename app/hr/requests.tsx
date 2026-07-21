@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity, Image,
   RefreshControl, Modal, TextInput, ScrollView, Platform,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
 import { usePermissions } from '@/lib/hooks/use-permissions';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppButton } from '@/components/ui/AppButton';
@@ -22,6 +23,8 @@ import { hrRequestsApi, HRRequest, HRLeaveBalance } from '@/lib/api/hr';
 import { toast, confirm } from '@/lib/hooks/use-toast';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
 import { useMyEmployeeProfile } from '@/lib/hooks/use-employee-profile';
+
+type PendingAttachment = { uri: string; type: string; name: string };
 
 // Icons must exist in components/ui/icon-symbol.tsx MAPPING — unmapped names
 // silently render as an empty circle on Android.
@@ -94,6 +97,36 @@ export default function HRRequestsScreen() {
     days: '',
     reason: '',
   });
+
+  // Attachments picked in the New Request form, uploaded right after create()
+  // succeeds (the backend needs the request's id first — same two-step
+  // pattern as the Expenses module's receipt uploads).
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+
+  const pickAttachment = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { toast('Please allow photo library access to attach a document', 'error'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'] as any,
+      allowsMultipleSelection: true,
+      selectionLimit: 5,
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets.length) return;
+    setPendingAttachments(prev => [
+      ...prev,
+      ...result.assets.map((a, i) => ({
+        uri: a.uri,
+        type: a.mimeType || 'image/jpeg',
+        name: a.fileName || `attachment-${Date.now()}-${i}.jpg`,
+      })),
+    ]);
+  };
+
+  const removePendingAttachment = (uri: string) => {
+    setPendingAttachments(prev => prev.filter(a => a.uri !== uri));
+  };
 
   const handledTypeParam = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -187,7 +220,7 @@ export default function HRRequestsScreen() {
     if (!form.reason.trim()) { toast('Please enter a reason', 'error'); return; }
     setSubmitting(true);
     try {
-      await hrRequestsApi.create({
+      const created = await hrRequestsApi.create({
         employee: employeeId,
         request_type: form.request_type,
         start_date: form.start_date || undefined,
@@ -195,9 +228,27 @@ export default function HRRequestsScreen() {
         days: form.days ? Number(form.days) : undefined,
         reason: form.reason,
       });
+
+      // Upload sequentially — the backend needs the request's own id first,
+      // so this can only happen after create() resolves.
+      let failedUploads = 0;
+      for (const att of pendingAttachments) {
+        try {
+          await hrRequestsApi.uploadAttachment(created.id, att);
+        } catch {
+          failedUploads++;
+        }
+      }
+
       setShowForm(false);
       setForm({ request_type: 'annual_leave', start_date: '', end_date: '', days: '', reason: '' });
-      toast('Request submitted successfully', 'success');
+      setPendingAttachments([]);
+      toast(
+        failedUploads > 0
+          ? `Request submitted, but ${failedUploads} attachment${failedUploads > 1 ? 's' : ''} failed to upload`
+          : 'Request submitted successfully',
+        failedUploads > 0 ? 'warning' : 'success',
+      );
       loadData();
     } catch (e: any) {
       toast(e.message || 'Failed to submit request', 'error');
@@ -282,6 +333,18 @@ export default function HRRequestsScreen() {
 
         {item.reason ? (
           <Text style={[S.reqReason, { color: C.textSecondary }]} numberOfLines={2}>{item.reason}</Text>
+        ) : null}
+
+        {item.attachments?.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {item.attachments.map(att => (
+                <TouchableOpacity key={att.id} onPress={() => setViewerUri(att.url)} activeOpacity={0.85}>
+                  <Image source={{ uri: att.url }} style={S.attachmentThumbSmall} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
         ) : null}
 
         {item.reject_reason ? (
@@ -426,7 +489,7 @@ export default function HRRequestsScreen() {
         <SafeAreaView style={[S.modal, { backgroundColor: C.background }]}>
           <View style={[S.modalHeader, { borderBottomColor: C.border }]}>
             <Text style={[S.modalTitle, { color: C.textPrimary }]}>New Request</Text>
-            <TouchableOpacity onPress={() => setShowForm(false)} hitSlop={8}>
+            <TouchableOpacity onPress={() => { setShowForm(false); setPendingAttachments([]); }} hitSlop={8}>
               <IconSymbol name="xmark.circle.fill" size={26} color={C.textMuted} />
             </TouchableOpacity>
           </View>
@@ -551,6 +614,41 @@ export default function HRRequestsScreen() {
               onChangeText={v => setForm(f => ({ ...f, reason: v }))}
             />
 
+            {/* Attachments — e.g. a sick-leave medical certificate */}
+            <Text style={[S.formLabel, { color: C.textPrimary }]}>
+              Attachments{' '}
+              <Text style={[S.formLabelOptional, { color: C.textMuted }]}>(optional)</Text>
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {pendingAttachments.map(att => (
+                  <TouchableOpacity
+                    key={att.uri}
+                    style={S.attachmentThumbWrap}
+                    onPress={() => setViewerUri(att.uri)}
+                    activeOpacity={0.85}
+                  >
+                    <Image source={{ uri: att.uri }} style={S.attachmentThumb} />
+                    <TouchableOpacity
+                      style={[S.attachmentRemove, { backgroundColor: C.danger }]}
+                      onPress={() => removePendingAttachment(att.uri)}
+                      hitSlop={8}
+                    >
+                      <IconSymbol name="xmark" size={11} color="#FFF" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={[S.attachmentAdd, { borderColor: C.border, backgroundColor: C.surface }]}
+                  onPress={pickAttachment}
+                  activeOpacity={0.8}
+                >
+                  <IconSymbol name="paperclip" size={18} color={C.primary} />
+                  <Text style={[S.attachmentAddText, { color: C.primary }]}>Add</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
             <View style={{ height: 20 }} />
             <AppButton
               title="Submit Request"
@@ -575,6 +673,18 @@ export default function HRRequestsScreen() {
         title="Reject HR Request"
         message="Please provide a reason for rejecting this request."
       />
+
+      {/* Attachment viewer — shared by the picker preview and submitted-request thumbnails */}
+      <Modal visible={viewerUri !== null} animationType="fade" transparent onRequestClose={() => setViewerUri(null)}>
+        <View style={S.viewerBackdrop}>
+          <TouchableOpacity style={S.viewerClose} onPress={() => setViewerUri(null)} hitSlop={10}>
+            <IconSymbol name="xmark.circle.fill" size={32} color="#FFF" />
+          </TouchableOpacity>
+          {viewerUri ? (
+            <Image source={{ uri: viewerUri }} style={S.viewerImage} resizeMode="contain" />
+          ) : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -673,5 +783,27 @@ function makeStyles(C: AppColors) {
       borderRadius: 20, borderWidth: 1,
     },
     typeChipText: { fontSize: 12, fontWeight: '600' },
+
+    attachmentThumbSmall: { width: 56, height: 56, borderRadius: 8 },
+
+    attachmentThumbWrap: { position: 'relative' },
+    attachmentThumb: { width: 72, height: 72, borderRadius: 10 },
+    attachmentRemove: {
+      position: 'absolute', top: -6, right: -6,
+      width: 20, height: 20, borderRadius: 10,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    attachmentAdd: {
+      width: 72, height: 72, borderRadius: 10, borderWidth: 1, borderStyle: 'dashed',
+      alignItems: 'center', justifyContent: 'center', gap: 4,
+    },
+    attachmentAddText: { fontSize: 11, fontWeight: '600' },
+
+    viewerBackdrop: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.92)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    viewerImage: { width: '100%', height: '80%' },
+    viewerClose: { position: 'absolute', top: 50, right: 20, zIndex: 1 },
   });
 }

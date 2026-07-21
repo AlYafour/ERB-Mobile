@@ -100,6 +100,8 @@ export const API_ENDPOINTS = {
   HR_REQUEST_DETAIL: (id: string) => `/api/hr/requests/${id}/`,
   HR_REQUEST_APPROVE: (id: string) => `/api/hr/requests/${id}/approve/`,
   HR_REQUEST_REJECT: (id: string) => `/api/hr/requests/${id}/reject/`,
+  HR_REQUEST_ATTACHMENTS: (id: string) => `/api/hr/requests/${id}/attachments/`,
+  HR_REQUEST_ATTACHMENT_DELETE: (id: string, attId: string) => `/api/hr/requests/${id}/attachments/${attId}/`,
   HR_LEAVE_BALANCES: '/api/hr/requests/leave-balances/',
   HR_PAYROLL: '/api/hr/payroll/',
   HR_PAYROLL_DETAIL: (id: string) => `/api/hr/payroll/${id}/`,
