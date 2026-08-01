@@ -12,12 +12,14 @@ import { usePermissions } from '@/lib/hooks/use-permissions';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppBadge, BadgeVariant } from '@/components/ui/AppBadge';
+import { AppCard } from '@/components/ui/AppCard';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppFilterBar } from '@/components/ui/AppFilterBar';
 import { AppSkeletonList } from '@/components/ui/AppSkeleton';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { DocumentIconTile } from '@/components/ui/DocumentIconTile';
+import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import RejectionReasonDialog from '@/components/ui/RejectionReasonDialog';
-import { Colors, ModuleTints, CARD_SHADOW } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { hrRequestsApi, HRRequest, HRLeaveBalance } from '@/lib/api/hr';
 import { toast, confirm } from '@/lib/hooks/use-toast';
@@ -296,15 +298,16 @@ export default function HRRequestsScreen() {
   const renderItem = ({ item }: { item: HRRequest }) => {
     const typeDef = REQUEST_TYPES.find(t => t.value === item.request_type);
     const typeLabel = typeDef?.label || item.request_type;
-    const tint = ModuleTints[cs][typeDef?.tint ?? 'operations'];
     const isApprovable = item.status === 'pending' && (canApproveReq || canRejectReq);
 
     return (
-      <View style={S.reqCard}>
+      <AppCard style={S.reqCard}>
         <View style={S.reqHeader}>
-          <View style={[S.typeTile, { backgroundColor: tint.bg }]}>
-            <IconSymbol name={(typeDef?.icon ?? 'doc.text') as any} size={17} color={tint.fg} />
-          </View>
+          <DocumentIconTile
+            icon={(typeDef?.icon ?? 'doc.text') as IconSymbolName}
+            tint={typeDef?.tint ?? 'operations'}
+            size={38}
+          />
           <View style={{ flex: 1 }}>
             <Text style={[S.reqType, { color: C.textPrimary }]}>{typeLabel}</Text>
             {viewAll && item.employee_name ? (
@@ -389,7 +392,7 @@ export default function HRRequestsScreen() {
             )}
           </View>
         )}
-      </View>
+      </AppCard>
     );
   };
 
@@ -728,18 +731,9 @@ function makeStyles(C: AppColors) {
     chipText: { fontSize: 12, fontWeight: '600' },
 
     reqCard: {
-      backgroundColor: C.surface,
-      borderRadius: 16, padding: 16,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border,
       gap: 8,
-      ...CARD_SHADOW,
     },
     reqHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-    typeTile: {
-      width: 36, height: 36, borderRadius: 11,
-      alignItems: 'center', justifyContent: 'center',
-    },
     reqType: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2, flex: 1 },
     reqEmployee: { fontSize: 12, marginTop: 2 },
     dateRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },

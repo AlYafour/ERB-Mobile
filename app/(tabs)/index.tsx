@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/use-permissions';
@@ -17,6 +18,7 @@ import { notificationsApi } from '@/lib/api/notifications';
 import { Logo } from '@/components/ui/Logo';
 import { AppSkeleton } from '@/components/ui/AppSkeleton';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { shadeColor } from '@/lib/utils/format';
 
 const H_PAD = 20;
 
@@ -177,7 +179,12 @@ export default function HomeScreen() {
       >
         {/* ── Welcome card ── */}
         <Animated.View entering={FadeIn.duration(320)} style={s.welcomeOuter}>
-          <View style={[s.welcomeCard, { backgroundColor: brandPrimary }]}>
+          <LinearGradient
+            colors={[shadeColor(brandPrimary, 14), brandPrimary, shadeColor(brandPrimary, -16)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={s.welcomeCard}
+          >
             <View style={s.decCircle1} />
             <View style={s.decCircle2} />
             <Text style={s.welcomeGreeting}>{getGreeting()}</Text>
@@ -187,7 +194,7 @@ export default function HomeScreen() {
                 <Text style={s.roleText}>{roleLabel}</Text>
               </View>
             )}
-          </View>
+          </LinearGradient>
         </Animated.View>
 
         {/* ── Stats row ── */}

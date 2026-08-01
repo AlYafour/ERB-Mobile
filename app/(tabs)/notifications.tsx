@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, StyleSheet, RefreshControl,
   TouchableOpacity, Text, AppState,
@@ -8,9 +8,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { notificationsApi } from '@/lib/api/notifications';
 import { AppHeader } from '@/components/ui/AppHeader';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
-import { Colors } from '@/constants/theme';
+import { Colors, ModuleTints } from '@/constants/theme';
+import { DOCUMENT_TYPE_META, ProcurementDocType } from '@/constants/procurement';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Notification } from '@/types';
 import { toast } from '@/lib/hooks/use-toast';
@@ -28,6 +29,46 @@ const NOTIFICATION_ROUTES: Record<string, (id: string) => string> = {
   quotation:        id => `/purchase-quotations/${id}`,
   hr_request:       id => `/hr/requests`,
 };
+
+// The notification `type` field doesn't always match a DOCUMENT_TYPE_META key
+// 1:1 (e.g. 'invoice' vs 'purchase_invoice') — bridge the two so every
+// notification gets the same tinted icon used for its document elsewhere in
+// the app, instead of a generic bell regardless of type.
+const NOTIFICATION_TYPE_ALIAS: Record<string, ProcurementDocType> = {
+  invoice: 'purchase_invoice',
+  quotation: 'purchase_quotation',
+};
+
+function getTypeMeta(type: string | undefined, cs: 'light' | 'dark'): { icon: IconSymbolName; fg: string; bg: string } | null {
+  if (!type) return null;
+  const docType = NOTIFICATION_TYPE_ALIAS[type] ?? (type in DOCUMENT_TYPE_META ? (type as ProcurementDocType) : undefined);
+  if (docType) {
+    const meta = DOCUMENT_TYPE_META[docType];
+    const tint = ModuleTints[cs][meta.tint];
+    return { icon: meta.icon as IconSymbolName, fg: tint.fg, bg: tint.bg };
+  }
+  if (type === 'hr_request') {
+    const tint = ModuleTints[cs].hr;
+    return { icon: 'person.2.fill', fg: tint.fg, bg: tint.bg };
+  }
+  return null;
+}
+
+function getDateBucket(dateStr?: string): string {
+  if (!dateStr) return 'Earlier';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return 'Earlier';
+  const startOfDay = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+  const diffDays = Math.floor((startOfDay(new Date()) - startOfDay(d)) / 86_400_000);
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return 'This Week';
+  return 'Earlier';
+}
+
+type ListRow =
+  | { kind: 'header'; key: string; label: string }
+  | { kind: 'item'; key: string; data: Notification };
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -178,52 +219,78 @@ export default function NotificationsScreen() {
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  const renderItem = ({ item }: { item: Notification }) => (
-    <TouchableOpacity
-      onPress={() => handleNotificationPress(item)}
-      activeOpacity={0.7}
-      style={[
-        styles.item,
-        {
-          backgroundColor: item.is_read ? colors.surface : colors.primarySoft,
-          borderColor: item.is_read ? colors.border : colors.primary + '30',
-        },
-      ]}
-    >
-      <View style={styles.itemLeft}>
-        <View style={[styles.iconWrap, { backgroundColor: item.is_read ? colors.surfaceMuted : colors.primarySoft }]}>
-          <IconSymbol
-            name={item.is_read ? 'bell' : 'bell.fill'}
-            size={18}
-            color={item.is_read ? colors.textMuted : colors.primary}
-          />
+  const rows = useMemo<ListRow[]>(() => {
+    const out: ListRow[] = [];
+    let lastBucket: string | null = null;
+    for (const n of notifications) {
+      const bucket = getDateBucket(n.created_at);
+      if (bucket !== lastBucket) {
+        out.push({ kind: 'header', key: `h-${bucket}`, label: bucket });
+        lastBucket = bucket;
+      }
+      out.push({ kind: 'item', key: String(n.id ?? n.created_at), data: n });
+    }
+    return out;
+  }, [notifications]);
+
+  const renderRow = ({ item }: { item: ListRow }) => {
+    if (item.kind === 'header') {
+      return (
+        <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>{item.label}</Text>
+      );
+    }
+
+    const n = item.data;
+    const typeMeta = getTypeMeta(n.type, colorScheme);
+    const iconName: IconSymbolName = typeMeta?.icon ?? (n.is_read ? 'bell' : 'bell.fill');
+    const iconBg = n.is_read ? colors.surfaceMuted : (typeMeta?.bg ?? colors.primarySoft);
+    const iconColor = n.is_read ? colors.textMuted : (typeMeta?.fg ?? colors.primary);
+    const accentColor = typeMeta?.fg ?? colors.primary;
+
+    return (
+      <TouchableOpacity
+        onPress={() => handleNotificationPress(n)}
+        activeOpacity={0.7}
+        style={[
+          styles.item,
+          {
+            backgroundColor: n.is_read ? colors.surface : colors.primarySoft,
+            borderColor: n.is_read ? colors.border : colors.primary + '30',
+          },
+          !n.is_read && { borderLeftWidth: 3, borderLeftColor: accentColor },
+        ]}
+      >
+        <View style={styles.itemLeft}>
+          <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
+            <IconSymbol name={iconName} size={18} color={iconColor} />
+          </View>
         </View>
-      </View>
-      <View style={styles.itemBody}>
-        <View style={styles.itemHeader}>
-          <Text
-            style={[styles.itemTitle, { color: colors.textPrimary, fontWeight: item.is_read ? '400' : '600' }]}
-            numberOfLines={1}
-          >
-            {item.title}
+        <View style={styles.itemBody}>
+          <View style={styles.itemHeader}>
+            <Text
+              style={[styles.itemTitle, { color: colors.textPrimary, fontWeight: n.is_read ? '400' : '600' }]}
+              numberOfLines={1}
+            >
+              {n.title}
+            </Text>
+            {!n.is_read && (
+              <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
+            )}
+          </View>
+          <Text style={[styles.itemMessage, { color: colors.textSecondary }]} numberOfLines={2}>
+            {n.message}
           </Text>
-          {!item.is_read && (
-            <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
+          {n.created_at && (
+            <Text style={[styles.itemDate, { color: colors.textMuted }]}>
+              {new Date(n.created_at).toLocaleDateString('en-AE', {
+                month: 'short', day: 'numeric', year: 'numeric',
+              })}
+            </Text>
           )}
         </View>
-        <Text style={[styles.itemMessage, { color: colors.textSecondary }]} numberOfLines={2}>
-          {item.message}
-        </Text>
-        {item.created_at && (
-          <Text style={[styles.itemDate, { color: colors.textMuted }]}>
-            {new Date(item.created_at).toLocaleDateString('en-AE', {
-              month: 'short', day: 'numeric', year: 'numeric',
-            })}
-          </Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -258,9 +325,10 @@ export default function NotificationsScreen() {
         />
       ) : (
         <FlashList
-          data={notifications}
-          renderItem={renderItem}
-          keyExtractor={(item, idx) => String(item.id ?? item.created_at ?? idx)}
+          data={rows}
+          renderItem={renderRow}
+          keyExtractor={(item) => item.key}
+          getItemType={(item) => item.kind}
           contentContainerStyle={[
             styles.listContent,
             notifications.length === 0 && styles.listEmpty,
@@ -291,6 +359,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: { padding: 16, paddingBottom: 32 },
   listEmpty: { flex: 1 },
+  sectionHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: 14,
+    marginBottom: 8,
+  },
   markAllBtn: {
     borderWidth: 1,
     borderRadius: 8,

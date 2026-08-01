@@ -26,3 +26,18 @@ export function buildQueryString(params: Record<string, any>): string {
   }
   return queryParams.toString();
 }
+
+/**
+ * Lightens (positive percent) or darkens (negative percent) a 6-digit hex
+ * color. Used to derive a gradient's second stop from a single dynamic brand
+ * color (e.g. tenant branding.primary_color) without hardcoding a pair.
+ */
+export function shadeColor(hex: string, percent: number): string {
+  const clean = hex.replace('#', '');
+  const num = parseInt(clean, 16);
+  const amt = Math.round(2.55 * percent);
+  const r = Math.max(Math.min(255, (num >> 16) + amt), 0);
+  const g = Math.max(Math.min(255, ((num >> 8) & 0x00ff) + amt), 0);
+  const b = Math.max(Math.min(255, (num & 0x0000ff) + amt), 0);
+  return `#${(0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1)}`;
+}

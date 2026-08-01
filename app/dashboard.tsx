@@ -12,6 +12,7 @@ import { AppHeader } from '@/components/ui/AppHeader';
 import { dashboardApi, DashboardStats, RecentActivity, ProcurementCycleMetrics } from '@/lib/api/dashboard';
 import { AppPermissionGate } from '@/components/AppPermissionGate';
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus';
+import { DonutChart, DonutSegment } from '@/components/ui/DonutChart';
 
 const { width: SW } = Dimensions.get('window');
 const HPAD = 16;
@@ -187,6 +188,69 @@ function DashboardScreenInner() {
             ))}
           </View>
 
+          {/* ── Status breakdown (donut charts) ── */}
+          {stats && (stats.purchaseRequests.total > 0 || stats.purchaseOrders.total > 0 || stats.invoices.total > 0) && (
+            <>
+              <Text style={[s.sectionLabel, { color: c.textMuted }]}>STATUS BREAKDOWN</Text>
+              <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border, padding: 16 }]}>
+                <View style={donut.row}>
+                  {(
+                    [
+                      {
+                        title: 'Requests',
+                        total: stats.purchaseRequests.total,
+                        segments: [
+                          { value: stats.purchaseRequests.pending, color: c.warning, label: 'Pending' },
+                          { value: stats.purchaseRequests.approved, color: c.success, label: 'Approved' },
+                          { value: stats.purchaseRequests.rejected, color: c.danger, label: 'Rejected' },
+                        ] as DonutSegment[],
+                      },
+                      {
+                        title: 'Orders',
+                        total: stats.purchaseOrders.total,
+                        segments: [
+                          { value: stats.purchaseOrders.pending, color: c.warning, label: 'Pending' },
+                          { value: stats.purchaseOrders.approved + stats.purchaseOrders.completed, color: c.success, label: 'Approved' },
+                          { value: stats.purchaseOrders.rejected, color: c.danger, label: 'Rejected' },
+                        ] as DonutSegment[],
+                      },
+                      {
+                        title: 'Invoices',
+                        total: stats.invoices.total,
+                        segments: [
+                          { value: stats.invoices.pending, color: c.warning, label: 'Pending' },
+                          { value: stats.invoices.approved, color: c.info, label: 'Approved' },
+                          { value: stats.invoices.paid, color: c.success, label: 'Paid' },
+                        ] as DonutSegment[],
+                      },
+                    ]
+                  ).map(d => (
+                    <View key={d.title} style={donut.col}>
+                      <DonutChart
+                        segments={d.segments}
+                        total={d.total}
+                        size={72}
+                        strokeWidth={9}
+                        centerValue={d.total}
+                      />
+                      <Text style={[donut.colTitle, { color: c.textPrimary }]}>{d.title}</Text>
+                      <View style={donut.miniLegend}>
+                        {d.segments.filter(seg => seg.value > 0).map(seg => (
+                          <View key={seg.label} style={donut.miniLegendRow}>
+                            <View style={[donut.miniDot, { backgroundColor: seg.color }]} />
+                            <Text style={[donut.miniLegendText, { color: c.textMuted }]} numberOfLines={1}>
+                              {seg.label} · {seg.value}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
+
           {/* ── Approval pipeline ── */}
           {stats && (
             <>
@@ -292,6 +356,16 @@ const pipe = StyleSheet.create({
   count: { fontSize: 16, fontWeight: '700' },
   track: { height: 6, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%' as any, borderRadius: 3 },
+});
+
+const donut = StyleSheet.create({
+  row: { flexDirection: 'row', justifyContent: 'space-between' },
+  col: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+  colTitle: { fontSize: 11, fontWeight: '700', marginTop: 8, marginBottom: 6 },
+  miniLegend: { alignSelf: 'stretch', gap: 3 },
+  miniLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 5, justifyContent: 'center' },
+  miniDot: { width: 6, height: 6, borderRadius: 3 },
+  miniLegendText: { fontSize: 10 },
 });
 
 const cyc = StyleSheet.create({

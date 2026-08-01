@@ -5,21 +5,26 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { DOCUMENT_TYPE_META, ProcurementDocType } from '@/constants/procurement';
 import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 
-interface DocumentIconTileProps {
-  type: ProcurementDocType;
-  size?: number;
-}
+type TintKey = keyof typeof ModuleTints.light;
+
+type DocumentIconTileProps =
+  | { type: ProcurementDocType; size?: number; icon?: never; tint?: never }
+  | { type?: never; icon: IconSymbolName; tint: TintKey; size?: number };
 
 /**
- * Small tinted glyph identifying a procurement record's type at a glance —
- * same tile treatment as the HR request-type cards, reused here so the
- * whole procurement module reads as one family instead of screen-by-screen
- * plain text lists.
+ * Small tinted glyph identifying a record's type at a glance — used across
+ * the procurement module (via `type`, resolved through DOCUMENT_TYPE_META)
+ * and by non-procurement lists like HR requests (via a direct `icon`+`tint`
+ * pair) so every list screen in the app shares one tile treatment instead of
+ * each one hand-rolling its own.
  */
-export function DocumentIconTile({ type, size = 38 }: DocumentIconTileProps) {
+export function DocumentIconTile(props: DocumentIconTileProps) {
   const cs = useColorScheme() ?? 'light';
-  const meta = DOCUMENT_TYPE_META[type];
-  const tint = ModuleTints[cs][meta.tint];
+  const size = props.size ?? 38;
+  const { icon, tintKey } = props.type
+    ? { icon: DOCUMENT_TYPE_META[props.type].icon as IconSymbolName, tintKey: DOCUMENT_TYPE_META[props.type].tint }
+    : { icon: props.icon, tintKey: props.tint };
+  const tint = ModuleTints[cs][tintKey];
 
   return (
     <View
@@ -28,7 +33,7 @@ export function DocumentIconTile({ type, size = 38 }: DocumentIconTileProps) {
         { width: size, height: size, borderRadius: size * 0.3, backgroundColor: tint.bg },
       ]}
     >
-      <IconSymbol name={meta.icon as IconSymbolName} size={size * 0.46} color={tint.fg} />
+      <IconSymbol name={icon} size={size * 0.46} color={tint.fg} />
     </View>
   );
 }
